@@ -3,7 +3,35 @@ declare(strict_types=1);
 require_once __DIR__.'/captions.php';
 function speechScript(string $s):string{
     $s=preg_replace('~(?<![A-Za-z0-9])(?:https?://)?(?:www\.)?mygoldenauto\.net/?(?![A-Za-z0-9/])~i','my golden auto dot N, E, T',$s);
-    return priceSpeech(preg_replace('/\bSan\s+Ramon\b/i','the East Bay',$s));
+    return acronymSpeech(priceSpeech(preg_replace('/\bSan\s+Ramon\b/i','the East Bay',$s)));
+}
+/** Acronyms that contain vowels but are still said letter by letter. */
+const SPEECH_SPELLED=['SUV','AWD','FWD','RWD','2WD','4WD','4X4','EX','EXL','LX','LE','SE','SEL','XLE','GT','GTI','AMG','STI','TDI','TSI','SRT','LED','USB','ABS','EV','ES','RS','SS','SV','SL','SR','SR5','LT','LS','LTZ','XLT','ST'];
+/**
+ * Voice models try to read SUV or XV as words, so spoken text spells them with commas: "S,U,V", "X,V", "C,R,V".
+ * Uppercase tokens only: known acronyms and short letter groups without vowels are spelled; other all-caps
+ * inventory words become normal case (SUBARU → Subaru, RAM → Ram) so they are spoken as words.
+ */
+function acronymSpeech(string $s):string {
+    return preg_replace_callback('/(?<![A-Za-z0-9])[A-Z0-9]+(?:-[A-Z0-9]+)*(?![A-Za-z0-9])/',function($m){
+        $token=$m[0];if(ctype_digit(str_replace('-','',$token)))return $token;
+        if(in_array(str_replace('-','',$token),SPEECH_SPELLED,true))return implode(',',str_split(str_replace('-','',$token)));
+        $parts=[];
+        foreach(explode('-',$token) as $part){
+            $runs=preg_split('/(?<=[A-Z])(?=\d)|(?<=\d)(?=[A-Z])/',$part);$out=[];$spelledOnly=true;
+            foreach($runs as $run){
+                if(ctype_digit($run)){$out[]=$run;$spelledOnly=false;}
+                elseif(in_array($run,SPEECH_SPELLED,true)||(strlen($run)<=3&&!preg_match('/[AEIOU]/',$run)))$out[]=implode(',',str_split($run));
+                elseif(strlen($run)>1){$out[]=ucfirst(strtolower($run));$spelledOnly=false;}
+                else{$out[]=$run;$spelledOnly=false;}
+            }
+            $parts[]=['text'=>implode(' ',$out),'spelled'=>$spelledOnly];
+        }
+        // CR-V → "C,R,V"; CX-30 → "C,X 30".
+        $text=$parts[0]['text'];
+        for($i=1;$i<count($parts);$i++)$text.=($parts[$i-1]['spelled']&&$parts[$i]['spelled']?',':' ').$parts[$i]['text'];
+        return $text;
+    },$s);
 }
 function referenceFile(string $url,array $cfg):array {
     $base=rtrim((string)($cfg['public_base_url']??''),'/').'/assets/';

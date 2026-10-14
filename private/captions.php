@@ -14,7 +14,8 @@ function currencyWords(string $raw):string {
     return integerWords($d).($d===1?' dollar':' dollars').($c?' and '.integerWords($c).($c===1?' cent':' cents'):'');
 }
 function priceSpeech(string $s):string {
-    return preg_replace_callback('/\$(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)(?![\d.,])(?:\s+dollars\b)?/i',fn($m)=>currencyWords($m[1]),$s);
+    // A sentence-ending period after the price ("Just $14,688.") must not block the conversion.
+    return preg_replace_callback('/\$(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)(?![\d,]|\.\d)(?:\s+dollars\b)?/i',fn($m)=>currencyWords($m[1]),$s);
 }
 function speechWordCount(string $s):int{return count(preg_split('/[\s-]+/u',speechScript($s),-1,PREG_SPLIT_NO_EMPTY));}
 function srtTime(float $seconds):string {$ms=(int)round(max(0,$seconds)*1000);return sprintf('%02d:%02d:%02d,%03d',intdiv($ms,3600000),intdiv($ms%3600000,60000),intdiv($ms%60000,1000),$ms%1000);}

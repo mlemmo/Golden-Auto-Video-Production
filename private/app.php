@@ -82,7 +82,8 @@ function enrich(array $v): array {
 function script(array $v,int $duration=15): string {
     if($duration===30)return script30($v);
     $name=title($v);$drive=$v['Drivetrain']??'';
-    $feature=$drive?' with '.strtolower($drive):'';
+    // Keep drive codes uppercase so speech spells them ("A,W,D") and captions keep "AWD".
+    $feature=$drive?' with '.(preg_match('/^[A-Za-z0-9]{2,4}$/',$drive)?strtoupper($drive):strtolower($drive)):'';
     return 'Explore this '.$name.$feature.' at Golden Auto. '.
         ($v['price']!==null?'Just '.adPrice((float)$v['price']).'. ':'').
         'Book your test drive at mygoldenauto.net.';
@@ -111,7 +112,7 @@ function script30(array $v): string {
         default=>'It is a great fit for daily commutes and weekend drives.'};
     $parts=['hook'=>'Looking for a dependable '.$body.'?','name'=>'Take a look at this '.$name.', here at Golden Auto in San Ramon.',
         'facts'=>$factLine,'use'=>$use,'price'=>$v['price']!==null?'Just '.adPrice((float)$v['price']).'.':'',
-        'cta'=>'Stop by to see it in person, and book your test drive today at mygoldenauto.net.'];
+        'cta'=>'Book your test drive today at mygoldenauto.net.'];
     $join=fn($p)=>trim(preg_replace('/\s+/',' ',implode(' ',array_filter($p)))??'');
     foreach(['use','hook'] as $optional)if(speechWordCount($join($parts))>62)unset($parts[$optional]);
     return $join($parts);
