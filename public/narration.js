@@ -15,6 +15,11 @@
   function option(select, value, label) {
     const o = el('option', label); o.value = value; select.append(o);
   }
+  function deleteButton(label, question, action, id) {
+    const b = el('button', label); b.type = 'button'; b.className = 'secondary';
+    b.onclick = () => { if (confirm(question)) act(action, {id}); };
+    return b;
+  }
   n('nCopyScript').onclick = async () => {
     if (!chosen) { message('Select a vehicle first.'); return; }
     n('nCaptions').value = chosen.script;
@@ -78,6 +83,9 @@
           box.append(label, approve);
         }
       }
+      if (preview.status !== 'submitting') box.append(deleteButton('Delete preview',
+        `Delete this voice preview for ${preview.vehicle}? Its audio file is removed. Previews used by a lip-sync video cannot be deleted.`,
+        'narration_delete', preview.id));
       n('nPreviews').append(box);
     }
     n('nApproved').value = selectedAudio;
@@ -97,6 +105,9 @@
         a.target = '_blank'; a.rel = 'noopener noreferrer'; box.append(a);
       }
       if (job.status === 'submission_uncertain') box.append(el('p', 'Check fal request history before any retry.'));
+      if (!['submitting', 'queued', 'in_progress'].includes(job.status)) box.append(deleteButton('Delete lip-sync job',
+        `Delete this lip-sync job for ${job.vehicle}?` + (job.status === 'completed' ? ' The finished video stays in Video jobs.' : ''),
+        'narration_lipsync_delete', job.id));
       n('nSyncJobs').append(box);
     }
   }

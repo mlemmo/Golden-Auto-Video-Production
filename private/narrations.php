@@ -94,7 +94,7 @@ function narrationApi(string $action,array $in,array $cfg,PDO $db):array {
             $v=json_decode($raw,true);$v['audio_url']=isset($v['audio_name'])?validateAppBase($cfg).'/assets/narrations/'.$v['audio_name']:null;$list[]=$v;
         }
         $sync=[];foreach($db->query('SELECT payload FROM narration_lipsync ORDER BY rowid DESC LIMIT 30')->fetchAll(PDO::FETCH_COLUMN)as $raw){
-            $v=json_decode($raw,true);unset($v['status_url'],$v['response_url']);$sync[]=$v;
+            $v=json_decode($raw,true);unset($v['status_url'],$v['response_url'],$v['audio_file']);$sync[]=$v;
         }
         $videos=[];foreach($db->query('SELECT payload FROM jobs ORDER BY rowid DESC LIMIT 50')->fetchAll(PDO::FETCH_COLUMN)as $raw){
             $v=json_decode($raw,true);if(($v['status']??'')==='completed'&&!empty($v['video_url']))$videos[]=['id'=>$v['id'],'vehicle'=>$v['vehicle'],'stock'=>$v['stock'],'duration'=>$v['duration']??15];
@@ -171,7 +171,7 @@ function narrationApi(string $action,array $in,array $cfg,PDO $db):array {
             throw new RuntimeException('Cannot make padded narration readable.');
         $padded['audio_url']=validateAppBase($cfg).'/assets/narrations/'.$wavName;
         $record=['id'=>bin2hex(random_bytes(16)),'stock'=>$audio['stock'],'vehicle'=>$audio['vehicle'],
-            'narration_id'=>$audio['id'],'source_video_id'=>$source['id'],'status'=>'submitting','created_at'=>gmdate('c')];
+            'narration_id'=>$audio['id'],'source_video_id'=>$source['id'],'audio_file'=>$wavName,'status'=>'submitting','created_at'=>gmdate('c')];
         narrationReserve($db,'narration_lipsync',$record,hash('sha256',$audio['audio_hash'].'|'.$source['id']));
         $code=0;
         try{
@@ -221,6 +221,26 @@ function narrationApi(string $action,array $in,array $cfg,PDO $db):array {
         }else{$record['status']=match($state['status']??''){'IN_QUEUE'=>'queued','IN_PROGRESS'=>'in_progress',default=>'unknown'};}
         narrationSave($db,'narration_lipsync',$record);
         return ['message'=>'Lip-sync: '.$record['status'].'. Completed results also appear in Video jobs for captions.'];
+    }
+    if($action==='narration_delete'){
+        $id=(string)($in['id']??'');$audio=narrationLoad($db,'narrations',$id);
+        if(($audio['status']??'')==='submitting')throw new RuntimeException('This voice preview is still being created. Refresh before deleting.');
+        // Lip-synced videos keep needing the approved MP3 for caption timing, so in-use previews stay.
+        $q=$db->prepare("SELECT COUNT(*) FROM narration_lipsync WHERE json_extract(payload,'$.narration_id')=? AND json_extract(payload,'$.status')<>'failed'");$q->execute([$id]);
+        if($q->fetchColumn()>0)throw new RuntimeException('This preview is used by a lip-sync job. Delete that lip-sync job first.');
+        $q=$db->prepare("SELECT COUNT(*) FROM jobs WHERE json_extract(payload,'$.narration_id')=?");$q->execute([$id]);
+        if($q->fetchColumn()>0)throw new RuntimeException('A lip-synced video uses this preview for its captions, so it cannot be deleted.');
+        $q=$db->prepare('DELETE FROM narrations WHERE id=?');$q->execute([$id]);
+        if(isset($audio['audio_name'])){$path=narrationAudioPath($cfg,$audio);if(is_file($path))unlink($path);}
+        return ['message'=>'Voice preview deleted.'];
+    }
+    if($action==='narration_lipsync_delete'){
+        $id=(string)($in['id']??'');$record=narrationLoad($db,'narration_lipsync',$id);
+        if(in_array($record['status']??'',['submitting','queued','in_progress'],true))throw new RuntimeException('This lip-sync job is still running at fal. Refresh its status until it completes or fails before deleting.');
+        $q=$db->prepare('DELETE FROM narration_lipsync WHERE id=?');$q->execute([$id]);
+        $wav=(string)($record['audio_file']??'');
+        if(preg_match('/^[a-f0-9]{32}\.wav$/',$wav)){$path=($cfg['asset_dir']??__DIR__.'/../public/assets').'/narrations/'.$wav;if(is_file($path))unlink($path);}
+        return ['message'=>($record['status']??'')==='completed'?'Lip-sync job deleted. Its video stays in Video jobs.':'Lip-sync job deleted.'];
     }
     throw new RuntimeException('Unknown narration action.');
 }
