@@ -18,7 +18,12 @@ function dcNormalize(array $s):array {
     return ['stock'=>$stock,'vin'=>$vin,'year'=>$year,'make'=>$make,'model'=>$model,'trim'=>trim((string)($s['trim']??'')),
         'drivetrain'=>trim((string)($s['drivetrain']??'')),'color'=>trim((string)($s['color']??'')),
         'mileage'=>($mileage===null||$mileage==='')?null:(int)$mileage,'price'=>$prices?max($prices):null,
-        'description'=>mbSafeText((string)($s['description']??'')),'photo_count'=>$photos];
+        'description'=>dcCleanDescription((string)($s['description']??'')),'photo_count'=>$photos];
+}
+/** DealerCenter descriptions open with a tax/registration price disclaimer; it never belongs in ad copy. */
+function dcCleanDescription(string $s):string {
+    $s=preg_replace('/Total price does not include State Sales Tax or Registration fees,?\s*please call us for the total price\.?/iu','',$s)??$s;
+    return mbSafeText(preg_replace("/^\s+/u",'',$s)??$s);
 }
 /** Saved JSON turns 9000.0 into 9000, so compare prices by value. */
 function dcSamePrice(mixed $a,mixed $b):bool {return $a===null||$b===null?$a===$b:abs((float)$a-(float)$b)<0.005;}

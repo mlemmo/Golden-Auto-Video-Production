@@ -35,6 +35,7 @@ try{
 
     $log=dcSync($db,$cfg,[car('S1',4,8500,['mileage'=>100500]),car('OLD1',2,5000,['make'=>'Ford','model'=>'Focus','year'=>2010])],"$dir/zips");$inv=$byStock($db);
     verify($log['returned']===['OLD1 2010 FORD FOCUS']&&$inv['OLD1']['active']===true&&count($log['waiting_photos'])===1,'returning vehicle reactivated and waits for photos');
+    verify(dcCleanDescription("Total price does not include State Sales Tax or Registration fees, please call us for the total price.\n\nDiscover the car.")==='Discover the car.','price disclaimer removed from descriptions');
     try{dcSync($db,$cfg,[car('S1',4,8500),car('S1',4,8500)]);verify(false,'duplicate stock rejected');}catch(RuntimeException $e){verify(str_contains($e->getMessage(),'Duplicate'),'duplicate stock rejected');}
     try{dcSync($db,$cfg,[car('S1',4,8500,['vin'=>'BADVIN'])]);verify(false,'bad VIN rejected');}catch(RuntimeException $e){verify(true,'bad VIN rejected before any change');}
 }finally{
