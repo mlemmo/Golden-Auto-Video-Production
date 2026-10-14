@@ -76,7 +76,7 @@ if (isset($_GET['api'])) {
                 }
                 if(empty($job['finishing_plan']))throw new RuntimeException('Open Review captions first to prepare the intro and closing card.');
             }
-            if($action==='caption_draft'){echo json_encode(['srt'=>captionDraft($job['script'],(float)($job['duration']??15)),'note'=>'Draft timing from the script. Review against the actual spoken audio before rendering.']);exit;}
+            if($action==='caption_draft'){echo json_encode(['srt'=>captionDraft($job['script'],(float)($job['duration']??15),(string)($job['vehicle']??'')),'note'=>'Draft timing from the script. Review against the actual spoken audio before rendering.']);exit;}
             if(!($in['reviewed']??false))throw new RuntimeException('Review caption wording and timing first.');
             if(in_array($job['finish_status']??'',['queued','rendering'],true))throw new RuntimeException('This video is already queued for finishing.');
             $job['captions_srt']=validateSrt((string)($in['srt']??''),(float)($job['duration']??15));$job['finish_status']='queued';$job['render_backend']=$cfg['render_backend']??'windows';$job['finish_error']='';$job['captioned_url']=null;

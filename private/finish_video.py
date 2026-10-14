@@ -42,7 +42,45 @@ def analyze(data):
     if speech_end < 0.5:
         raise ValueError('No usable speech found.')
     return {'speech_end': speech_end, 'audio_duration': duration,
-            'source_end': math.ceil((speech_end + 0.1) * 24) / 24}
+            'source_end': math.ceil((speech_end + 0.1) * 24) / 24,
+            'spans': voiced_spans(r.stdout, speech_end)}
+
+
+def voiced_spans(pcm, speech_end):
+    """Voiced intervals [start, end] in seconds from 16 kHz mono s16le audio.
+
+    Pauses are found from short-window loudness relative to the speech level, because a
+    fixed dB gate misses pauses that contain breath noise.
+    """
+    import array
+    samples = array.array('h')
+    samples.frombytes(pcm[:len(pcm) // 2 * 2])
+    window = 160  # 10 ms
+    levels = []
+    for i in range(0, len(samples) - window + 1, window):
+        chunk = samples[i:i + window]
+        rms = math.sqrt(sum(v * v for v in chunk) / window)
+        levels.append(20 * math.log10(rms / 32768 + 1e-9))
+    if not levels:
+        return []
+    ranked = sorted(levels)
+    gate = max(-60.0, ranked[int(len(ranked) * 0.9)] - 25.0)
+    spans, start = [], None
+    quiet = 0
+    for i, level in enumerate(levels):
+        if level >= gate:
+            if start is None:
+                start = i
+            quiet = 0
+        elif start is not None:
+            quiet += 1
+            if quiet >= 12:  # at least 120 ms of quiet ends a span
+                spans.append([start * 0.01, (i - quiet + 1) * 0.01])
+                start, quiet = None, 0
+    if start is not None:
+        spans.append([start * 0.01, min(speech_end, len(levels) * 0.01)])
+    return [[round(a, 3), round(min(b, speech_end), 3)] for a, b in spans
+            if min(b, speech_end) - a >= 0.06]
 
 
 def make_card(photo, output, width, height, title, closing):

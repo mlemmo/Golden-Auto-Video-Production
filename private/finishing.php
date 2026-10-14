@@ -46,14 +46,13 @@ function goldenFinishDraft(PDO $db,array $cfg,array &$job):array {
         'source_end'=>$timing['source_end'],'speech_end'=>$timing['speech_end'],
         'photo_name'=>$name,'photo_hash'=>hash_file('sha256',$photo),'photo_index'=>$index,
         'audio_hash'=>$audio['audio_hash']];
-    // These timestamps refer to the FINAL timeline, not the unedited master.
-    $srt=captionDraft($job['script'],(float)$timing['speech_end']);
-    $srt=preg_replace_callback('/(\d{2}):(\d{2}):(\d{2}),(\d{3})/',function($m){
-        return srtTime(2+(int)$m[1]*3600+(int)$m[2]*60+(int)$m[3]+(int)$m[4]/1000);
-    },$srt);
+    // Cues follow the pauses measured in the approved audio. Speech starts at t=2 on the FINAL timeline.
+    $cues=captionCues($job['script'],(string)$job['vehicle'],$timing['spans']??[],(float)$timing['speech_end']);
+    if(!$cues)throw new RuntimeException('Caption script is empty.');
+    $srt=captionSrt($cues,2.0);
     $q=$db->prepare('UPDATE jobs SET payload=? WHERE id=?');
     $q->execute([json_encode($job,JSON_THROW_ON_ERROR),$job['id']]);
-    return ['srt'=>$srt,'note'=>'Two-second intro and smooth dissolve enabled. Uses inventory photo '.($index+1).'. Caption timestamps include the intro. Timing is estimated from the script, not word-aligned transcription; review the final render.'];
+    return ['srt'=>$srt,'note'=>'Two-second intro and smooth dissolve enabled. Uses inventory photo '.($index+1).'. Caption timestamps include the intro. Cue timing follows the pauses in the approved audio and is spread by syllable count inside each sentence; it is not word-level transcription, so review the final render.'];
 }
 function goldenFinishRender(PDO $db,array $cfg,array $job,string $work,string $output,int $w,int $h):void {
     $plan=$job['finishing_plan']??null;
