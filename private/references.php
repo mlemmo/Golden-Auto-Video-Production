@@ -3,7 +3,7 @@ declare(strict_types=1);
 require_once __DIR__.'/captions.php';
 function speechScript(string $s):string{
     $s=preg_replace('~(?<![A-Za-z0-9])(?:https?://)?(?:www\.)?mygoldenauto\.net/?(?![A-Za-z0-9/])~i','my golden auto dot N, E, T',$s);
-    return acronymSpeech(priceSpeech(preg_replace('/\bSan\s+Ramon\b/i','the East Bay',$s)));
+    return acronymSpeech(priceSpeech($s));
 }
 /** Acronyms that contain vowels but are still said letter by letter. */
 const SPEECH_SPELLED=['SUV','AWD','FWD','RWD','2WD','4WD','4X4','EX','EXL','LX','LE','SE','SEL','XLE','GT','GTI','AMG','STI','TDI','TSI','SRT','LED','USB','ABS','EV','ES','RS','SS','SV','SL','SR','SR5','LT','LS','LTZ','XLT','ST'];

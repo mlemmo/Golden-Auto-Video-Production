@@ -23,9 +23,9 @@ const CAPTION_MAX_LINE=24;
 const CAPTION_MAX_CUE=40;
 const CAPTION_GLUE=['this','the','a','an','your','at','to','in','of','for','on','with','and','or','our','my','from','by'];
 const CAPTION_ACRONYMS=['SUV','AWD','FWD','RWD','4WD','GMC','BMW','CVT','TDI','TSI','WRX','STI','SRT','AMG','XLT','LED'];
-/** Display text for captions: readable case, whole-dollar prices, spoken location match. */
+/** Display text for captions: readable case, whole-dollar prices. */
 function captionDisplayText(string $script):string {
-    $s=trim(preg_replace('/\s+/u',' ',preg_replace('/\bSan\s+Ramon\b/i','the East Bay',$script)));
+    $s=trim(preg_replace('/\s+/u',' ',$script));
     $s=preg_replace('/(\$\d[\d,]*)\.00(?!\d)/','$1',$s);
     return preg_replace_callback('/(?<![A-Za-z0-9\-])[A-Z]{4,}(?![A-Za-z0-9\-])/',function($m){
         return in_array($m[0],CAPTION_ACRONYMS,true)?$m[0]:ucfirst(strtolower($m[0]));

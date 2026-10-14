@@ -5,7 +5,7 @@ foreach(['$14,688.25'=>'fourteen thousand six hundred eighty-eight dollars and t
 assertCaption(speechScript('Price $14,688.25 dollars.')==='Price fourteen thousand six hundred eighty-eight dollars and twenty-five cents.','no duplicate dollars');
 assertCaption(speechWordCount('$14,688.25')>1,'speech count includes expanded currency');
 $s=captionDraft('Golden Auto in San Ramon. Priced at $14,688.25.',15);
-assertCaption(str_contains($s,'$14,688.25')&&!str_contains($s,'San Ramon'),'captions keep numeric price and match spoken location');
+assertCaption(str_contains($s,'$14,688.25')&&str_contains($s,'San Ramon'),'captions keep numeric price and say San Ramon like the narration');
 assertCaption(validateSrt($s,15)!=='','draft has valid ordered times');
 try{validateSrt("1\n00:00:10,000 --> 00:00:09,000\nBad",15);throw new LogicException('Bad time accepted');}catch(RuntimeException $e){assertCaption(true,'reversed time rejected');}
 file_put_contents(sys_get_temp_dir().'/golden-caption-test.srt',$s);
