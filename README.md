@@ -13,6 +13,7 @@ Runs on Ubuntu with Nginx + PHP-FPM (or `php -S` for testing), SQLite, FFmpeg (l
 | `public/index.php`, `app.js`, `narration.js`, `style.css` | Dashboard and JSON API (login, CSRF, import, generate, narration, finishing) |
 | `private/app.php` | Inventory helpers, highest-price rule, prompts, asset sheets, DB helpers |
 | `private/spokespersons.php` | Spokesperson library: upload/list/default/delete; images in `public/assets/spokesperson-*.{jpg,png,webp}`, metadata in state row `spokespersons`; each one's description feeds the video prompt |
+| `private/dealercenter_sync.php` | DealerCenter inventory tracking (CLI: `php private/dealercenter_sync.php snapshot.json [zip-dir]`). Snapshot = active list without costs (stock, VIN, year, make, model, trim, colour, mileage, prices, description, photo_count); ZIPs named `<stock>.zip`. Adds new cars, re-imports photos when the count changes, logs price changes, marks missing cars inactive (hidden, paid actions blocked, videos kept). Log in state row `sync_log`, shown in the dashboard |
 | `private/import.php` | DealerCenter media-ZIP importer |
 | `private/references.php` | Higgsfield reference upload, `speechScript()` (prices and website spoken form), `jobError()` |
 | `private/narrations.php`, `narration_bridge.py` | ElevenLabs preview/approve, fal.ai lip-sync, duplicate-submission fingerprints |

@@ -108,7 +108,7 @@ function narrationApi(string $action,array $in,array $cfg,PDO $db):array {
         $text=trim((string)($in['text']??''));$captions=trim((string)($in['caption_script']??''));
         if(strlen($text)<10||strlen($text)>1200||strlen($captions)<10||strlen($captions)>1200)throw new RuntimeException('Enter narration and correctly spelled caption text, up to 1,200 characters each.');
         $v=null;foreach((state($db,'inventory')['vehicles']??[])as $candidate)if($candidate['StockNumber']===($in['stock']??''))$v=$candidate;
-        if(!$v)throw new RuntimeException('Select a saved vehicle.');
+        if(!$v||($v['active']??true)===false)throw new RuntimeException('Select a saved vehicle that is still in active inventory.');
         $duration=(int)($in['duration']??15);if(!in_array($duration,[15,30],true))throw new RuntimeException('Choose 15 or 30 seconds.');
         $fingerprint=hash('sha256',json_encode([$v['StockNumber'],$v['price'],$voice,$text,$captions,$duration]));
         if($in['new_take']??false)$fingerprint=hash('sha256',$fingerprint.random_bytes(16));
@@ -151,7 +151,7 @@ function narrationApi(string $action,array $in,array $cfg,PDO $db):array {
         if(($source['status']??'')!=='completed'||empty($source['video_url']))throw new RuntimeException('Choose a completed video.');
         if(($source['stock']??'')!==$audio['stock']||($source['price']??null)!==$audio['price'])throw new RuntimeException('Preview and video must be for the same vehicle and price.');
         $current=null;foreach((state($db,'inventory')['vehicles']??[])as $candidate)if($candidate['StockNumber']===$audio['stock'])$current=$candidate;
-        if(!$current||$current['price']!==$audio['price'])throw new RuntimeException('Saved vehicle price changed or vehicle was removed. Create a new narration.');
+        if(!$current||($current['active']??true)===false||$current['price']!==$audio['price'])throw new RuntimeException('Saved vehicle price changed or vehicle was removed. Create a new narration.');
         $duration=(int)($source['duration']??15);
         if($duration!==$audio['duration'])throw new RuntimeException('Preview target duration must match the selected video.');
         $path=narrationCheckAudio($cfg,$audio);publicImage($source['video_url']);
