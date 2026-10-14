@@ -5,3 +5,5 @@ public/assets/*
 *.sqlite
 *.log
 *.lock
+__pycache__/
+*.pyc
