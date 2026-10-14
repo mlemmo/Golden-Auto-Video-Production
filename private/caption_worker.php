@@ -4,7 +4,7 @@ declare(strict_types=1);
 if(PHP_SAPI!=='cli'){http_response_code(403);exit('CLI only');}
 require __DIR__.'/app.php';$cfg=require __DIR__.'/config.php';
 $cfg['asset_dir']=$cfg['asset_dir']??(is_dir(__DIR__.'/../public/assets')?__DIR__.'/../public/assets':__DIR__.'/../public_html/golden-auto-video/assets');
-if(!in_array($cfg['render_backend']??'windows',['linux','siteground'],true))exit;
+if(($cfg['render_backend']??'linux')!=='linux')exit;
 $db=db($cfg);$lock=fopen($cfg['data_dir'].'/caption-worker.lock','c');if(!$lock||!flock($lock,LOCK_EX|LOCK_NB))exit;
 function saveRenderJob(PDO $db,array $j):void{$q=$db->prepare('UPDATE jobs SET payload=? WHERE id=?');$q->execute([json_encode($j,JSON_THROW_ON_ERROR),$j['id']]);}
 function downloadMaster(string $url,string $path):void {
@@ -15,7 +15,7 @@ function downloadMaster(string $url,string $path):void {
     $ok=curl_exec($c);$status=curl_getinfo($c,CURLINFO_RESPONSE_CODE);curl_close($c);fclose($f);
     if($ok===false||$status!==200||$size<1000)throw new RuntimeException('Video download failed (HTTP '.$status.'). Refresh the generation result if its link expired.');
 }
-$job=null;foreach($db->query('SELECT payload FROM jobs ORDER BY rowid')->fetchAll(PDO::FETCH_COLUMN)as $raw){$j=json_decode($raw,true);if(($j['finish_status']??'')==='rendering' && strtotime($j['finish_started_at']??'now')<time()-900){$j['finish_status']='failed';$j['finish_error']='Caption worker stopped before completing. Review the job and queue finishing again.';saveRenderJob($db,$j);}if(($j['finish_status']??'')==='queued'&&in_array($j['render_backend']??($cfg['render_backend']??'linux'),['linux','siteground'],true)){$job=$j;break;}}
+$job=null;foreach($db->query('SELECT payload FROM jobs ORDER BY rowid')->fetchAll(PDO::FETCH_COLUMN)as $raw){$j=json_decode($raw,true);if(($j['finish_status']??'')==='rendering' && strtotime($j['finish_started_at']??'now')<time()-900){$j['finish_status']='failed';$j['finish_error']='Caption worker stopped before completing. Review the job and queue finishing again.';saveRenderJob($db,$j);}if(($j['finish_status']??'')==='queued'&&($j['render_backend']??($cfg['render_backend']??'linux'))==='linux'){$job=$j;break;}}
 if(!$job)exit;
 $work=$cfg['data_dir'].'/render-'.bin2hex(random_bytes(10));mkdir($work,0700);$output=null;
 try{

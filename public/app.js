@@ -36,5 +36,3 @@ let captionJob=null;
 async function editCaptions(id){try{const r=await api('caption_draft',{id});captionJob=id;$('captionSrt').value=r.srt;$('captionReviewed').checked=false;$('captionEditor').hidden=false;$('captionEditor').scrollIntoView({behavior:'smooth'});message(r.note);}catch(e){message(e.message);}}
 $('renderCaptions').onclick=async()=>{if(!captionJob)return;$('renderCaptions').disabled=true;try{const r=await api('finish',{id:captionJob,srt:$('captionSrt').value,reviewed:$('captionReviewed').checked});message(r.message);await jobs();}catch(e){message(e.message);}finally{$('renderCaptions').disabled=false;}};
 
-$('agentToken').onclick=async()=>{try{const r=await api('agent_token');$('agentTokenValue').value=r.token;message('New rendering token created. Previous token is now invalid. Copy it into your Windows agent setup.');}catch(e){message(e.message);}};
-$('revokeAgent').onclick=async()=>{try{await api('agent_revoke');$('agentTokenValue').value='';message('Rendering agent disconnected.');}catch(e){message(e.message);}};

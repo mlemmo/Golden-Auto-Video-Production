@@ -25,3 +25,6 @@ assertCaption($ok,'cues ordered, inside speech, lines short enough');
 assertCaption(validateSrt(captionSrt($cues,2.0),15)!=='','shifted SRT passes validation');
 $fallback=captionCues($script,'2013 SUBARU XV CROSSTREK',[[0.0,11.0]],11.15);
 assertCaption(count($fallback)===5&&$fallback[4]['end']<=11.23,'single-span fallback spreads cues over the speech');
+assertCaption(speechScript('Visit https://www.mygoldenauto.net.')==='Visit my golden auto dot N, E, T.','website spelling for speech');
+assertCaption(speechScript('Visit mygoldenauto.net.')==='Visit my golden auto dot N, E, T.','plain website for speech');
+assertCaption(str_contains(script(['Year'=>2013,'Make'=>'SUBARU','Model'=>'XV CROSSTREK','price'=>14688.0]),'Just $14,688.'),'default script uses approved "Just" wording and whole dollars');

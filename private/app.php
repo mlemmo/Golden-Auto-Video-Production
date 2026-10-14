@@ -10,7 +10,7 @@ function jsonp(string $s): array {
     return $d;
 }
 function request(string $url, ?array $payload=null, string $key=''): string {
-    // Use the verified Python transport for authenticated Higgsfield POSTs.
+    // Authenticated Higgsfield POSTs go through the Python transport (see references.php).
     if($payload!==null&&$key!==''&&parse_url($url,PHP_URL_HOST)==='api.higgsfield.ai'){
         try{
             return uploadHttp('POST',$url,[
@@ -45,7 +45,7 @@ function highestPrice(array $vehicle, array $detail=[]): ?float {
         if (isset($v[$k]) && is_numeric($v[$k]) && (float)$v[$k]>0) $p[]=(float)$v[$k];
     return $p?max($p):null;
 }
-function money(?float $p): string { return $p===null?'Call for price':'$'.number_format($p,2); }
+function money(?float $p): string { return $p===null?'Call for price':'$'.number_format($p,fmod($p,1.0)==0.0?0:2); }
 function title(array $v): string {return trim(($v['Year']??'').' '.($v['Make']??'').' '.($v['Model']??''));}
 function inventory(string $source): array {
     $html=request($source); $x=doc($html); $url=null;
@@ -81,7 +81,7 @@ function script(array $v): string {
     $name=title($v);$drive=$v['Drivetrain']??'';
     $feature=$drive?' with '.strtolower($drive):'';
     return 'Explore this '.$name.$feature.' at Golden Auto. '.
-        ($v['price']!==null?'Priced at '.money($v['price']).'. ':'').
+        ($v['price']!==null?'Just '.money($v['price']).'. ':'').
         'Book your test drive at mygoldenauto.net.';
 
 }
