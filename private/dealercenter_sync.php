@@ -29,10 +29,16 @@ function dcNormalize(array $s):array {
         $s['photo_count']=count($urls);
     }
     $photos=filter_var($s['photo_count']??null,FILTER_VALIDATE_INT);if($photos===false||$photos===null||$photos<0||$photos>100)throw new RuntimeException("Stock $stock: photo_count must be 0–100.");
+    $sheet=null;
+    if(isset($s['sheet_photos'])){
+        $sheet=$s['sheet_photos'];
+        if(!is_array($sheet)||!array_is_list($sheet)||count($sheet)<1||count($sheet)>9||count(array_unique($sheet))!==count($sheet))throw new RuntimeException("Stock $stock: sheet_photos must list 1–9 different photo positions.");
+        foreach($sheet as $n)if(!is_int($n)||$n<1||$n>$photos)throw new RuntimeException("Stock $stock: sheet photo $n is not in the gallery.");
+    }
     return ['stock'=>$stock,'vin'=>$vin,'year'=>$year,'make'=>$make,'model'=>$model,'trim'=>trim((string)($s['trim']??'')),
         'drivetrain'=>trim((string)($s['drivetrain']??'')),'color'=>trim((string)($s['color']??'')),
         'mileage'=>($mileage===null||$mileage==='')?null:(int)$mileage,'price'=>$prices?max($prices):null,
-        'description'=>dcCleanDescription((string)($s['description']??'')),'photo_count'=>$photos,'photo_urls'=>$urls,'photo_key'=>$key];
+        'description'=>dcCleanDescription((string)($s['description']??'')),'photo_count'=>$photos,'photo_urls'=>$urls,'photo_key'=>$key,'sheet_photos'=>$sheet];
 }
 /** True when the saved photo set no longer matches the snapshot (URL set when known, otherwise the count). */
 function dcPhotosChanged(?array $cur,array $s):bool {
@@ -90,8 +96,8 @@ function dcSync(PDO $db,array $cfg,array $snapshot,?string $zipDir=null,?callabl
     }catch(Throwable $e){foreach($created as $f)@unlink($f);throw $e;}
 
     // Phase 2 (short transaction): re-read inventory and apply all changes.
-    $log=['at'=>gmdate('c'),'source'=>'dealercenter','active_count'=>count($items),'added'=>[],'photos_updated'=>[],'price_changed'=>[],'updated'=>[],'returned'=>[],'removed'=>[],'waiting_photos'=>[]];
-    $stale=[];
+    $log=['at'=>gmdate('c'),'source'=>'dealercenter','active_count'=>count($items),'added'=>[],'photos_updated'=>[],'price_changed'=>[],'updated'=>[],'returned'=>[],'removed'=>[],'waiting_photos'=>[],'sheet_views'=>[]];
+    $stale=[];$rebuild=[];
     $db->beginTransaction();
     try{
         $inv=state($db,'inventory')??['vehicles'=>[]];$byStock=[];foreach($inv['vehicles']as $v)$byStock[$v['StockNumber']]=$v;
@@ -110,6 +116,11 @@ function dcSync(PDO $db,array $cfg,array $snapshot,?string $zipDir=null,?callabl
                 if(($cur['active']??true)===false)$log['returned'][]=$label;
                 elseif(!isset($imported[$stock])&&(($cur['Odometer']??null)!==$v['Odometer']||($cur['description']??'')!==($v['description']??'')||($cur['Trim']??'')!==$v['Trim']))$log['updated'][]=$label;
             }
+            if($s['sheet_photos']!==null){
+                if($s['sheet_photos']!==($cur['sheet_photos']??null)){$rebuild[$stock]=true;if(!isset($imported[$stock]))$log['sheet_views'][]=$label.' (photos '.implode(', ',$s['sheet_photos']).')';}
+                $v['sheet_photos']=$s['sheet_photos'];
+            }
+            if(isset($imported[$stock]))$rebuild[$stock]=true;
             $byStock[$stock]=$v;
         }
         foreach($byStock as $stock=>$v){
@@ -122,8 +133,14 @@ function dcSync(PDO $db,array $cfg,array $snapshot,?string $zipDir=null,?callabl
         $db->commit();
     }catch(Throwable $e){if($db->inTransaction())$db->rollBack();foreach($created as $f)@unlink($f);throw $e;}
     foreach($stale as $f)if(is_file($f))@unlink($f);
-    // Asset sheets for new photo sets; a failure here leaves the vehicle usable (the dashboard rebuilds on open).
-    foreach($imported as $stock=>$_){$v=$byStock[$stock];try{save($db,'sheet:'.$v['Vin'],assetSheet($v,$cfg));}catch(Throwable $e){$log['sheet_errors'][]=$stock.': '.$e->getMessage();}}
+    // Asset sheets for new photo sets or new view picks (default: saved front/side/side/rear picks, else first four).
+    // A failure here leaves the vehicle usable (the dashboard rebuilds on open). The replaced sheet image is deleted.
+    foreach($rebuild as $stock=>$_){
+        $v=$byStock[$stock];$old=state($db,'sheet:'.$v['Vin']);
+        try{$new=assetSheet($v,$cfg);save($db,'sheet:'.$v['Vin'],$new);}catch(Throwable $e){$log['sheet_errors'][]=$stock.': '.$e->getMessage();continue;}
+        $oldFile=$old?basename((string)parse_url((string)$old['url'],PHP_URL_PATH)):'';
+        if(preg_match('/^[a-f0-9]{40}\.jpg$/',$oldFile)&&$oldFile!==basename($new['url']))@unlink(($cfg['asset_dir']??__DIR__.'/../public/assets').'/'.$oldFile);
+    }
     return $log;
 }
 

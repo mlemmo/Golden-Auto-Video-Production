@@ -133,6 +133,12 @@ function samplePhotos(array $photos,int $count=9): array {
     $n=count($photos);if($n<=$count)return $photos;
     $out=[];for($i=0;$i<$count;$i++) $out[]=$photos[(int)round($i*($n-1)/($count-1))];return $out;
 }
+/** Default asset-sheet photos: the saved front/side/side/rear picks (1-based gallery positions), else the first four. */
+function defaultSheetPhotos(array $v): array {
+    $all=$v['photos']??[];$picked=[];
+    foreach($v['sheet_photos']??[] as $n)if(isset($all[$n-1]))$picked[]=$all[$n-1];
+    return $picked?:array_slice($all,0,4);
+}
 function downloadPhotos(array $urls): array {
     $multi=curl_multi_init();$handles=[];$buffers=[];
     foreach($urls as $i=>$url){
@@ -148,10 +154,12 @@ function assetSheet(array $v,array $cfg,array $selected=[]): array {
     if(!extension_loaded('gd'))throw new RuntimeException('Enable the PHP GD extension to create car asset sheets.');
     $base=validateAppBase($cfg);
     $all=$v['photos']??[];if(!$all)throw new RuntimeException('No photos found for this vehicle.');
-    $urls=$selected?:samplePhotos($all);
+    $urls=$selected?:defaultSheetPhotos($v);
     if(count($urls)>9 || count($urls)<1 || array_diff($urls,$all))throw new RuntimeException('Choose 1–9 photos from this vehicle gallery.');
     $bytes=sheetBytes($urls,$cfg);if(count($bytes)!==count($urls))throw new RuntimeException('A vehicle photo could not be downloaded. No incomplete sheet was saved; try again or choose other photos.');
-    $cols=3;$rows=(int)ceil(count($urls)/$cols);$width=1800;$height=100+$rows*460;
+    // 2 columns for up to 4 photos (front / sides / rear as a 2×2 grid), 3 columns above that.
+    $cols=count($urls)<=4?2:3;$width=1800;$tileW=intdiv($width,$cols);$boxW=$tileW-30;$boxH=(int)round($boxW*0.737);
+    $rows=(int)ceil(count($urls)/$cols);$height=100+$rows*($boxH+40);
     $sheet=imagecreatetruecolor($width,$height);$bg=imagecolorallocate($sheet,18,23,32);$white=imagecolorallocate($sheet,244,244,244);$gold=imagecolorallocate($sheet,239,189,100);imagefill($sheet,0,0,$bg);
     imagestring($sheet,5,24,20,title($v).' | STOCK '.($v['StockNumber']??''),$gold);
     imagestring($sheet,3,24,48,'Original inventory photos - source views only; no invented angles or features',$white);
@@ -159,9 +167,9 @@ function assetSheet(array $v,array $cfg,array $selected=[]): array {
     foreach($urls as $i=>$url){
         $size=@getimagesizefromstring($bytes[$i]);if(!$size || $size[0]*$size[1]>16000000){imagedestroy($sheet);throw new RuntimeException('Invalid or excessively large source image.');}
         $img=@imagecreatefromstring($bytes[$i]);if(!$img){imagedestroy($sheet);throw new RuntimeException('Unable to decode a vehicle photo.');}
-        $x=($i%$cols)*600+15;$y=100+(int)floor($i/$cols)*460; $ratio=min(570/imagesx($img),420/imagesy($img));$w=(int)round(imagesx($img)*$ratio);$h=(int)round(imagesy($img)*$ratio);
-        imagecopyresampled($sheet,$img,$x+(int)((570-$w)/2),$y+(int)((420-$h)/2),0,0,$w,$h,imagesx($img),imagesy($img));
-        imagestring($sheet,3,$x,$y+426,'SOURCE PHOTO '.(array_search($url,$all,true)+1),$white);hash_update($hash,$bytes[$i]);imagedestroy($img);unset($bytes[$i]);
+        $x=($i%$cols)*$tileW+15;$y=100+(int)floor($i/$cols)*($boxH+40); $ratio=min($boxW/imagesx($img),$boxH/imagesy($img));$w=(int)round(imagesx($img)*$ratio);$h=(int)round(imagesy($img)*$ratio);
+        imagecopyresampled($sheet,$img,$x+(int)(($boxW-$w)/2),$y+(int)(($boxH-$h)/2),0,0,$w,$h,imagesx($img),imagesy($img));
+        imagestring($sheet,3,$x,$y+$boxH+6,'SOURCE PHOTO '.(array_search($url,$all,true)+1),$white);hash_update($hash,$bytes[$i]);imagedestroy($img);unset($bytes[$i]);
     }
     $dir=$cfg['asset_dir']??(__DIR__.'/../public/assets');if(!is_dir($dir))mkdir($dir,0755,true);$name=bin2hex(random_bytes(20)).'.jpg';
     if(!imagejpeg($sheet,$dir.'/'.$name,92)){imagedestroy($sheet);throw new RuntimeException('Cannot save the asset sheet. Check assets directory permissions.');}imagedestroy($sheet);

@@ -54,6 +54,17 @@ try{
     $s3['photo_urls']=$cdn('p1','p2','p8');
     try{dcSync($db,$cfg,[$s3],null,$flaky);verify(false,'incomplete download rejected');}catch(RuntimeException $e){verify(str_contains($e->getMessage(),'could not be downloaded')&&$byStock($db)['S1']['active']===true,'incomplete download stops the sync without changes');}
     try{dcSync($db,$cfg,[car('S4',0,1,['photo_urls'=>['https://evil.example/p.jpg']])],null,$fake);verify(false,'non-CDN photo rejected');}catch(RuntimeException $e){verify(str_contains($e->getMessage(),'imagescf'),'only DealerCenter CDN photo URLs accepted');}
+    $s3['photo_urls']=$cdn('p1','p2','p9');$s3['sheet_photos']=[3,1];
+    $log=dcSync($db,$cfg,[car('S1',4,8500,['mileage'=>100500]),car('OLD1',2,5000,['make'=>'Ford','model'=>'Focus','year'=>2010]),$s3],null,$fake);$inv=$byStock($db);
+    $sheet=state($db,'sheet:'.$inv['S3']['Vin']);$oldSheetFile=basename($sheet['url']);
+    verify($inv['S3']['sheet_photos']===[3,1]&&$sheet['photo_urls']===[$inv['S3']['photos'][2],$inv['S3']['photos'][0]]&&count($log['sheet_views'])===1,'sheet uses the picked views in order');
+    verify(getimagesize("$dir/assets/$oldSheetFile")[0]===1800&&getimagesize("$dir/assets/$oldSheetFile")[1]===100+(int)round(870*0.737)+40,'up to 4 photos use a 2-column sheet');
+    $s3['sheet_photos']=[1,2,3];dcSync($db,$cfg,[car('S1',4,8500,['mileage'=>100500]),car('OLD1',2,5000,['make'=>'Ford','model'=>'Focus','year'=>2010]),$s3],null,$fake);
+    verify(!is_file("$dir/assets/$oldSheetFile"),'replaced asset sheet image deleted');
+    $calls=[];$log=dcSync($db,$cfg,[car('S1',4,8500,['mileage'=>100500]),car('OLD1',2,5000,['make'=>'Ford','model'=>'Focus','year'=>2010]),$s3],null,$fake);
+    verify($calls===[]&&$log['sheet_views']===[],'unchanged picks do not rebuild the sheet');
+    try{$bad=$s3;$bad['sheet_photos']=[1,4];dcSync($db,$cfg,[$bad],null,$fake);verify(false,'out-of-range pick rejected');}catch(RuntimeException $e){verify(str_contains($e->getMessage(),'not in the gallery'),'sheet pick outside the gallery rejected');}
+    verify(defaultSheetPhotos(['photos'=>['a','b','c','d','e','f']])===['a','b','c','d']&&defaultSheetPhotos(['photos'=>['a','b','c'],'sheet_photos'=>[3,9,1]])===['c','a'],'default sheet: saved picks, else first four');
     verify(dcCleanDescription("Total price does not include State Sales Tax or Registration fees, please call us for the total price.\n\nDiscover the car.")==='Discover the car.','price disclaimer removed from descriptions');
     try{dcSync($db,$cfg,[car('S1',4,8500),car('S1',4,8500)]);verify(false,'duplicate stock rejected');}catch(RuntimeException $e){verify(str_contains($e->getMessage(),'Duplicate'),'duplicate stock rejected');}
     try{dcSync($db,$cfg,[car('S1',4,8500,['vin'=>'BADVIN'])]);verify(false,'bad VIN rejected');}catch(RuntimeException $e){verify(true,'bad VIN rejected before any change');}
