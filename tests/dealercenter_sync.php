@@ -41,9 +41,12 @@ try{
     $s3=car('S3',0,11000,['photo_urls'=>$cdn('p1','p2','p3')]);unset($s3['photo_count']);
     $log=dcSync($db,$cfg,[car('S1',4,8500,['mileage'=>100500]),car('OLD1',2,5000,['make'=>'Ford','model'=>'Focus','year'=>2010]),$s3],null,$fake);$inv=$byStock($db);
     verify(count($inv['S3']['photos'])===3&&$inv['S3']['dc_photo_count']===3&&count($log['added'])===1,'photos downloaded from CDN URLs and imported');
-    verify(str_contains($calls[0][0],'/1600/1200/202512-aa/p1.jpg'),'CDN photos requested at full size');
+    verify($calls[0][0]==='https://imagescf.dealercenter.net/1600/1200/p1.jpg','CDN originals requested at full size without the overlay folder');
     $calls=[];dcSync($db,$cfg,[car('S1',4,8500,['mileage'=>100500]),car('OLD1',2,5000,['make'=>'Ford','model'=>'Focus','year'=>2010]),$s3],null,$fake);
     verify($calls===[],'same photo URLs are not downloaded again');
+    $s3['photo_urls']=array_map(fn($id)=>"https://imagescf.dealercenter.net/320/240/$id.jpg",['p1','p2','p3']);
+    $calls=[];dcSync($db,$cfg,[car('S1',4,8500,['mileage'=>100500]),car('OLD1',2,5000,['make'=>'Ford','model'=>'Focus','year'=>2010]),$s3],null,$fake);
+    verify($calls===[],'turning the website overlay on or off does not re-import photos');
     $s3['photo_urls']=$cdn('p1','p2','p9');
     $log=dcSync($db,$cfg,[car('S1',4,8500,['mileage'=>100500]),car('OLD1',2,5000,['make'=>'Ford','model'=>'Focus','year'=>2010]),$s3],null,$fake);
     verify(count($log['photos_updated'])===1,'replaced photo with the same count is detected');

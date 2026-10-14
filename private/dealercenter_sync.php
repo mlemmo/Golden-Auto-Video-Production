@@ -18,8 +18,10 @@ function dcNormalize(array $s):array {
     $urls=null;$key=null;
     if(isset($s['photo_urls'])){
         if(!is_array($s['photo_urls'])||!array_is_list($s['photo_urls'])||count($s['photo_urls'])>100)throw new RuntimeException("Stock $stock: photo_urls must be a list of up to 100 URLs.");
+        // CDN paths are /W/H/[overlay-folder/]document.jpg; the folder-less path is the original without the
+        // website overlay, so only the document ID is kept (also keeps the photo key stable if the overlay is toggled).
         $urls=[];foreach($s['photo_urls'] as $u){
-            if(!is_string($u)||!preg_match('~^https://imagescf\.dealercenter\.net/(?:\d+/\d+/)?([A-Za-z0-9-]+(?:/[A-Za-z0-9-]+)?\.jpg)$~',$u,$m))throw new RuntimeException("Stock $stock: photos must come from imagescf.dealercenter.net.");
+            if(!is_string($u)||!preg_match('~^https://imagescf\.dealercenter\.net/(?:\d+/\d+/)?(?:[A-Za-z0-9-]+/)?([A-Za-z0-9-]+\.jpg)$~',$u,$m))throw new RuntimeException("Stock $stock: photos must come from imagescf.dealercenter.net.");
             $urls[]=$m[1];
         }
         $urls=array_values(array_unique($urls));$key=hash('sha256',implode("\n",$urls));
