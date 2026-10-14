@@ -1,7 +1,8 @@
 <?php
 declare(strict_types=1);
-// DealerCenter inventory tracking. Input: a snapshot of the DealerCenter active list (no costs) plus
-// optional photo ZIPs named <stock>.zip. Compares with saved inventory, records a change log in state
+// DealerCenter inventory tracking. Input: a snapshot of the DealerCenter active list (no costs). Photos come from
+// each item's photo_urls (imagescf.dealercenter.net, downloaded server-to-server; the URL set is tracked so replaced
+// photos are noticed) or, as a fallback, from ZIPs named <stock>.zip with photo_count. Compares with saved inventory, records a change log in state
 // row "sync_log", marks vehicles missing from the snapshot inactive (kept, never deleted).
 // CLI: php private/dealercenter_sync.php snapshot.json [zip-dir]
 require_once __DIR__.'/app.php';
@@ -14,11 +15,38 @@ function dcNormalize(array $s):array {
     $vin=strtoupper(trim((string)($s['vin']??'')));if($vin&&!preg_match('/^[A-HJ-NPR-Z0-9]{17}$/',$vin))throw new RuntimeException("Stock $stock: invalid VIN.");
     $prices=[];foreach((array)($s['prices']??[])as $p){if(is_numeric($p)&&(float)$p>0)$prices[]=(float)$p;}
     $mileage=$s['mileage']??null;if($mileage!==null&&$mileage!==''&&(filter_var($mileage,FILTER_VALIDATE_INT)===false||(int)$mileage<0||(int)$mileage>2000000))throw new RuntimeException("Stock $stock: invalid mileage.");
+    $urls=null;$key=null;
+    if(isset($s['photo_urls'])){
+        if(!is_array($s['photo_urls'])||!array_is_list($s['photo_urls'])||count($s['photo_urls'])>100)throw new RuntimeException("Stock $stock: photo_urls must be a list of up to 100 URLs.");
+        $urls=[];foreach($s['photo_urls'] as $u){
+            if(!is_string($u)||!preg_match('~^https://imagescf\.dealercenter\.net/(?:\d+/\d+/)?([A-Za-z0-9-]+(?:/[A-Za-z0-9-]+)?\.jpg)$~',$u,$m))throw new RuntimeException("Stock $stock: photos must come from imagescf.dealercenter.net.");
+            $urls[]=$m[1];
+        }
+        $urls=array_values(array_unique($urls));$key=hash('sha256',implode("\n",$urls));
+        $urls=array_map(fn($id)=>'https://imagescf.dealercenter.net/1600/1200/'.$id,$urls);
+        $s['photo_count']=count($urls);
+    }
     $photos=filter_var($s['photo_count']??null,FILTER_VALIDATE_INT);if($photos===false||$photos===null||$photos<0||$photos>100)throw new RuntimeException("Stock $stock: photo_count must be 0–100.");
     return ['stock'=>$stock,'vin'=>$vin,'year'=>$year,'make'=>$make,'model'=>$model,'trim'=>trim((string)($s['trim']??'')),
         'drivetrain'=>trim((string)($s['drivetrain']??'')),'color'=>trim((string)($s['color']??'')),
         'mileage'=>($mileage===null||$mileage==='')?null:(int)$mileage,'price'=>$prices?max($prices):null,
-        'description'=>dcCleanDescription((string)($s['description']??'')),'photo_count'=>$photos];
+        'description'=>dcCleanDescription((string)($s['description']??'')),'photo_count'=>$photos,'photo_urls'=>$urls,'photo_key'=>$key];
+}
+/** True when the saved photo set no longer matches the snapshot (URL set when known, otherwise the count). */
+function dcPhotosChanged(?array $cur,array $s):bool {
+    if(!$cur||empty($cur['photos']))return true;
+    return $s['photo_key']!==null?($cur['dc_photo_key']??null)!==$s['photo_key']:($cur['dc_photo_count']??null)!==$s['photo_count'];
+}
+/** Download DealerCenter CDN photos server-to-server into a temporary ZIP for importMediaZip(). */
+function dcZipFromUrls(array $urls,?callable $download=null):string {
+    $download??='downloadPhotos';if(!$urls)throw new RuntimeException('No photos listed for this vehicle.');
+    $got=$download($urls);$missing=array_diff_key($urls,$got);
+    if($missing)foreach($download($missing) as $i=>$bytes)$got[$i]=$bytes;
+    if(count($got)!==count($urls))throw new RuntimeException((count($urls)-count($got)).' of '.count($urls).' photos could not be downloaded; try the sync again.');
+    $path=tempnam(sys_get_temp_dir(),'ga-photos-');$zip=new ZipArchive();
+    if($zip->open($path,ZipArchive::OVERWRITE)!==true)throw new RuntimeException('Cannot create temporary photo ZIP.');
+    foreach($urls as $i=>$_)$zip->addFromString(sprintf('photo_%03d.jpg',$i+1),$got[$i]);
+    $zip->close();return $path;
 }
 /** DealerCenter descriptions open with a tax/registration price disclaimer; it never belongs in ad copy. */
 function dcCleanDescription(string $s):string {
@@ -38,7 +66,7 @@ function dcApplyFields(array $v,array $s):array {
     if($s['description']!=='')$v['description']=$s['description'];
     $v['feed']='dealercenter';$v['active']=true;unset($v['removed_at']);$v['dc_checked_at']=gmdate('c');return $v;
 }
-function dcSync(PDO $db,array $cfg,array $snapshot,?string $zipDir=null):array {
+function dcSync(PDO $db,array $cfg,array $snapshot,?string $zipDir=null,?callable $download=null):array {
     if(!array_is_list($snapshot)||!$snapshot)throw new RuntimeException('Snapshot must be a non-empty list of vehicles.');
     $items=[];foreach($snapshot as $raw){$s=dcNormalize((array)$raw);if(isset($items[$s['stock']]))throw new RuntimeException('Duplicate stock '.$s['stock'].' in snapshot.');$items[$s['stock']]=$s;}
     $before=[];foreach(state($db,'inventory')['vehicles']??[]as $v)$before[$v['StockNumber']]=$v;
@@ -47,14 +75,15 @@ function dcSync(PDO $db,array $cfg,array $snapshot,?string $zipDir=null):array {
     $imported=[];$created=[];
     try{
         foreach($items as $stock=>$s){
-            $cur=$before[$stock]??null;
-            if($cur&&!empty($cur['photos'])&&($cur['dc_photo_count']??null)===$s['photo_count'])continue;
-            $zip=$zipDir?rtrim($zipDir,'/').'/'.$stock.'.zip':null;
-            if(!$zip||!is_file($zip))continue;
-            $v=importMediaZip($zip,['stock'=>$stock,'year'=>$s['year'],'make'=>$s['make'],'model'=>$s['model'],'trim'=>$s['trim'],'vin'=>$s['vin'],
-                'mileage'=>$s['mileage']===null?'':(string)$s['mileage'],'prices'=>$s['price']===null?'':(string)$s['price'],'description'=>$s['description'],'drivetrain'=>$s['drivetrain']],$cfg);
+            if(!dcPhotosChanged($before[$stock]??null,$s))continue;
+            $temp=null;
+            if($s['photo_urls']!==null)$zip=$temp=dcZipFromUrls($s['photo_urls'],$download);
+            else{$zip=$zipDir?rtrim($zipDir,'/').'/'.$stock.'.zip':null;if(!$zip||!is_file($zip))continue;}
+            try{$v=importMediaZip($zip,['stock'=>$stock,'year'=>$s['year'],'make'=>$s['make'],'model'=>$s['model'],'trim'=>$s['trim'],'vin'=>$s['vin'],
+                'mileage'=>$s['mileage']===null?'':(string)$s['mileage'],'prices'=>$s['price']===null?'':(string)$s['price'],'description'=>$s['description'],'drivetrain'=>$s['drivetrain']],$cfg);}
+            finally{if($temp)@unlink($temp);}
             $created=array_merge($created,dcLocalPhotos($v,$cfg));
-            $v['dc_photo_count']=$s['photo_count'];$imported[$stock]=$v;
+            $v['dc_photo_count']=$s['photo_count'];$v['dc_photo_key']=$s['photo_key'];$imported[$stock]=$v;
         }
     }catch(Throwable $e){foreach($created as $f)@unlink($f);throw $e;}
 
@@ -72,7 +101,7 @@ function dcSync(PDO $db,array $cfg,array $snapshot,?string $zipDir=null):array {
                 else $log['added'][]=$label.' ('.count($v['photos']).' photos)';
             }elseif($cur){
                 $v=dcApplyFields($cur,$s);
-                if(($cur['dc_photo_count']??null)!==$s['photo_count']||empty($cur['photos']))$log['waiting_photos'][]=$label.' (photo count '.($cur['dc_photo_count']??'unknown').' → '.$s['photo_count'].')';
+                if(dcPhotosChanged($cur,$s))$log['waiting_photos'][]=$label.' (photo count '.($cur['dc_photo_count']??'unknown').' → '.$s['photo_count'].')';
             }else{$log['waiting_photos'][]=$label.' (new, '.$s['photo_count'].' photos)';continue;}
             if($cur){
                 if(!dcSamePrice($cur['price']??null,$v['price'])){$log['price_changed'][]=$label.': '.money($cur['price']).' → '.money($v['price']);$v['price_changed_at']=gmdate('c');}
