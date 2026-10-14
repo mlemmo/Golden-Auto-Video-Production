@@ -22,30 +22,37 @@
   }
   n('nCopyScript').onclick = async () => {
     if (!chosen) { message('Select a vehicle first.'); return; }
-    n('nCaptions').value = chosen.script;
+    // Copy the script currently in the editor (the duration's default unless edited).
+    const script = $('script').value.trim() || chosen.scripts?.[$('duration').value] || chosen.script;
+    n('nCaptions').value = script;
     let r;
-    try { r = await api('speech', {script: chosen.script}); }
+    try { r = await api('speech', {script}); }
     catch (error) { message(error.message); return; }
     n('nText').value = r.speech.replace(/my golden auto dot N, E, T/gi, 'my golden auto dot net');
     n('nDuration').value = $('duration').value;
     n('nPreviewSpend').checked = false;
     message('Narration and caption drafts copied. Edit narration pronunciation independently of captions.');
   };
-  n('nLoadVoices').onclick = async () => {
+  // Voices load when the page opens (listing is free); Bella is the default when the account has her.
+  async function loadVoices(automatic) {
     if (pending) return;
     pending = true;
     try {
       const r = await api('narration_voices');
+      const current = n('nVoice').value;
       n('nVoice').replaceChildren();
       option(n('nVoice'), '', 'Choose a voice');
       for (const voice of r.voices) {
         const labels = [voice.labels.gender, voice.labels.accent, voice.labels.age].filter(Boolean).join(', ');
         option(n('nVoice'), voice.id, voice.name + (labels ? ` — ${labels}` : ''));
       }
-      message('Voices loaded. Choose a voice and create a preview to hear it.');
+      const bella = r.voices.find(voice => /^bella\b/i.test(voice.name));
+      n('nVoice').value = r.voices.some(voice => voice.id === current) ? current : (bella ? bella.id : '');
+      if (!automatic) message(bella ? 'Voices loaded. Bella is selected by default.' : 'Voices loaded. Choose a voice and create a preview to hear it.');
     } catch (error) { message(error.message); }
     finally { pending = false; }
-  };
+  }
+  n('nLoadVoices').onclick = () => loadVoices(false);
   n('nCreatePreview').onclick = () => {
     if (!chosen) { message('Select a vehicle first.'); return; }
     act('narration_preview', {stock: chosen.StockNumber, voice_id: n('nVoice').value,
@@ -117,5 +124,5 @@
       approve_spend: n('nSyncSpend').checked, confirm_current: n('nCurrent').checked});
     n('nSyncSpend').checked = false;
   };
-  refresh().catch(e => message(e.message));
+  refresh().catch(e => message(e.message)).finally(() => loadVoices(true));
 })();

@@ -1,8 +1,8 @@
 <section id="narrationStudio">
 <h2>Narration first</h2>
 <p class="hint">Make and listen to a voice preview before paying for lip-sync. Reuse a completed video with one clearly visible spokesperson. The new version uses the approved voice track; original dialogue and background audio are replaced.</p>
-<div class="actions"><button type="button" id="nCopyScript" class="secondary">Copy selected vehicle script</button><button type="button" id="nLoadVoices" class="secondary">Load ElevenLabs voices</button></div>
-<label>Voice<select id="nVoice"><option value="">Load voices and choose one</option></select></label>
+<div class="actions"><button type="button" id="nCopyScript" class="secondary">Copy selected vehicle script</button><button type="button" id="nLoadVoices" class="secondary">Reload ElevenLabs voices</button></div>
+<label>Voice<select id="nVoice"><option value="">Loading voices…</option></select></label>
 <label>Narration text — edit pronunciation here<textarea id="nText" rows="4" maxlength="1200"></textarea></label>
 <label>Caption text — correct model spelling and numeric price<textarea id="nCaptions" rows="4" maxlength="1200"></textarea></label>
 <label>Target duration<select id="nDuration"><option value="15">15 seconds</option><option value="30">30 seconds</option></select></label>

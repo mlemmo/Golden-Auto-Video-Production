@@ -77,7 +77,8 @@ function enrich(array $v): array {
     $v['photos']=array_values(array_unique($v['photos'])); $v['price']=highestPrice($v,$detail);
     $v['detail_checked_at']=gmdate('c'); return $v;
 }
-function script(array $v): string {
+function script(array $v,int $duration=15): string {
+    if($duration===30)return script30($v);
     $name=title($v);$drive=$v['Drivetrain']??'';
     $feature=$drive?' with '.strtolower($drive):'';
     return 'Explore this '.$name.$feature.' at Golden Auto. '.
@@ -86,6 +87,33 @@ function script(array $v): string {
 
 }
 const SPOKESPERSON_DEFAULT_DESCRIPTION='trustworthy friendly adult woman age 28–33, casual professional attire';
+/**
+ * 30-second script built only from inventory facts. Targets about 55–60 spoken words (roughly 22–25 s of speech),
+ * which fits the 27.5 s left after the 2 s intro card; optional sentences are dropped for long vehicle names.
+ */
+function script30(array $v): string {
+    $trimRaw=trim((string)($v['Trim']??''));
+    $body=match(true){(bool)preg_match('/pickup|crew cab|truck/i',$trimRaw.' '.($v['Model']??''))=>'truck',
+        (bool)preg_match('/sport utility|suv/i',$trimRaw)=>'SUV',(bool)preg_match('/sedan/i',$trimRaw)=>'sedan',
+        (bool)preg_match('/coupe/i',$trimRaw)=>'coupe',(bool)preg_match('/van/i',$trimRaw)=>'van',default=>'vehicle'};
+    // Trim name without the body-style suffix, e.g. "Premium Sport Utility 4D" → "Premium".
+    $trim=trim(preg_replace('/\b(sport utility|sedan|coupe|pickup|crew cab|van|wagon|hatchback|convertible)\b.*$/i','',$trimRaw)??'');
+    $name=title($v).($trim!==''&&stripos(title($v),$trim)===false?' '.$trim:'');
+    $drive=['AWD'=>'all-wheel drive','4WD'=>'four-wheel drive','4X4'=>'four-wheel drive','FWD'=>'front-wheel drive','RWD'=>'rear-wheel drive'][strtoupper(trim((string)($v['Drivetrain']??'')))]??'';
+    $color=strtolower(trim((string)($v['ExteriorColor']??'')));
+    $miles=isset($v['Odometer'])&&$v['Odometer']!==null?(int)$v['Odometer']:null;
+    $facts=array_values(array_filter([$drive,$color!==''?'a '.$color.' exterior':'',$miles!==null&&$miles>=1000?'just over '.number_format(intdiv($miles,1000)*1000).' miles':'']));
+    $factLine=$facts?'It comes with '.(count($facts)>1?implode(', ',array_slice($facts,0,-1)).', and '.end($facts):$facts[0]).'.':'';
+    $use=match($body){'truck'=>'It is ready for work during the week and adventures on the weekend.',
+        'SUV'=>'It is a great fit for daily commutes, family errands, and weekend road trips.',
+        default=>'It is a great fit for daily commutes and weekend drives.'};
+    $parts=['hook'=>'Looking for a dependable '.$body.'?','name'=>'Take a look at this '.$name.', here at Golden Auto in San Ramon.',
+        'facts'=>$factLine,'use'=>$use,'price'=>$v['price']!==null?'Just '.money($v['price']).'.':'',
+        'cta'=>'Stop by to see it in person, and book your test drive today at mygoldenauto.net.'];
+    $join=fn($p)=>trim(preg_replace('/\s+/',' ',implode(' ',array_filter($p)))??'');
+    foreach(['use','hook'] as $optional)if(speechWordCount($join($parts))>62)unset($parts[$optional]);
+    return $join($parts);
+}
 function prompt(array $v,string $spoken,string $style="dynamic",int $duration=15,string $presenter=SPOKESPERSON_DEFAULT_DESCRIPTION): string {
     $spoken=speechScript($spoken);$presenter=rtrim(trim($presenter),'.');
     if ($style === "showroom") return 'Create a '.$duration.'-second dealership showroom walkthrough. Reference image 1 is the exact vehicle asset sheet; reference image 2 is the consistent spokesperson; match their face, hair and outfit exactly. Preserve the vehicle paint, trim, wheels, lamps and actual interior; do not invent equipment or repair cosmetic imperfections. The spokesperson ('.$presenter.') stands beside the car, gestures naturally and maintains eye contact with the viewer. The spokesperson stays visible as the stabilized camera smoothly travels from rear three-quarter to side profile to front three-quarter. The vehicle is parked throughout. Keep presenter and car central for the chosen frame; no hard cuts, no racing or drone sequence. Use a modern illustrative showroom, not a representation of Golden Auto’s actual building. Spoken English script, exactly: "'.$spoken.'". Speak the supplied script once only. Say the price once. Do not repeat sentences or add dialogue. After the script ends, use ambient sound only. Native synchronized clear warm speech, subtle showroom ambience below dialogue. No generated text. Leave space for bottom captions and a small top vehicle heading added in post-production. No invented warranty, inspection, title or scarcity claims.';

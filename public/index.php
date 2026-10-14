@@ -54,7 +54,7 @@ if (isset($_GET['api'])) {
             $a=state($db,'inventory')??[];$found=false;
             foreach ($a['vehicles']??[] as &$v) if ($v['StockNumber']===($in['stock']??'')) {$v=enrich($v);$out=$v;$found=true;break;}
             if (!$found) throw new RuntimeException('Vehicle not found. Refresh inventory first.');
-            save($db,'inventory',$a);$out['script']=script($out);
+            save($db,'inventory',$a);$out['script']=script($out);$out['scripts']=['15'=>$out['script'],'30'=>script($out,30)];
             $existing=state($db,'sheet:'.$out['Vin']);
             if($existing && ($existing['gallery_hash']??'')===hash('sha256',json_encode($out['photos']))) $out['asset_sheet']=$existing;
             else try{$out['asset_sheet']=assetSheet($out,$cfg);save($db,'sheet:'.$out['Vin'],$out['asset_sheet']);}catch(Throwable $e){$out['sheet_error']=$e->getMessage();}echo json_encode($out,JSON_THROW_ON_ERROR);exit;
@@ -171,4 +171,4 @@ if (isset($_GET['api'])) {
 <label class="check"><input type="checkbox" id="confirmCurrent">For imported vehicles: I confirm the vehicle is available and its highest advertised price is current.</label><div class="actions"><button class="secondary" id="checkReferences">Check reference uploads</button><button id="generate" disabled>Generate video</button><button class="secondary" id="brief" disabled>Download production brief</button></div>
 <p class="hint">Uses Seedance 2.5 with native speech and effects. Showroom style follows the example’s presenter-beside-car layout; dynamic style uses a presenter inset. Car asset sheets are automatically assembled from inventory photos. Choose a saved spokesperson before generation. Generated identity, pronunciation and scene timing require review. Captions and final 4:5 crop are a separate finishing step.</p>
 </section></div><section><h2>Video jobs</h2><p class="hint">Refresh status to retrieve the generated master. Download completed files promptly; provider links can expire.</p><div id="jobs"></div><section id="captionEditor" hidden><h2>Review captions</h2><p class="hint">Automatic draft from the script—not a transcription. Check wording and timing against the generated audio. You can paste a corrected SRT here. Numeric prices stay numeric.</p><textarea id="captionSrt" rows="14"></textarea><label class="check"><input id="captionReviewed" type="checkbox">I checked the captions against the video.</label><button id="renderCaptions">Render captioned video</button></section></section><?php require $private.'/narration_panel.php'; ?></main>
-<script>window.CSRF=<?=json_encode($_SESSION['csrf'])?>;</script><script src="app.js?v=5"></script><script src="narration.js?v=2"></script></body></html>
+<script>window.CSRF=<?=json_encode($_SESSION['csrf'])?>;</script><script src="app.js?v=6"></script><script src="narration.js?v=3"></script></body></html>
