@@ -2,7 +2,7 @@
 
 PHP dashboard + Python helpers that turn Golden Auto (San Ramon, CA) inventory into 9:16 walk-around ads for Instagram and Facebook.
 
-**Pipeline:** inventory (manual DealerCenter ZIP import today, SFTP XML later) → asset sheet of real car photos → Higgsfield Seedance 2.5 base video with the saved spokesperson → ElevenLabs narration (preview, listen, approve) → fal.ai sync-lipsync v2 → FFmpeg finishing (2 s intro card, dissolve, phrase captions, car-only closing card).
+**Pipeline:** inventory (manual DealerCenter ZIP import today, SFTP XML later) → asset sheet of real car photos → Higgsfield Seedance 2.5 base video with a spokesperson chosen from the saved library → ElevenLabs narration (preview, listen, approve) → fal.ai sync-lipsync v2 → FFmpeg finishing (2 s intro card, dissolve, phrase captions, car-only closing card).
 
 Runs on Ubuntu with Nginx + PHP-FPM (or `php -S` for testing), SQLite, FFmpeg (libx264, libass), Python 3 with Pillow and fonts-dejavu-core. See `docs/DEPLOY_UBUNTU.md`.
 
@@ -12,6 +12,7 @@ Runs on Ubuntu with Nginx + PHP-FPM (or `php -S` for testing), SQLite, FFmpeg (l
 | --- | --- |
 | `public/index.php`, `app.js`, `narration.js`, `style.css` | Dashboard and JSON API (login, CSRF, import, generate, narration, finishing) |
 | `private/app.php` | Inventory helpers, highest-price rule, prompts, asset sheets, DB helpers |
+| `private/spokespersons.php` | Spokesperson library: upload/list/default/delete; images in `public/assets/spokesperson-*.{jpg,png,webp}`, metadata in state row `spokespersons`; each one's description feeds the video prompt |
 | `private/import.php` | DealerCenter media-ZIP importer |
 | `private/references.php` | Higgsfield reference upload, `speechScript()` (prices and website spoken form), `jobError()` |
 | `private/narrations.php`, `narration_bridge.py` | ElevenLabs preview/approve, fal.ai lip-sync, duplicate-submission fingerprints |
