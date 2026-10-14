@@ -1,0 +1,7 @@
+private/config.php
+private/data/
+public/assets/*
+!public/assets/.gitkeep
+*.sqlite
+*.log
+*.lock
