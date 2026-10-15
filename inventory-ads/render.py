@@ -33,6 +33,14 @@ class HeyGen:
     def __init__(self):
         self.h = {"X-Api-Key": os.environ["HEYGEN_API_KEY"], "Content-Type": "application/json"}
 
+    @staticmethod
+    def character() -> dict:
+        """Video avatar (HEYGEN_AVATAR_TYPE=avatar) or photo avatar made from a still image (talking_photo)."""
+        if os.getenv("HEYGEN_AVATAR_TYPE", "avatar") == "talking_photo":
+            return {"type": "talking_photo", "talking_photo_id": os.environ["HEYGEN_AVATAR_ID"],
+                    "talking_style": "expressive", "matting": True, "super_resolution": True}
+        return {"type": "avatar", "avatar_id": os.environ["HEYGEN_AVATAR_ID"], "avatar_style": "normal"}
+
     def spokesperson(self, text: str, title: str) -> dict:
         """Render the presenter speaking `text` on solid green, 1080x1920. Returns {url, duration}."""
         body = {
@@ -40,8 +48,7 @@ class HeyGen:
             "caption": False,                       # captions are added in Shotstack
             "dimension": {"width": 1080, "height": 1920},
             "video_inputs": [{
-                "character": {"type": "avatar", "avatar_id": os.environ["HEYGEN_AVATAR_ID"],
-                              "avatar_style": "normal"},
+                "character": self.character(),
                 "voice": {"type": "text", "voice_id": os.environ["HEYGEN_VOICE_ID"],
                           "input_text": text, "speed": 1.05, "emotion": "Friendly"},
                 "background": {"type": "color", "value": GREEN},
