@@ -23,14 +23,23 @@ if(!$job)exit;
 $work=$cfg['data_dir'].'/render-'.bin2hex(random_bytes(10));mkdir($work,0700);$output=null;
 try{
     $job['finish_status']='rendering';$job['finish_started_at']=gmdate('c');saveRenderJob($db,$job);
-    downloadMaster($job['video_url'],$work.'/master.mp4');file_put_contents($work.'/captions.srt',validateSrt($job['captions_srt'],(float)($job['duration']??15)));
+    downloadMaster($job['video_url'],$work.'/master.mp4');
+    if(!empty($job['captions_from_audio'])){
+        require_once __DIR__.'/finishing.php';
+        $job['captions_srt']=goldenNativeCaptions($cfg,$job,$work.'/master.mp4',$work);saveRenderJob($db,$job);
+    }
+    file_put_contents($work.'/captions.srt',validateSrt($job['captions_srt'],(float)($job['duration']??15)));
     [$w,$h]=match($job['format']){'facebook_feed'=>[1080,1350],'square'=>[1080,1080],default=>[1080,1920]};
     $name=bin2hex(random_bytes(20)).'.mp4';$output=$cfg['asset_dir'].'/'.$name;
     if(($job['provider']??'')==='fal_lipsync'){
         require_once __DIR__.'/finishing.php';
         goldenFinishRender($db,$cfg,$job,$work,$output,$w,$h);
     }else{
-    $filter="scale=$w:$h:force_original_aspect_ratio=increase,crop=$w:$h,setsar=1,subtitles=captions.srt:force_style='FontName=DejaVu Sans,FontSize=10,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=1,Shadow=0,Alignment=2,MarginV=40'";
+    // Native-voice videos use the reference style: bold white words on a solid black box.
+    $style=($job['voice']??'')==='native'
+        ?'FontName=DejaVu Sans,Bold=1,FontSize=13,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BackColour=&H00000000,BorderStyle=3,Outline=6,Shadow=0,Alignment=2,MarginV=55'
+        :'FontName=DejaVu Sans,FontSize=10,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=1,Shadow=0,Alignment=2,MarginV=40';
+    $filter="scale=$w:$h:force_original_aspect_ratio=increase,crop=$w:$h,setsar=1,subtitles=captions.srt:force_style='$style'";
     
     $args=[(string)($cfg['ffmpeg_path']??'ffmpeg'),'-nostdin','-n','-hide_banner','-loglevel','error','-i','master.mp4','-vf',$filter,'-c:v','libx264','-preset','veryfast','-crf','20','-threads','1','-pix_fmt','yuv420p','-c:a','aac','-movflags','+faststart',$output];
     $p=proc_open($args,[0=>['file','/dev/null','r'],1=>['file',$work.'/ffmpeg.log','a'],2=>['file',$work.'/ffmpeg.log','a']],$pipes,$work);

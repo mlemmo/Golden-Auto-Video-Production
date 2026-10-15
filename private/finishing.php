@@ -76,3 +76,14 @@ function goldenFinishRender(PDO $db,array $cfg,array $job,string $work,string $o
         'title'=>$job['vehicle'],'width'=>$w,'height'=>$h,'plan'=>$plan,
         'ffmpeg'=>$cfg['ffmpeg_path']??'/usr/bin/ffmpeg']);
 }
+
+/** Captions for a native-voice video, timed from the speech in the downloaded master itself. */
+function goldenNativeCaptions(array $cfg,array $job,string $master,string $work):string {
+    $ffmpeg=(string)($cfg['ffmpeg_path']??'/usr/bin/ffmpeg');$wav=$work.'/speech.wav';
+    $p=proc_open([$ffmpeg,'-nostdin','-v','error','-y','-i',$master,'-vn','-ac','1','-ar','16000','-t','61',$wav],[0=>['file','/dev/null','r'],1=>['file','/dev/null','w'],2=>['file','/dev/null','w']],$pipes);
+    if(!is_resource($p)||proc_close($p)!==0||!is_file($wav))throw new RuntimeException('The generated video has no usable audio track. Check that it was generated with voice.');
+    $timing=goldenFinishPython(['op'=>'analyze','audio'=>$wav,'audio_hash'=>hash_file('sha256',$wav),'ffmpeg'=>$ffmpeg]);
+    $cues=captionCues((string)$job['script'],(string)($job['vehicle']??''),$timing['spans']??[],(float)$timing['speech_end']);
+    if(!$cues)throw new RuntimeException('Caption script is empty.');
+    return validateSrt(captionSrt($cues,0.0),(float)($job['duration']??30));
+}

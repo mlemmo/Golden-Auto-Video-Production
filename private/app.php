@@ -117,6 +117,26 @@ function script30(array $v): string {
     foreach(['use','hook'] as $optional)if(speechWordCount($join($parts))>62)unset($parts[$optional]);
     return $join($parts);
 }
+/**
+ * Native-voice showroom shot (Seedance generate_audio): the spokesperson speaks the script herself, so voice,
+ * lips and gestures come from one generation and no separate narration or lip-sync step is needed.
+ * $speech is the pronunciation form (speechScript); captions use the display script.
+ */
+function promptNative(array $v,string $speech,int $duration=30,string $presenter=SPOKESPERSON_DEFAULT_DESCRIPTION): string {
+    $presenter=rtrim(trim($presenter),'.');
+    $speech=trim(preg_replace('/\s+/',' ',str_replace('"',"'",$speech))??'');
+    if($speech==='')throw new RuntimeException('Write the script the spokesperson will say.');
+    return 'Create a '.$duration.'-second dealership showroom video with synchronized spoken dialogue. '.
+        'Reference image 1 is the exact vehicle asset sheet showing its front, sides and rear; reference image 2 is the spokesperson; match their face, hair, body and outfit exactly. '.
+        'Preserve the vehicle paint, trim, wheels, lamps and body exactly; do not invent equipment, badges or license plates, and do not repair cosmetic imperfections. The vehicle is parked and stationary throughout. '.
+        'Setting: a bright, upscale modern showroom with polished stone floors, warm architectural lighting and tall windows, not a representation of Golden Auto’s actual building. '.
+        'The spokesperson ('.$presenter.') stands beside the car on the side nearest the camera, fully visible from head to at least the knees, facing the camera and speaking directly to the viewer. '.
+        'Her lip movements match every word exactly. Her expressions are warm and natural, and her relaxed open-hand gestures toward the car match what she is saying at that moment; no repetitive or random gestures. '.
+        'Camera: one slow, smooth, continuous move on a stabilizer, starting at the rear three-quarter view of the car and gliding along its near side to the front three-quarter view, always keeping the spokesperson in frame with her face clearly visible and well lit. No hard cuts. '.
+        'She speaks in a warm, clear, friendly American English voice at a natural, unhurried pace and says exactly this, word for word, and nothing else: "'.$speech.'" '.
+        'Audio: only her voice, clear and close to the microphone, over a soft quiet room tone. No music, no other voices, no sound effects. '.
+        'Leave space at the bottom of the frame for captions added in post-production. No on-screen text of any kind: no captions, no watermark, no website address, no logo, no signage text, no license-plate text.';
+}
 function prompt(array $v,string $spoken,string $style="dynamic",int $duration=15,string $presenter=SPOKESPERSON_DEFAULT_DESCRIPTION): string {
     $presenter=rtrim(trim($presenter),'.');
     // The voice comes later from the approved ElevenLabs narration via lip-sync, so the video is generated silent
