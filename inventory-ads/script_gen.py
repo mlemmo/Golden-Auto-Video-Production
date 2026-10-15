@@ -52,8 +52,14 @@ Return ONLY this JSON, no prose:
 }"""
 
 
+def make_client() -> anthropic.Anthropic:
+    """Keys not scoped to a workspace must name one with the anthropic-workspace-id header."""
+    ws = os.getenv("ANTHROPIC_WORKSPACE_ID", "").strip()
+    return anthropic.Anthropic(default_headers={"anthropic-workspace-id": ws} if ws else None)
+
+
 def write_script(v: Vehicle, client: anthropic.Anthropic | None = None) -> dict:
-    client = client or anthropic.Anthropic()
+    client = client or make_client()
     user = {
         "VEHICLE_FACTS": v.facts(),
         "PHOTOS": [f"{i}: {u.rsplit('/', 1)[-1]}" for i, u in enumerate(v.photos[:20])],

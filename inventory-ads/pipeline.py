@@ -21,12 +21,13 @@ import requests
 
 from feed import load_inventory
 from render import FORMATS, HeyGen, Shotstack, build_timeline
-from script_gen import write_script
+from script_gen import make_client, write_script
 
 OUT = Path("out")
 STATE = Path("state.json")
 _heygen: HeyGen | None = None
 _shot: Shotstack | None = None
+_claude = None
 
 
 def now() -> str:
@@ -34,8 +35,9 @@ def now() -> str:
 
 
 def process(v, a, state: dict) -> None:
-    global _heygen, _shot
-    script = write_script(v)
+    global _heygen, _shot, _claude
+    _claude = _claude or make_client()
+    script = write_script(v, _claude)
     (OUT / f"{v.stock}_script.json").write_text(json.dumps(script, indent=2))
     print(script["spoken_script"], flush=True)
 
