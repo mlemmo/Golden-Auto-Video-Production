@@ -88,6 +88,7 @@ if (isset($_GET['api'])) {
             uploadReference($sheet,$cfg);uploadReference($avatar,$cfg);
             echo json_encode(['message'=>'Both references uploaded successfully to Higgsfield. No video generation was submitted.']);exit;
         }
+        if ($action==='job_delete') {require_once $private.'/jobs.php';echo json_encode(goldenJobDelete($db,$cfg,(string)($in['id']??'')),JSON_THROW_ON_ERROR);exit;}
         if ($action==='jobs') {echo json_encode($db->query('SELECT payload FROM jobs ORDER BY rowid DESC LIMIT 30')->fetchAll(PDO::FETCH_COLUMN));exit;}
         if ($action==='poll') {
             $q=$db->prepare('SELECT payload FROM jobs WHERE id=?');$q->execute([$in['id']??'']);$raw=$q->fetchColumn();
