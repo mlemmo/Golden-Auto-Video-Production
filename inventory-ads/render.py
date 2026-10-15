@@ -54,12 +54,12 @@ class HeyGen:
                 "background": {"type": "color", "value": GREEN},
             }],
         }
-        r = requests.post(f"{self.BASE}/v2/video/generate", headers=self.h, json=body, timeout=60)
+        r = requests.post(f"{self.BASE}/v2/video/generate", headers=self.h, json=body, timeout=120)
         r.raise_for_status()
         vid = r.json()["data"]["video_id"]
         while True:
             s = requests.get(f"{self.BASE}/v1/video_status.get", headers=self.h,
-                             params={"video_id": vid}, timeout=30).json()["data"]
+                             params={"video_id": vid}, timeout=(15, 120)).json()["data"]
             if s["status"] == "completed":
                 return {"url": s["video_url"], "duration": float(s["duration"])}
             if s["status"] == "failed":
@@ -168,7 +168,7 @@ class Shotstack:
         self.h = {"x-api-key": os.environ["SHOTSTACK_API_KEY"], "Content-Type": "application/json"}
 
     def render(self, edit: dict) -> str:
-        r = requests.post(f"{self.base}/render", headers=self.h, json=edit, timeout=60)
+        r = requests.post(f"{self.base}/render", headers=self.h, json=edit, timeout=120)
         if r.status_code >= 400:
             raise RuntimeError(f"Shotstack {r.status_code}: {r.text}")
         rid = r.json()["response"]["id"]
