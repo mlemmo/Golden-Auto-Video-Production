@@ -1,6 +1,17 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__.'/captions.php';
+/**
+ * Spoken form for Seedance native voice: like speechScript, but the website is said "my golden auto dot net"
+ * (the spelled "N, E, T" form suits ElevenLabs and sounds wrong from Seedance). Place names stay as written and
+ * get a pronunciation guide in the prompt (SPEECH_PRONUNCIATION).
+ */
+function nativeSpeech(string $s):string{
+    $s=preg_replace('~(?<![A-Za-z0-9])(?:https?://)?(?:www\.)?mygoldenauto\.net/?(?![A-Za-z0-9/])~i','my golden auto dot net',$s);
+    return acronymSpeech(priceSpeech($s));
+}
+/** Pronunciations given to the native-voice model when the word appears in the script. */
+const SPEECH_PRONUNCIATION=['San Ramon'=>'san ruh-MOHN (rhymes with "a phone")','my golden auto dot net'=>'my GOLD-en AW-toh dot net, said as words, never spelled out letter by letter','Golden Auto'=>'GOLD-en AW-toh'];
 function speechScript(string $s):string{
     $s=preg_replace('~(?<![A-Za-z0-9])(?:https?://)?(?:www\.)?mygoldenauto\.net/?(?![A-Za-z0-9/])~i','my golden auto dot N, E, T',$s);
     return acronymSpeech(priceSpeech($s));

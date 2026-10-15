@@ -4,11 +4,15 @@ declare(strict_types=1);
 require __DIR__.'/../private/app.php';require __DIR__.'/../private/auto_build.php';
 function verify(bool $ok,string $name):void{if(!$ok)throw new RuntimeException('FAIL '.$name);echo "PASS $name\n";}
 $v=['Year'=>2013,'Make'=>'SUBARU','Model'=>'XV CROSSTREK','price'=>14688.25];
-$speech=speechScript('Take a look at this 2013 SUBARU XV CROSSTREK. Just $14,688. Book your test drive at mygoldenauto.net.');
+$speech=nativeSpeech('Take a look at this 2013 SUBARU XV CROSSTREK here at Golden Auto in San Ramon. Just $14,688. Book your test drive at mygoldenauto.net.');
+verify(str_contains($speech,'my golden auto dot net')&&!str_contains($speech,'N, E, T'),'website is said as "dot net" for the native voice');
 $p=promptNative($v,$speech,30,'friendly woman, cream dress');
 verify(str_contains($p,'word for word')&&str_contains($p,'"'.$speech.'"'),'prompt carries the exact spoken words');
 verify(str_contains($p,'X-V')&&!str_contains($p,'$14,688'),'spoken words use the pronunciation form');
-verify(str_contains($p,'rear three-quarter')&&str_contains($p,'No music'),'prompt sets the reference camera move and clean voice audio');
+verify(str_contains($p,'rear three-quarter')&&str_contains($p,'No music'),'prompt sets the camera move and clean voice audio');
+verify(str_contains($p,'always in the foreground, between the camera and the car')&&str_contains($p,'never behind the car'),'spokesperson stays in front of the car');
+verify(str_contains($p,'"San Ramon" is pronounced san ruh-MOHN')&&str_contains($p,'never spelled out letter by letter'),'pronunciation guide for city and website');
+verify(!str_contains(promptNative($v,'Just fourteen thousand dollars.'),'Pronunciation:'),'no pronunciation note when the words are absent');
 try{promptNative($v,'  ');verify(false,'empty script rejected');}catch(RuntimeException $e){verify(true,'empty script rejected');}
 
 $dir=sys_get_temp_dir().'/ga-native-'.bin2hex(random_bytes(4));mkdir("$dir/data",0700,true);mkdir("$dir/assets",0700);

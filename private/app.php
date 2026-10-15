@@ -130,12 +130,18 @@ function promptNative(array $v,string $speech,int $duration=30,string $presenter
         'Reference image 1 is the exact vehicle asset sheet showing its front, sides and rear; reference image 2 is the spokesperson; match their face, hair, body and outfit exactly. '.
         'Preserve the vehicle paint, trim, wheels, lamps and body exactly; do not invent equipment, badges or license plates, and do not repair cosmetic imperfections. The vehicle is parked and stationary throughout. '.
         'Setting: a bright, upscale modern showroom with polished stone floors, warm architectural lighting and tall windows, not a representation of Golden Auto’s actual building. '.
-        'The spokesperson ('.$presenter.') stands beside the car on the side nearest the camera, fully visible from head to at least the knees, facing the camera and speaking directly to the viewer. '.
-        'Her lip movements match every word exactly. Her expressions are warm and natural, and her relaxed open-hand gestures toward the car match what she is saying at that moment; no repetitive or random gestures. '.
-        'Camera: one slow, smooth, continuous move on a stabilizer, starting at the rear three-quarter view of the car and gliding along its near side to the front three-quarter view, always keeping the spokesperson in frame with her face clearly visible and well lit. No hard cuts. '.
+        'Placement is critical: the spokesperson ('.$presenter.') is always in the foreground, between the camera and the car, closer to the camera than the car. She is never behind the car, never on its far side and never hidden by it; the car is always behind her or beside her, never in front of her. '.
+        'She begins standing in front of the rear three-quarter corner of the car on the side nearest the camera, then walks slowly forward along that side toward the front three-quarter corner while presenting the car, ending in front of the front corner. '.
+        'She is fully visible from head to at least the knees the whole time, faces the camera most of the time, and speaks directly to the viewer. Her lip movements match every word exactly; her expressions are warm and natural, and her relaxed open-hand gestures toward the car match what she is saying at that moment, with no repetitive or random gestures. '.
+        'Camera: one slow, smooth, continuous tracking move on a stabilizer at her walking pace, slightly ahead of her, keeping her face clearly visible, well lit and reasonably large in frame while the car stays recognizable behind her. No hard cuts, no orbit to the far side of the car. '.
         'She speaks in a warm, clear, friendly American English voice at a natural, unhurried pace and says exactly this, word for word, and nothing else: "'.$speech.'" '.
+        speechPronunciationGuide($speech).
         'Audio: only her voice, clear and close to the microphone, over a soft quiet room tone. No music, no other voices, no sound effects. '.
         'Leave space at the bottom of the frame for captions added in post-production. No on-screen text of any kind: no captions, no watermark, no website address, no logo, no signage text, no license-plate text.';
+}
+function speechPronunciationGuide(string $speech):string {
+    $notes=[];foreach(SPEECH_PRONUNCIATION as $word=>$say)if(stripos($speech,$word)!==false)$notes[]='"'.$word.'" is pronounced '.$say;
+    return $notes?'Pronunciation: '.implode('; ',$notes).'. ':'';
 }
 function prompt(array $v,string $spoken,string $style="dynamic",int $duration=15,string $presenter=SPOKESPERSON_DEFAULT_DESCRIPTION): string {
     $presenter=rtrim(trim($presenter),'.');
