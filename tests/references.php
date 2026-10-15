@@ -13,7 +13,8 @@ try{
  verify($calls[1][2]===['Content-Type: image/png','x-amz-tagging: retention=temporary'],'all storage headers and no API credentials');
  verify($calls[1][3]===file_get_contents($dir.'/avatar.png'),'actual file bytes uploaded');
  verify(speechScript('Visit Golden Auto in San Ramon.')==='Visit Golden Auto in San Ramon.','narration says San Ramon');
- verify(str_contains(prompt(['Year'=>2013,'Make'=>'SUBARU','Model'=>'XV CROSSTREK'],'Visit San Ramon. A great SUV.','showroom',15),'Visit San Ramon. A great S-U-V.'),'prompt applies speech rules to edited scripts');
+ $walk=prompt(['Year'=>2013,'Make'=>'SUBARU','Model'=>'XV CROSSTREK'],'Visit San Ramon. A great SUV.','showroom',30);
+ verify(!str_contains($walk,'Visit San Ramon')&&str_contains($walk,'walks slowly forward')&&str_contains($walk,'side nearest the camera')&&str_contains($walk,'no watermark'),'walkaround prompt: spokesperson walks the near side, no spoken script, no text');
  try{referenceFile('https://example.com/studio/assets/../config.php',$cfg);throw new LogicException('Traversal accepted');}catch(RuntimeException $e){verify(true,'path traversal rejected');}
  $fail=function($method,$url,$headers,$body)use($mock){if($method==='PUT')throw new RuntimeException('PUT rejected');return $mock($method,$url,$headers,$body);};
  try{uploadReference('https://example.com/studio/assets/avatar.png',$cfg,$fail);throw new LogicException('Failed PUT accepted');}catch(RuntimeException $e){verify($e->getMessage()==='PUT rejected','failed PUT stops before generation');}

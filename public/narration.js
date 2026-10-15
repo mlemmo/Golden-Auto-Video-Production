@@ -98,9 +98,18 @@
     n('nApproved').value = selectedAudio;
     n('nVideo').value = selectedVideo;
     n('nSyncJobs').replaceChildren();
+    let building = false;
+    const stage = {waiting: 'preparing captions', queued: 'queued for final render', rendering: 'rendering final video', completed: 'final video ready', failed: 'final build failed'};
     for (const job of r.lipsync) {
       const box = el('div'); box.className = 'job';
-      box.append(el('strong', job.vehicle), el('span', 'Lip-sync: ' + job.status));
+      box.append(el('strong', job.vehicle), el('span', 'Lip-sync: ' + job.status + (job.final ? ' · ' + (stage[job.final.status] || job.final.status) : '')));
+      if (job.auto_build && (['submitting', 'queued', 'in_progress', 'unknown'].includes(job.status) || (job.final && ['waiting', 'queued', 'rendering'].includes(job.final.status)))) {
+        building = true; box.append(el('small', 'Building automatically — this page refreshes every 30 seconds.'));
+      }
+      if (job.final && job.final.error) box.append(el('p', job.final.error));
+      if (job.final && job.final.url && job.final.url.startsWith('https://')) {
+        const a = el('a', 'Download final video'); a.href = job.final.url; a.target = '_blank'; a.rel = 'noopener noreferrer'; box.append(a);
+      }
       if (job.error) box.append(el('p', job.error));
       if (job.request_id && !['completed', 'failed'].includes(job.status)) {
         const poll = el('button', 'Refresh lip-sync status'); poll.type = 'button'; poll.className = 'secondary';
@@ -117,11 +126,14 @@
         'narration_lipsync_delete', job.id));
       n('nSyncJobs').append(box);
     }
+    clearTimeout(buildTimer);
+    if (building) buildTimer = setTimeout(() => { refresh().then(() => jobs()).catch(e => message(e.message)); }, 30000);
   }
+  let buildTimer;
   n('nRefresh').onclick = () => { if (!pending) refresh().catch(e => message(e.message)); };
   n('nSubmitSync').onclick = () => {
     act('narration_lipsync', {narration_id: n('nApproved').value, video_id: n('nVideo').value,
-      approve_spend: n('nSyncSpend').checked, confirm_current: n('nCurrent').checked});
+      approve_spend: n('nSyncSpend').checked, confirm_current: n('nCurrent').checked, auto_build: true});
     n('nSyncSpend').checked = false;
   };
   refresh().catch(e => message(e.message)).finally(() => loadVoices(true));

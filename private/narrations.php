@@ -94,7 +94,11 @@ function narrationApi(string $action,array $in,array $cfg,PDO $db):array {
             $v=json_decode($raw,true);$v['audio_url']=isset($v['audio_name'])?validateAppBase($cfg).'/assets/narrations/'.$v['audio_name']:null;$list[]=$v;
         }
         $sync=[];foreach($db->query('SELECT payload FROM narration_lipsync ORDER BY rowid DESC LIMIT 30')->fetchAll(PDO::FETCH_COLUMN)as $raw){
-            $v=json_decode($raw,true);unset($v['status_url'],$v['response_url'],$v['audio_file']);$sync[]=$v;
+            $v=json_decode($raw,true);unset($v['status_url'],$v['response_url'],$v['audio_file']);
+            // Progress of the final captioned video built from this lip-sync (same id in jobs).
+            if(($v['status']??'')==='completed'){$q=$db->prepare('SELECT payload FROM jobs WHERE id=?');$q->execute([$v['id']]);$j=json_decode($q->fetchColumn()?:'null',true);
+                if($j)$v['final']=['status'=>$j['finish_status']??'waiting','error'=>$j['finish_error']??'','url'=>$j['captioned_url']??null];}
+            $sync[]=$v;
         }
         $videos=[];foreach($db->query('SELECT payload FROM jobs ORDER BY rowid DESC LIMIT 50')->fetchAll(PDO::FETCH_COLUMN)as $raw){
             $v=json_decode($raw,true);if(($v['status']??'')==='completed'&&!empty($v['video_url']))$videos[]=['id'=>$v['id'],'vehicle'=>$v['vehicle'],'stock'=>$v['stock'],'duration'=>$v['duration']??15];
@@ -171,7 +175,7 @@ function narrationApi(string $action,array $in,array $cfg,PDO $db):array {
             throw new RuntimeException('Cannot make padded narration readable.');
         $padded['audio_url']=validateAppBase($cfg).'/assets/narrations/'.$wavName;
         $record=['id'=>bin2hex(random_bytes(16)),'stock'=>$audio['stock'],'vehicle'=>$audio['vehicle'],
-            'narration_id'=>$audio['id'],'source_video_id'=>$source['id'],'audio_file'=>$wavName,'status'=>'submitting','created_at'=>gmdate('c')];
+            'narration_id'=>$audio['id'],'source_video_id'=>$source['id'],'audio_file'=>$wavName,'auto_build'=>!empty($in['auto_build']),'status'=>'submitting','created_at'=>gmdate('c')];
         narrationReserve($db,'narration_lipsync',$record,hash('sha256',$audio['audio_hash'].'|'.$source['id']));
         $code=0;
         try{
@@ -213,7 +217,8 @@ function narrationApi(string $action,array $in,array $cfg,PDO $db):array {
                 $job=['id'=>$record['id'],'stock'=>$source['stock'],'vehicle'=>$source['vehicle'],'price'=>$source['price'],
                     'format'=>$source['format'],'style'=>$source['style']??'showroom','duration'=>$source['duration']??15,
                     'status'=>'completed','video_url'=>$url,'script'=>$audio['caption_script'],'speech_script'=>$audio['text'],
-                    'created_at'=>gmdate('c'),'provider'=>'fal_lipsync','narration_id'=>$audio['id'],'source_video_id'=>$source['id']];
+                    'created_at'=>gmdate('c'),'provider'=>'fal_lipsync','narration_id'=>$audio['id'],'source_video_id'=>$source['id'],
+                    'auto_build'=>!empty($record['auto_build'])];
                 $q=$db->prepare('INSERT OR IGNORE INTO jobs (id,fingerprint,payload) VALUES (?,NULL,?)');
                 $q->execute([$job['id'],json_encode($job,JSON_THROW_ON_ERROR)]);
                 $record['status']='completed';$record['video_url']=$url;$record['completed_at']=gmdate('c');

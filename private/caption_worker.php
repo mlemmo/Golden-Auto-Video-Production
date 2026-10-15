@@ -6,6 +6,9 @@ require __DIR__.'/app.php';$cfg=require __DIR__.'/config.php';
 $cfg['asset_dir']=$cfg['asset_dir']??(is_dir(__DIR__.'/../public/assets')?__DIR__.'/../public/assets':__DIR__.'/../public_html/golden-auto-video/assets');
 if(($cfg['render_backend']??'linux')!=='linux')exit;
 $db=db($cfg);$lock=fopen($cfg['data_dir'].'/caption-worker.lock','c');if(!$lock||!flock($lock,LOCK_EX|LOCK_NB))exit;
+// One-approval build: advance auto-build lip-sync jobs and queue their final render before picking a job below.
+require_once __DIR__.'/auto_build.php';
+try{foreach(goldenAutoBuild($db,$cfg) as $line)echo $line,"\n";}catch(Throwable $e){echo 'Auto-build step failed: ',jobError($e->getMessage()),"\n";}
 function saveRenderJob(PDO $db,array $j):void{$q=$db->prepare('UPDATE jobs SET payload=? WHERE id=?');$q->execute([json_encode($j,JSON_THROW_ON_ERROR),$j['id']]);}
 function downloadMaster(string $url,string $path):void {
     $u=parse_url($url);if(($u['scheme']??'')!=='https'||empty($u['host'])||isset($u['user'])||isset($u['pass'])||isset($u['port']))throw new RuntimeException('Invalid generated-video URL.');
