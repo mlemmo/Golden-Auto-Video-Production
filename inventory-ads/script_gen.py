@@ -41,7 +41,7 @@ You get the photos as a numbered list in the order the dealer uploaded them. You
 them. Dealers usually shoot front three-quarter first, then sides, rear, interior, then details. \
 Pick 6–8 indices for the slideshow, keeping the first photo first.
 
-Return the result by calling the ad_script tool."""
+Return the result by calling the ad_script tool (or, if you cannot, as one JSON object with the same fields)."""
 
 AD_SCRIPT_TOOL = {
     "name": "ad_script",
@@ -77,13 +77,19 @@ def write_script(v: Vehicle, client: anthropic.Anthropic | None = None) -> dict:
     }
     msg = client.messages.create(
         model=MODEL,
-        max_tokens=1500,
+        max_tokens=4000,
         system=SYSTEM_PROMPT,
         tools=[AD_SCRIPT_TOOL],
-        tool_choice={"type": "tool", "name": "ad_script"},
         messages=[{"role": "user", "content": json.dumps(user, indent=2)}],
     )
     script = next((b.input for b in msg.content if b.type == "tool_use"), None)
+    if not isinstance(script, dict):                 # model answered in text: take the JSON object from it
+        text = "".join(getattr(b, "text", "") for b in msg.content if b.type == "text")
+        i, j = text.find("{"), text.rfind("}")
+        try:
+            script = json.loads(text[i:j + 1]) if i >= 0 < j else None
+        except json.JSONDecodeError:
+            script = None
     if not isinstance(script, dict) or "spoken_script" not in script:
         raw = "\n".join(getattr(b, "text", "") or str(getattr(b, "input", "")) for b in msg.content)
         raise ValueError(f"no script returned (model={msg.model}, stop={msg.stop_reason}): {raw[:300]!r}")
