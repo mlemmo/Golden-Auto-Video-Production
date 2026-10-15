@@ -33,8 +33,8 @@ hundred eighty-eight dollars"); never say cents or any other price. Golden Auto'
 ("twenty eighteen", "three point five liter"). Spell letter codes with hyphens so the voice reads \
 them as letters: SUV -> "S-U-V", XV -> "X-V", CR-V -> "C-R-V", AWD -> "all-wheel drive". The website is \
 "my golden auto dot net".
-5. Open with a 1-sentence hook about who the car is for. End with the call to action: \
-call or text 925-230-1400 or tap to see it at Golden Auto in San Ramon.
+5. Open with a 1-sentence hook about who the car is for. End with exactly this sentence: \
+"Call or text nine two five, two three zero, one four zero zero, or tap to see it at Golden Auto in San Ramon."
 
 PHOTOS
 You get the photos as a numbered list in the order the dealer uploaded them. You cannot see \
@@ -97,8 +97,34 @@ def write_script(v: Vehicle, client: anthropic.Anthropic | None = None) -> dict:
     return script
 
 
+CTA = ("Call or text nine two five, two three zero, one four zero zero, "
+       "or tap to see it at Golden Auto in San Ramon.")
+ONES = "zero one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen " \
+       "seventeen eighteen nineteen".split()
+TENS = "_ _ twenty thirty forty fifty sixty seventy eighty ninety".split()
+
+
+def words(n: int) -> str:
+    """0-999 in words, for spoken mileage like '253 thousand'."""
+    if n < 20:
+        return ONES[n]
+    if n < 100:
+        return TENS[n // 10] + ("-" + ONES[n % 10] if n % 10 else "")
+    return ONES[n // 100] + " hundred" + (" " + words(n % 100) if n % 100 else "")
+
+
+def tidy_speech(text: str) -> str:
+    """Same phone wording every time; numerals before 'thousand' spelled out."""
+    import re
+    i = text.lower().rfind("call or text")
+    text = (text[:i].rstrip() + " " + CTA) if i >= 0 else (text.rstrip() + " " + CTA)
+    text = re.sub(r"\b(\d{1,3})(?= thousand)", lambda m: words(int(m.group(1))), text)
+    return re.sub(r"\bpriced at just\b", "Just", re.sub(r"\bIt's priced at just\b", "Just", text))
+
+
 def validate(s: dict, v: Vehicle) -> None:
     """Cheap guardrails before spending money on a render."""
+    s["spoken_script"] = tidy_speech(s["spoken_script"])
     words = len(s["spoken_script"].split())
     if not 40 <= words <= 90:
         raise ValueError(f"{v.stock}: script is {words} words")
