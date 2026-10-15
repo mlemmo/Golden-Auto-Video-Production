@@ -9,8 +9,10 @@ verify(str_contains($speech,'my golden auto dot net')&&!str_contains($speech,'N,
 $p=promptNative($v,$speech,30,'friendly woman, cream dress');
 verify(str_contains($p,'word for word')&&str_contains($p,'"'.$speech.'"'),'prompt carries the exact spoken words');
 verify(str_contains($p,'X-V')&&!str_contains($p,'$14,688'),'spoken words use the pronunciation form');
-verify(str_contains($p,'rear three-quarter')&&str_contains($p,'No music'),'prompt sets the camera move and clean voice audio');
-verify(str_contains($p,'always in the foreground, between the camera and the car')&&str_contains($p,'never behind the car'),'spokesperson stays in front of the car');
+verify(str_contains($p,'four wide shots')&&str_contains($p,'Shot 4 (23–30 s)')&&str_contains($p,'No music'),'prompt sets four wide shots around the car and clean voice audio');
+verify(str_contains($p,'entire car is visible from bumper to bumper')&&str_contains($p,'never closer to the camera than the car'),'whole car in frame, spokesperson beside it');
+verify(str_contains($p,'finishes by 28 seconds')&&!str_contains($p,'Reference audio 1'),'speech ends before the cut-off; no voice reference unless configured');
+verify(str_contains(promptNative($v,$speech,30,'x',true),'Reference audio 1 is the spokesperson'),'voice reference described when configured');
 verify(str_contains($p,'"San Ramon" is pronounced san ruh-MOHN')&&str_contains($p,'never spelled out letter by letter'),'pronunciation guide for city and website');
 verify(!str_contains(promptNative($v,'Just fourteen thousand dollars.'),'Pronunciation:'),'no pronunciation note when the words are absent');
 try{promptNative($v,'  ');verify(false,'empty script rejected');}catch(RuntimeException $e){verify(true,'empty script rejected');}
@@ -46,6 +48,8 @@ try{
         $srt=goldenNativeCaptions($cfg,['script'=>'Take a look at this 2013 SUBARU XV CROSSTREK. Just $14,688.','vehicle'=>'2013 SUBARU XV CROSSTREK','duration'=>30],$mp4,$dir);
         preg_match_all('/(\d\d):(\d\d):(\d\d),(\d{3}) -->/',$srt,$m,PREG_SET_ORDER);
         $starts=array_map(fn($x)=>(int)$x[3]+(int)$x[4]/1000,$m);
+        $srt2=goldenNativeCaptions($cfg,['script'=>'Visit Golden Auto in San Ramon today.','vehicle'=>'','duration'=>30],$mp4,$dir);
+        verify(str_contains(str_replace("\n",' ',$srt2),'San Ramon'),'"San Ramon" is never split across captions');
         verify(str_contains(str_replace("\n",' ',$srt),'Subaru XV Crosstrek')&&str_contains($srt,'Just $14,688.'),'captions use display wording');
         verify(count($starts)>=2&&$starts[0]<0.5&&abs(end($starts)-3.8)<0.4,'second sentence caption starts at the measured pause');
         file_put_contents("$dir/captions.srt",$srt);

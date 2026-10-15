@@ -46,7 +46,7 @@ function captionSyllables(string $text):int {
 function captionUnits(string $sentence,string $vehicle=''):array {
     $s=$sentence;$protect=[];
     if($vehicle!=='')$protect[]=preg_quote($vehicle,'/');
-    $protect[]='Golden Auto';$protect[]='test drive';$protect[]='(?:Just|Priced at)\s+\$[\d,]+(?:\.\d+)?';
+    $protect[]='Golden Auto';$protect[]='San Ramon';$protect[]='test drive';$protect[]='(?:Just|Priced at)\s+\$[\d,]+(?:\.\d+)?';
     foreach($protect as $re)$s=preg_replace_callback('/'.$re.'/iu',fn($m)=>preg_replace('/\s+/',"\x01",$m[0]),$s);
     $tokens=preg_split('/\s+/u',trim($s),-1,PREG_SPLIT_NO_EMPTY);$units=[];$carry='';
     foreach($tokens as $i=>$t){

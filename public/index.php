@@ -134,8 +134,11 @@ if (isset($_GET['api'])) {
             $format=(string)($in['format']??'');if(!isset($formats[$format])) throw new RuntimeException('Choose a video format.');
             // The exact prompt is part of the fingerprint: a prompt improvement is a new request, a repeat is still blocked.
             $native=$voice==='native';
-            $promptText=$native?promptNative($fresh,nativeSpeech($spoken),$duration,$presenter['description']):prompt($fresh,$spoken,$style,$duration,$presenter['description']);
-            $fingerprint=hash('sha256',json_encode([$v['Vin'],$v['price'],$spoken,$sheet,$avatar,$presenter['description'],$format,$style,$duration,$voice,hash('sha256',$promptText)]));
+            // Optional voice reference (config voice_reference_url): the same voice on every native-voice video.
+            $voiceRef=$native?trim((string)($cfg['voice_reference_url']??'')):'';
+            if($voiceRef!==''&&!preg_match('~^https://[^\s?#]+\.(mp3|wav|m4a)$~i',$voiceRef))throw new RuntimeException('voice_reference_url in config.php must be a public https link to an MP3, WAV or M4A file.');
+            $promptText=$native?promptNative($fresh,nativeSpeech($spoken),$duration,$presenter['description'],$voiceRef!==''):prompt($fresh,$spoken,$style,$duration,$presenter['description']);
+            $fingerprint=hash('sha256',json_encode([$v['Vin'],$v['price'],$spoken,$sheet,$avatar,$presenter['description'],$format,$style,$duration,$voice,hash('sha256',$promptText),$voiceRef]));
             $id=bin2hex(random_bytes(12));$job=['id'=>$id,'stock'=>$v['StockNumber'],'vehicle'=>title($v),'spokesperson_id'=>$presenter['id'],'spokesperson'=>$presenter['name'],'format'=>$format,'style'=>$style,'duration'=>$duration,'status'=>'preparing_references','created_at'=>gmdate('c'),'script'=>$spoken,'speech_script'=>$voice==='native'?nativeSpeech($spoken):speechScript($spoken),'price'=>$v['price'],'voice'=>$voice];
             // Native voice: one approval builds the final video (captions timed from the video's own audio).
             if($voice==='native')$job['auto_build']=true;
@@ -150,6 +153,7 @@ if (isset($_GET['api'])) {
             catch(Throwable $e){$job['status']='reference_upload_failed';$job['error']=jobError($e->getMessage());$q=$db->prepare('UPDATE jobs SET fingerprint=NULL,payload=? WHERE id=?');$q->execute([json_encode($job),$id]);throw new RuntimeException($job['error']);}
             $job['status']='submitting';$q=$db->prepare('UPDATE jobs SET payload=? WHERE id=?');$q->execute([json_encode($job),$id]);
             $payload=['prompt'=>$promptText,'image_urls'=>[$hostedSheet,$hostedAvatar],'duration'=>$duration,'resolution'=>'720p','aspect_ratio'=>$formats[$format],'output_format'=>'mp4','generate_audio'=>$native];
+            if($voiceRef!=='')$payload['audio_urls']=[$voiceRef];
             try {
                 $r=json_decode(request('https://api.higgsfield.ai/bytedance/seedance-2.5/reference-to-video',$payload,$cfg['higgsfield_key']),true,512,JSON_THROW_ON_ERROR);
                 if(empty($r['request_id'])) throw new RuntimeException('Missing request ID.');

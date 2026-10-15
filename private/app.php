@@ -118,25 +118,33 @@ function script30(array $v): string {
     return $join($parts);
 }
 /**
- * Native-voice showroom shot (Seedance generate_audio): the spokesperson speaks the script herself, so voice,
- * lips and gestures come from one generation and no separate narration or lip-sync step is needed.
- * $speech is the pronunciation form (speechScript); captions use the display script.
+ * Native-voice showroom walkaround (Seedance generate_audio): four wide shots around the whole car, with the car fully
+ * in frame and in focus and the spokesperson beside it (never between camera and car), like the reference videos.
+ * The spokesperson speaks the script herself, so voice, lips and gestures come from one generation.
+ * $speech is the pronunciation form (nativeSpeech); captions use the display script. $voiceReference: an audio
+ * reference of the spokesperson's voice is attached to the request.
  */
-function promptNative(array $v,string $speech,int $duration=30,string $presenter=SPOKESPERSON_DEFAULT_DESCRIPTION): string {
+function promptNative(array $v,string $speech,int $duration=30,string $presenter=SPOKESPERSON_DEFAULT_DESCRIPTION,bool $voiceReference=false): string {
     $presenter=rtrim(trim($presenter),'.');
     $speech=trim(preg_replace('/\s+/',' ',str_replace('"',"'",$speech))??'');
     if($speech==='')throw new RuntimeException('Write the script the spokesperson will say.');
-    return 'Create a '.$duration.'-second dealership showroom video with synchronized spoken dialogue. '.
-        'Reference image 1 is the exact vehicle asset sheet showing its front, sides and rear; reference image 2 is the spokesperson; match their face, hair, body and outfit exactly. '.
+    $t=fn(float $f)=>(string)round($duration*$f);
+    $speakUntil=max(4,$duration-2);
+    return 'Create a '.$duration.'-second dealership walkaround video made of four wide shots, with synchronized spoken dialogue. '.
+        'Reference image 1 is the exact vehicle asset sheet showing its front, sides and rear; reference image 2 is the spokesperson; match their face, hair, body and outfit exactly. '.($voiceReference?'Reference audio 1 is the spokesperson\'s voice: match its timbre, accent, pitch and delivery exactly. ':'').
         'Preserve the vehicle paint, trim, wheels, lamps and body exactly; do not invent equipment, badges or license plates, and do not repair cosmetic imperfections. The vehicle is parked and stationary throughout. '.
-        'Setting: a bright, upscale modern showroom with polished stone floors, warm architectural lighting and tall windows, not a representation of Golden Auto’s actual building. '.
-        'Placement is critical: the spokesperson ('.$presenter.') is always in the foreground, between the camera and the car, closer to the camera than the car. She is never behind the car, never on its far side and never hidden by it; the car is always behind her or beside her, never in front of her. '.
-        'She begins standing in front of the rear three-quarter corner of the car on the side nearest the camera, then walks slowly forward along that side toward the front three-quarter corner while presenting the car, ending in front of the front corner. '.
-        'She is fully visible from head to at least the knees the whole time, faces the camera most of the time, and speaks directly to the viewer. Her lip movements match every word exactly; her expressions are warm and natural, and her relaxed open-hand gestures toward the car match what she is saying at that moment, with no repetitive or random gestures. '.
-        'Camera: one slow, smooth, continuous tracking move on a stabilizer at her walking pace, slightly ahead of her, keeping her face clearly visible, well lit and reasonably large in frame while the car stays recognizable behind her. No hard cuts, no orbit to the far side of the car. '.
-        'She speaks in a warm, clear, friendly American English voice at a natural, unhurried pace and says exactly this, word for word, and nothing else: "'.$speech.'" '.
+        'Setting: a bright, upscale modern showroom with polished floors, soft even lighting and tall windows, with open space all around the car, not a representation of Golden Auto’s actual building. '.
+        'Framing rules for every shot: the car is the main subject and in sharp focus, and the entire car is visible from bumper to bumper with space around it, never cropped. Use a wide lens with the camera about seven meters away at chest height. '.
+        'The spokesperson ('.$presenter.') stands or walks right beside the car, about one step from its body, shown full length from head to shoes, roughly half the height of the frame. She is never closer to the camera than the car, never blocks the view of the car, and never stands behind it or on its far side. '.
+        'Shot 1 (0–'.$t(.25).' s): wide front three-quarter view of the whole car; she stands beside the front fender, facing the camera, and begins speaking. '.
+        'Shot 2 ('.$t(.25).'–'.$t(.5).' s): wide side profile of the whole car; she walks slowly along the side toward the rear, gesturing to the car. '.
+        'Shot 3 ('.$t(.5).'–'.$t(.75).' s): wide rear three-quarter view of the whole car; she stands beside the rear corner, gesturing to the rear of the car. '.
+        'Shot 4 ('.$t(.75).'–'.$duration.' s): wide front three-quarter view of the whole car from the other side; she has walked around to the front corner and finishes speaking to the camera with a warm smile. '.
+        'Clean cuts between the four shots; the camera is steady or moves slowly within each shot. '.
+        'Speech: she speaks to the camera throughout, in a warm, clear, natural, friendly American English voice, relaxed and unhurried, with a brief natural pause between sentences, like a real salesperson talking to one customer, not an announcer. Her lip movements match every word exactly, and her open-hand gestures toward the car match what she is saying. Her speech continues seamlessly across the cuts and finishes by '.$speakUntil.' seconds. '.
+        'She says exactly this, word for word, and nothing else: "'.$speech.'" '.
         speechPronunciationGuide($speech).
-        'Audio: only her voice, clear and close to the microphone, over a soft quiet room tone. No music, no other voices, no sound effects. '.
+        'Audio: only her voice, clear, natural and close to the microphone, with no echo or reverb, over a soft quiet room tone. No music, no other voices, no sound effects. '.
         'Leave space at the bottom of the frame for captions added in post-production. No on-screen text of any kind: no captions, no watermark, no website address, no logo, no signage text, no license-plate text.';
 }
 function speechPronunciationGuide(string $speech):string {
