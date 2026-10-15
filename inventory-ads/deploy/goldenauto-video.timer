@@ -1,0 +1,10 @@
+[Unit]
+Description=Nightly Golden Auto video ad run
+
+[Timer]
+OnCalendar=*-*-* 05:47:00 America/Los_Angeles
+Persistent=true
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target

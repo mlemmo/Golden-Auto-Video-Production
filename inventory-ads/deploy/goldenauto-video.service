@@ -1,0 +1,12 @@
+[Unit]
+Description=Golden Auto inventory video ads
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=__USER__
+WorkingDirectory=/opt/goldenauto-video
+ExecStart=/opt/goldenauto-video/deploy/run.sh
+TimeoutStartSec=3h
+Nice=10

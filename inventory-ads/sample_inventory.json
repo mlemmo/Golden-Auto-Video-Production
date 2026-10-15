@@ -1,0 +1,38 @@
+{
+  "source": "mygoldenauto.net",
+  "scraped_at": "2026-10-15T20:40:00Z",
+  "vehicles": [
+    {
+      "stock": "A13806",
+      "vin": "1FMJK1MT7JEA13806",
+      "year": 2018,
+      "make": "FORD",
+      "model": "EXPEDITION MAX",
+      "trim": "PLATINUM SPORT UTILITY 4D",
+      "body": "SUV",
+      "fuel": "GASOLINE",
+      "drivetrain": "4WD",
+      "transmission": "AUTOMATIC",
+      "engine": "V6, ECOBOOST, TT, 3.5L",
+      "mileage": 81608,
+      "exterior_color": "WHITE",
+      "interior_color": "WHITE",
+      "price_advertised": 27026.25,
+      "price_base": 26888,
+      "description": "Step Into Comfort With This 2018 Ford Expedition MAX Platinum. Spacious SUV with a white exterior and roomy interior, automatic 10-speed transmission.",
+      "url": "https://www.mygoldenauto.net/inventory/ford/expedition-max/a13806/",
+      "photos": [
+        "https://imagescf.dealercenter.net/1920/1080/202606-cbd9850011b44bd6a4558b383d87f485.jpg",
+        "https://imagescf.dealercenter.net/1920/1080/202606-d1bc7a11e3774b48bf2884b11d581a97.jpg",
+        "https://imagescf.dealercenter.net/1920/1080/202606-32bb0c9f6a6e40b1b3b223bd0fd390af.jpg",
+        "https://imagescf.dealercenter.net/1920/1080/202606-55a62f3c911e498d9e194b263e9faa5b.jpg",
+        "https://imagescf.dealercenter.net/1920/1080/202606-eba4462a532b44bdb6b19cbbd546f0c4.jpg",
+        "https://imagescf.dealercenter.net/1920/1080/202606-3d5607505f2c4360b2081153d8bda38e.jpg",
+        "https://imagescf.dealercenter.net/1920/1080/202606-8c8b7292e5404bd4a6284ee0b0b31c34.jpg",
+        "https://imagescf.dealercenter.net/1920/1080/202606-a7cec34445dc4e509f6d50b7ced5ab1c.jpg",
+        "https://imagescf.dealercenter.net/1920/1080/202606-0b45e86267fe46fda96e745e74131810.jpg",
+        "https://imagescf.dealercenter.net/1920/1080/202606-b48e61aec03d4f9baded61df9c1e53d2.jpg"
+      ]
+    }
+  ]
+}
