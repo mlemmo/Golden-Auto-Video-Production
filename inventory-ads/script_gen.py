@@ -41,15 +41,26 @@ You get the photos as a numbered list in the order the dealer uploaded them. You
 them. Dealers usually shoot front three-quarter first, then sides, rear, interior, then details. \
 Pick 6–8 indices for the slideshow, keeping the first photo first.
 
-Return ONLY this JSON, no prose:
-{
-  "hook_text": "<on-screen headline, max 6 words>",
-  "spoken_script": "<what the spokesperson says>",
-  "price_badge": "<e.g. Just $14,688>",
-  "spec_chips": ["<3-4 short on-screen chips taken from the facts, e.g. '81K miles', '4WD', 'V6 EcoBoost'>"],
-  "photo_order": [<photo indices>],
-  "cta_text": "<end card line, max 8 words>"
-}"""
+Return the result by calling the ad_script tool."""
+
+AD_SCRIPT_TOOL = {
+    "name": "ad_script",
+    "description": "Return the finished ad script and on-screen elements for one vehicle.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "hook_text": {"type": "string", "description": "On-screen headline, max 6 words"},
+            "spoken_script": {"type": "string", "description": "What the spokesperson says, 55-75 words"},
+            "price_badge": {"type": "string", "description": "e.g. Just $14,688"},
+            "spec_chips": {"type": "array", "items": {"type": "string"},
+                           "description": "3-4 short on-screen chips from the facts, e.g. 81K miles, 4WD"},
+            "photo_order": {"type": "array", "items": {"type": "integer"},
+                            "description": "6-8 photo indices, first photo first"},
+            "cta_text": {"type": "string", "description": "End card line, max 8 words"},
+        },
+        "required": ["hook_text", "spoken_script", "price_badge", "spec_chips", "photo_order", "cta_text"],
+    },
+}
 
 
 def make_client() -> anthropic.Anthropic:
@@ -66,13 +77,16 @@ def write_script(v: Vehicle, client: anthropic.Anthropic | None = None) -> dict:
     }
     msg = client.messages.create(
         model=MODEL,
-        max_tokens=800,
+        max_tokens=1500,
         system=SYSTEM_PROMPT,
+        tools=[AD_SCRIPT_TOOL],
+        tool_choice={"type": "tool", "name": "ad_script"},
         messages=[{"role": "user", "content": json.dumps(user, indent=2)}],
     )
-    text = "".join(b.text for b in msg.content if b.type == "text").strip()
-    text = text[text.find("{"): text.rfind("}") + 1]
-    script = json.loads(text)
+    script = next((b.input for b in msg.content if b.type == "tool_use"), None)
+    if not isinstance(script, dict) or "spoken_script" not in script:
+        raw = "\n".join(getattr(b, "text", "") or str(getattr(b, "input", "")) for b in msg.content)
+        raise ValueError(f"no script returned (model={msg.model}, stop={msg.stop_reason}): {raw[:300]!r}")
     validate(script, v)
     return script
 
