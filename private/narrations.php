@@ -29,6 +29,17 @@ function narrationTables(PDO $db):void {
     $db->exec('CREATE TABLE IF NOT EXISTS narrations (id TEXT PRIMARY KEY,fingerprint TEXT UNIQUE,payload TEXT NOT NULL);
               CREATE TABLE IF NOT EXISTS narration_lipsync (id TEXT PRIMARY KEY,fingerprint TEXT UNIQUE,payload TEXT NOT NULL)');
 }
+/**
+ * ElevenLabs voice settings. 30-second previews are read a little slower (config narration_speed, default 0.9,
+ * ElevenLabs range 0.7–1.2) so the speech fills more of the video: a long silent end made Seedance pad it by
+ * repeating lines. 15-second previews keep normal speed.
+ */
+function narrationVoiceSettings(array $cfg,int $duration):array {
+    $settings=['stability'=>0.65,'similarity_boost'=>0.75];
+    $speed=$duration===30?max(0.7,min(1.2,(float)($cfg['narration_speed']??0.9))):1.0;
+    if(abs($speed-1.0)>0.001)$settings['speed']=$speed;
+    return $settings;
+}
 function narrationLoad(PDO $db,string $table,string $id):array {
     if(!in_array($table,['narrations','narration_lipsync','jobs'],true))throw new LogicException('Invalid table.');
     $q=$db->prepare("SELECT payload FROM $table WHERE id=?");$q->execute([$id]);$raw=$q->fetchColumn();
@@ -114,16 +125,17 @@ function narrationApi(string $action,array $in,array $cfg,PDO $db):array {
         $v=null;foreach((state($db,'inventory')['vehicles']??[])as $candidate)if($candidate['StockNumber']===($in['stock']??''))$v=$candidate;
         if(!$v||($v['active']??true)===false)throw new RuntimeException('Select a saved vehicle that is still in active inventory.');
         $duration=(int)($in['duration']??15);if(!in_array($duration,[15,30],true))throw new RuntimeException('Choose 15 or 30 seconds.');
-        $fingerprint=hash('sha256',json_encode([$v['StockNumber'],$v['price'],$voice,$text,$captions,$duration]));
+        $settings=narrationVoiceSettings($cfg,$duration);
+        $fingerprint=hash('sha256',json_encode([$v['StockNumber'],$v['price'],$voice,$text,$captions,$duration,$settings]));
         if($in['new_take']??false)$fingerprint=hash('sha256',$fingerprint.random_bytes(16));
         $record=['id'=>bin2hex(random_bytes(16)),'stock'=>$v['StockNumber'],'vehicle'=>title($v),'price'=>$v['price'],
-            'voice_id'=>$voice,'text'=>$text,'caption_script'=>$captions,'duration'=>$duration,'status'=>'submitting','created_at'=>gmdate('c')];
+            'voice_id'=>$voice,'text'=>$text,'caption_script'=>$captions,'duration'=>$duration,'speed'=>$settings['speed']??1.0,'status'=>'submitting','created_at'=>gmdate('c')];
         narrationReserve($db,'narrations',$record,$fingerprint);
         $code=0;
         try{
             $r=narrationHttp('https://api.elevenlabs.io/v1/text-to-speech/'.rawurlencode($voice).'?output_format=mp3_44100_128','POST',
                 ['xi-api-key'=>$key,'Content-Type'=>'application/json','Accept'=>'audio/mpeg'],
-                ['text'=>$text,'model_id'=>'eleven_multilingual_v2','voice_settings'=>['stability'=>0.65,'similarity_boost'=>0.75]]);
+                ['text'=>$text,'model_id'=>'eleven_multilingual_v2','voice_settings'=>$settings]);
             $code=(int)$r['status'];if($code<200||$code>=300)throw new RuntimeException('Voice preview API failed (HTTP '.$code.').');
             $dir=($cfg['asset_dir']??__DIR__.'/../public/assets').'/narrations';
             if(!is_dir($dir)&&!mkdir($dir,0755,true))throw new RuntimeException('Cannot create narration folder.');

@@ -131,29 +131,43 @@ function promptNative(array $v,string $speech,int $duration=30,string $presenter
     $presenter=rtrim(trim($presenter),'.');
     $speech=trim(preg_replace('/\s+/',' ',str_replace('"',"'",$speech))??'');
     if($speech==='')throw new RuntimeException('Write the script the spokesperson will say.');
-    $t=fn(float $f)=>(string)round($duration*$f);
     $speakFrom=0.5;
     $speakUntil=$speechSeconds!==null?min($duration-0.5,round($speakFrom+$speechSeconds,1)):max(4,$duration-2);
-    $silentAfter=$speechSeconds!==null&&$speakUntil<$duration-1
-        ?'At '.$speakUntil.' seconds she has finished speaking: from then until the end she does not talk at all, keeps her mouth closed with a warm smile, and simply gestures toward the car. '
-        :'';
-    return 'Create a '.$duration.'-second dealership walkaround video made of four wide shots, with synchronized spoken dialogue. '.
+    // A short narration leaves a long silent end, which Seedance filled by repeating lines. With 3 s or more left,
+    // the four presenter shots fit the speech and the rest is camera-only pan shots of the car, with nobody on screen to talk.
+    $talkEnd=$speechSeconds!==null&&$duration-$speakUntil>=3?(int)min($duration-2,ceil($speakUntil+0.5)):$duration;
+    $panShots=[];
+    if($talkEnd<$duration){
+        $pan=fn(string $from,string $to,string $move)=>'('.$from.'–'.$to.' s): camera-only shot of the parked car alone, '.$move.'; the whole car stays in frame and in focus; the spokesperson is not in this shot and nobody speaks. ';
+        if($duration-$talkEnd>=6){$mid=(string)round(($talkEnd+$duration)/2);
+            $panShots=[$pan((string)$talkEnd,$mid,'a slow smooth camera orbit from the front three-quarter along the side of the car'),
+                $pan($mid,(string)$duration,'a slow gentle push-in toward the front three-quarter, ending on a clean hero view of the car')];}
+        else $panShots=[$pan((string)$talkEnd,(string)$duration,'a slow smooth camera orbit around the front three-quarter, ending on a clean hero view of the car')];
+    }
+    $t=fn(float $f)=>(string)round($talkEnd*$f);
+    $silentAfter=$panShots
+        ?'At '.$speakUntil.' seconds she has finished speaking and says nothing more. '
+        :($speechSeconds!==null&&$speakUntil<$duration-1?'At '.$speakUntil.' seconds she has finished speaking: from then until the end she does not talk at all, keeps her mouth closed with a warm smile, and simply gestures toward the car. ':'');
+    $count=['','one','two'][count($panShots)];
+    return 'Create a '.$duration.'-second dealership walkaround video made of four wide shots, with synchronized spoken dialogue'.($panShots?', followed by '.$count.' slow camera-only pan shot'.(count($panShots)>1?'s':'').' of the car with no one speaking':'').'. '.
         'Reference image 1 is the exact vehicle asset sheet showing its front, sides and rear; reference image 2 is the spokesperson; match their face, hair, body and outfit exactly. '.
         ($voiceReference==='speech'?'Reference audio 1 is the exact recording of her speech for this video: she says exactly those words with that voice, at exactly the same pace and timing as the recording, starting at '.$speakFrom.' seconds; do not slow it down, stretch it or add pauses. Her lip movements follow that recording word for word. '
             :($voiceReference?'Reference audio 1 is the spokesperson\'s voice: match its timbre, accent, pitch and delivery exactly. ':'')).
         'Preserve the vehicle paint, trim, wheels, lamps and body exactly; do not invent equipment, badges or license plates, and do not repair cosmetic imperfections. The vehicle is parked and stationary throughout. '.
         'Setting: a bright, upscale modern showroom with polished floors, soft even lighting and tall windows, with open space all around the car, not a representation of Golden Auto’s actual building. '.
         'Framing rules for every shot: the car is the main subject and in sharp focus, and the entire car is visible from bumper to bumper with space around it, never cropped. Use a wide lens with the camera about seven meters away at chest height. '.
-        'The spokesperson ('.$presenter.') stands or walks right beside the car, about one step from its body, shown full length from head to shoes, roughly half the height of the frame. She is never closer to the camera than the car, never blocks the view of the car, and never stands behind it or on its far side. '.
+        ($panShots?'In shots 1–4 the spokesperson':'The spokesperson').' ('.$presenter.') stands or walks right beside the car, about one step from its body, shown full length from head to shoes, roughly half the height of the frame. She is never closer to the camera than the car, never blocks the view of the car, and never stands behind it or on its far side. '.
         'Shot 1 (0–'.$t(.25).' s): wide front three-quarter view of the whole car; she stands beside the front fender, facing the camera, and begins speaking. '.
         'Shot 2 ('.$t(.25).'–'.$t(.5).' s): wide side profile of the whole car; she walks slowly along the side toward the rear, gesturing to the car. '.
         'Shot 3 ('.$t(.5).'–'.$t(.75).' s): wide rear three-quarter view of the whole car; she stands beside the rear corner, gesturing to the rear of the car. '.
-        'Shot 4 ('.$t(.75).'–'.$duration.' s): wide front three-quarter view of the whole car from the other side; she has walked around to the front corner and finishes speaking to the camera with a warm smile. '.
-        'Clean cuts between the four shots; the camera is steady or moves slowly within each shot. '.
+        'Shot 4 ('.$t(.75).'–'.$talkEnd.' s): wide front three-quarter view of the whole car from the other side; she has walked around to the front corner and finishes speaking to the camera with a warm smile. '.
+        implode('',array_map(fn($k,$x)=>'Shot '.(5+$k).' '.$x,array_keys($panShots),$panShots)).
+        'Clean cuts between shots; the camera is steady or moves slowly within each shot. '.
         'Speech: she speaks to the camera'.($voiceReference==='speech'?' while the recording plays, in that same voice and pace,':' throughout, in a warm, clear, natural, friendly American English voice, relaxed and unhurried, with a brief natural pause between sentences,').' like a real salesperson talking to one customer, not an announcer. Her lip movements match every word exactly, and her open-hand gestures toward the car match what she is saying. Her speech continues seamlessly across the cuts and finishes by '.$speakUntil.' seconds. '.$silentAfter.
         'She says exactly this, word for word, and nothing else: "'.seedanceRespell($speech,$respell).'" '.
+        'She says each sentence exactly once, in this order, and then stops: she never repeats a sentence, the price or the website, and never adds words of her own. '.
         speechPronunciationGuide($speech).
-        'Audio: only her voice, clear, natural and close to the microphone, with no echo or reverb, over a soft quiet room tone. No music, no other voices, no sound effects. '.
+        'Audio: only her voice, clear, natural and close to the microphone, with no echo or reverb, over a soft quiet room tone'.($panShots?'; during the pan shots only the soft room tone':'').'. No music, no other voices, no sound effects. '.
         'Leave space at the bottom of the frame for captions added in post-production. No on-screen text of any kind: no captions, no watermark, no website address, no logo, no signage text, no license-plate text.';
 }
 function speechPronunciationGuide(string $speech):string {

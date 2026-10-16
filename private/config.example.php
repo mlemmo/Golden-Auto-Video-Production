@@ -11,6 +11,7 @@ return [
     'render_backend' => 'linux',
     // How Seedance should be told to say words it gets wrong (written into the spoken line; captions keep the real spelling).
     'respell' => ['San Ramon' => 'San Rah-moan'],
+    'narration_speed' => 0.9,                               // ElevenLabs speed for 30-second previews (0.7–1.2); slower fills more of the video
     'voice_reference_url' => '',                            // optional: public https MP3/WAV of the spokesperson voice (10–20 s), sent to Seedance so every video uses it
     'ffmpeg_path' => '/usr/bin/ffmpeg',
     // Optional local speech recognition (whisper.cpp) so captions follow the exact words she says; free, no API.
