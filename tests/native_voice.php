@@ -27,6 +27,13 @@ verify(str_contains($p,'says each sentence exactly once')&&str_contains($timed,'
 require_once __DIR__.'/../private/narrations.php';
 verify((narrationVoiceSettings([],30)['speed']??null)===0.9&&!isset(narrationVoiceSettings([],15)['speed']),'30-second previews are read a little slower; 15-second at normal speed');
 verify(narrationVoiceSettings(['narration_speed'=>1.5],30)['speed']===1.2&&!isset(narrationVoiceSettings(['narration_speed'=>1.0],30)['speed']),'narration speed is configurable and kept in the ElevenLabs range');
+$cap='Take a look at this 2013 SUBARU XV CROSSTREK Premium, here at Golden Auto in San Ramon. It comes with all-wheel drive, with just over 60,000 miles. Just $14,688. Book your test drive at mygoldenauto.net.';
+$spk='Take a look at this twenty thirteen Subaru X-V Crosstrek Premium, here at Golden Auto in San Ruh-mone. It comes with all-wheel drive, and just over sixty thousand miles. Just fourteen thousand six hundred eighty-eight dollars. Book your test drive at my golden auto dot net.';
+verify(narrationTextDifferences($spk,$cap)===['"with" (captions) vs "and" (spoken)'],'caption/spoken word difference found; numbers, price, website and respelling ignored');
+verify(narrationTextDifferences(str_replace('and just','with just',$spk),$cap)===[],'matching texts: no warning');
+verify(narrationTextDifferences(str_replace('and just','with just',$spk),str_replace(' Premium','',$cap))===['"premium" only in spoken text'],'a word missing from the captions is reported');
+verify(narrationTextDifferences(str_replace(['and just','San Ruh-mone'],['with just','San Ra-MOAN'],$spk),$cap,['San Ramon'=>'San Ra-MOAN'])===[],'configured respelling is not a difference');
+verify(str_contains(narrationMismatchNote(['"with" (captions) vs "and" (spoken)']),'Captions show the caption text')&&narrationMismatchNote([])==='','warning text only when they differ');
 verify(numberSpeech('2013 Subaru, 2008 Toyota, 1999 Ford, 2020 Kia, 60,000 miles, model 1500')==='twenty thirteen Subaru, two thousand eight Toyota, nineteen ninety-nine Ford, twenty twenty Kia, sixty thousand miles, model 1500','years and comma numbers spoken as words');
 verify(!str_contains(speechScript('This 2013 SUBARU has 60,000 miles. Just $14,688.'),'2013')&&str_contains(speechScript('Just $14,688.'),'fourteen thousand six hundred eighty-eight dollars'),'speech scripts use the number words, prices unchanged');
 verify(str_contains($p,'"San Ramon" is pronounced san rah-MOAN')&&str_contains($p,'never spelled out letter by letter'),'pronunciation guide for city and website');

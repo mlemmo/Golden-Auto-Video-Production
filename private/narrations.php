@@ -29,6 +29,56 @@ function narrationTables(PDO $db):void {
     $db->exec('CREATE TABLE IF NOT EXISTS narrations (id TEXT PRIMARY KEY,fingerprint TEXT UNIQUE,payload TEXT NOT NULL);
               CREATE TABLE IF NOT EXISTS narration_lipsync (id TEXT PRIMARY KEY,fingerprint TEXT UNIQUE,payload TEXT NOT NULL)');
 }
+/** Words as spoken, for comparing caption and spoken text: numbers, prices and the website as words, letters joined ("X-V" → "xv"). */
+function narrationWords(string $s):array {
+    $s=strtolower(speechScript($s));$s=str_replace(['-','–'],' ',$s);
+    $tokens=preg_split('/\s+/',trim(preg_replace('/[^a-z0-9\s]/',' ',$s)),-1,PREG_SPLIT_NO_EMPTY);
+    $out=[];$letters='';
+    foreach($tokens as $t){if(strlen($t)===1&&ctype_alpha($t)){$letters.=$t;continue;}if($letters!==''){$out[]=$letters;$letters='';}$out[]=$t;}
+    if($letters!=='')$out[]=$letters;
+    return $out;
+}
+/**
+ * Word differences between a preview's caption text and its spoken text, e.g. ['"with" (captions) vs "and" (spoken)'].
+ * Numbers written as words, prices, the website and respellings (config respell, or a close respelling such as
+ * "San Ruh-mone") are not differences. Captions show the caption text, so a difference means captions and voice disagree.
+ */
+function narrationTextDifferences(string $spoken,string $caption,array $respell=[]):array {
+    foreach(array_merge(SEEDANCE_RESPELL,$respell) as $word=>$say)if(is_string($word)&&is_string($say)&&$say!=='')$spoken=str_ireplace($say,$word,$spoken);
+    $c=narrationWords($caption);$s=narrationWords($spoken);$n=count($c);$m=count($s);
+    // Two short spoken syllables may be one respelled caption word ("ruh mone" for "ramon").
+    $pair=function(int $i,int $j)use($c,$s):bool{
+        if($j<2||strlen($s[$j-2])>4||strlen($s[$j-1])>5)return false;$x=$s[$j-2].$s[$j-1];$y=$c[$i-1];
+        return $x[0]===$y[0]&&abs(strlen($x)-strlen($y))<=3&&levenshtein($x,$y)<=(int)floor(max(strlen($x),strlen($y))*0.5);
+    };
+    $dp=array_fill(0,$n+1,array_fill(0,$m+1,0));$from=$dp;
+    for($i=1;$i<=$n;$i++){$dp[$i][0]=$i;$from[$i][0]=1;}
+    for($j=1;$j<=$m;$j++){$dp[0][$j]=$j;$from[0][$j]=2;}
+    for($i=1;$i<=$n;$i++)for($j=1;$j<=$m;$j++){
+        $best=$dp[$i-1][$j]+1;$f=1;
+        if($dp[$i][$j-1]+1<$best){$best=$dp[$i][$j-1]+1;$f=2;}
+        if(captionWordsMatch($c[$i-1],$s[$j-1])&&$dp[$i-1][$j-1]<=$best){$best=$dp[$i-1][$j-1];$f=3;}
+        if($pair($i,$j)&&$dp[$i-1][$j-2]<$best){$best=$dp[$i-1][$j-2];$f=4;}
+        $dp[$i][$j]=$best;$from[$i][$j]=$f;
+    }
+    // Walk back, grouping each run of unmatched words into one difference.
+    $diffs=[];$cr=[];$sr=[];$i=$n;$j=$m;
+    $close=function()use(&$diffs,&$cr,&$sr){
+        if(!$cr&&!$sr)return;$a=implode(' ',array_reverse($cr));$b=implode(' ',array_reverse($sr));
+        $diffs[]=$a!==''&&$b!==''?'"'.$a.'" (captions) vs "'.$b.'" (spoken)':($a!==''?'"'.$a.'" only in captions':'"'.$b.'" only in spoken text');
+        $cr=[];$sr=[];
+    };
+    while($i>0||$j>0){
+        $f=$from[$i][$j];
+        if($f===3){$close();$i--;$j--;}elseif($f===4){$close();$i--;$j-=2;}
+        elseif($f===1){$cr[]=$c[$i-1];$i--;}else{$sr[]=$s[$j-1];$j--;}
+    }
+    $close();
+    return array_reverse($diffs);
+}
+function narrationMismatchNote(array $diffs):string {
+    return $diffs?' Caption text and spoken text differ: '.implode('; ',array_slice($diffs,0,5)).'. Captions show the caption text, so fix one of them if they should match.':'';
+}
 /**
  * ElevenLabs voice settings. 30-second previews are read a little slower (config narration_speed, default 0.9,
  * ElevenLabs range 0.7–1.2) so the speech fills more of the video: a long silent end made Seedance pad it by
@@ -102,7 +152,8 @@ function narrationApi(string $action,array $in,array $cfg,PDO $db):array {
     }
     if($action==='narration_list'){
         $list=[];foreach($db->query('SELECT payload FROM narrations ORDER BY rowid DESC LIMIT 50')->fetchAll(PDO::FETCH_COLUMN)as $raw){
-            $v=json_decode($raw,true);$v['audio_url']=isset($v['audio_name'])?validateAppBase($cfg).'/assets/narrations/'.$v['audio_name']:null;$list[]=$v;
+            $v=json_decode($raw,true);$v['audio_url']=isset($v['audio_name'])?validateAppBase($cfg).'/assets/narrations/'.$v['audio_name']:null;
+            $v['text_mismatch']=narrationTextDifferences((string)($v['text']??''),(string)($v['caption_script']??''),(array)($cfg['respell']??[]));$list[]=$v;
         }
         $sync=[];foreach($db->query('SELECT payload FROM narration_lipsync ORDER BY rowid DESC LIMIT 30')->fetchAll(PDO::FETCH_COLUMN)as $raw){
             $v=json_decode($raw,true);unset($v['status_url'],$v['response_url'],$v['audio_file']);
@@ -145,7 +196,7 @@ function narrationApi(string $action,array $in,array $cfg,PDO $db):array {
             $record['audio_duration']=narrationBridge(['op'=>'probe','path'=>$path])['duration'];
             $record['status']='ready';$record['approved']=false;
             $record['too_long']=$record['audio_duration']>$duration;narrationSave($db,'narrations',$record);
-            return ['message'=>'Voice preview saved. Listen and approve pronunciation before lip-sync.'];
+            return ['message'=>'Voice preview saved. Listen and approve pronunciation before lip-sync.'.narrationMismatchNote(narrationTextDifferences($text,$captions,(array)($cfg['respell']??[])))];
         }catch(Throwable $e){
             $record['status']=narrationRejected($code)?'failed':'submission_uncertain';$record['error']=$e->getMessage();
             narrationSave($db,'narrations',$record,narrationRejected($code));throw $e;
@@ -157,7 +208,7 @@ function narrationApi(string $action,array $in,array $cfg,PDO $db):array {
         if($r['status']!=='ready')throw new RuntimeException('Preview is not ready.');
         narrationCheckAudio($cfg,$r);if($r['too_long']??false)throw new RuntimeException('Audio is too long. Shorten the narration and create another preview.');
         $r['approved']=true;$r['approved_at']=gmdate('c');narrationSave($db,'narrations',$r);
-        return ['message'=>'Narration approved. Lip-sync requires a separate paid approval.'];
+        return ['message'=>'Narration approved. Lip-sync requires a separate paid approval.'.narrationMismatchNote(narrationTextDifferences((string)$r['text'],(string)$r['caption_script'],(array)($cfg['respell']??[])))];
     }
     if($action==='narration_lipsync'){
         if(!($in['approve_spend']??false)||!($in['confirm_current']??false))throw new RuntimeException('Confirm current vehicle price/availability and approve one paid lip-sync request.');

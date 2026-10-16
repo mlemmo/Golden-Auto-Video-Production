@@ -84,6 +84,10 @@
       const badge = el('span', state[0]); badge.className = 'badge ' + state[1];
       head.append(el('strong', `${preview.vehicle} · ${preview.duration}s${preview.audio_duration ? ' · ' + preview.audio_duration.toFixed(1) + 's of speech' : ''}`), badge);
       box.append(head, el('p', 'Spoken: ' + preview.text), el('p', 'Captions: ' + preview.caption_script));
+      if (preview.text_mismatch && preview.text_mismatch.length) {
+        const warn = el('p', 'Caption text and spoken text differ: ' + preview.text_mismatch.slice(0, 5).join('; ') + '. Captions show the caption text, so fix one of them if they should match.');
+        warn.className = 'mismatch'; box.append(warn);
+      }
       if (preview.error) box.append(el('p', preview.error));
       const actions = el('div'); actions.className = 'actions';
       if (preview.status === 'ready' && preview.audio_url) {

@@ -52,3 +52,4 @@ a.button{display:inline-block;background:var(--gold);color:#151a23;border-radius
 @media(max-width:900px){.workspace{grid-template-columns:1fr}#stepVehicle{position:static}#stepVehicle .vehicle-list{max-height:320px}.steps{padding:8px 16px}}
 
 [hidden]{display:none!important}
+.mismatch{color:#ff9b8f;font-weight:600}
