@@ -8,6 +8,7 @@
       const result = await api(action, data);
       if (result.message) message(result.message);
       await refresh();
+      if (typeof approvedVoices === 'function') await approvedVoices();
       return result;
     } catch (error) { message(error.message); }
     finally { pending = false; }

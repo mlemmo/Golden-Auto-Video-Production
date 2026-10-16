@@ -119,12 +119,24 @@ if (isset($_GET['api'])) {
             // voice=native: Seedance speaks the script itself (generate_audio). voice=narration: silent video,
             // voice added later from the approved ElevenLabs narration by lip-sync.
             $spoken=trim((string)($in['script']??''));
-            $voice=(string)($in['voice']??'native');if(!in_array($voice,['native','narration'],true)) throw new RuntimeException('Choose how the voice is made.');
+            // voice=elevenlabs: native walkaround driven by an approved ElevenLabs narration (sent as the audio reference);
+            // the final video uses that exact audio, so pronunciation is what was approved.
+            $voice=(string)($in['voice']??'elevenlabs');if(!in_array($voice,['elevenlabs','native','narration'],true)) throw new RuntimeException('Choose how the voice is made.');
+            $approvedVoice=null;
+            if($voice==='elevenlabs'){
+                require_once $private.'/narrations.php';narrationTables($db);
+                $approvedVoice=narrationLoad($db,'narrations',(string)($in['narration_id']??''));
+                if(($approvedVoice['status']??'')!=='ready'||empty($approvedVoice['approved']))throw new RuntimeException('Choose an approved voice preview for this car (Narration panel: create, listen, approve).');
+                if(($approvedVoice['stock']??'')!==$v['StockNumber']||($approvedVoice['price']??null)===null||abs((float)$approvedVoice['price']-(float)$v['price'])>=0.005)throw new RuntimeException('The approved voice preview is for a different car or an old price. Make a new preview.');
+                narrationCheckAudio($cfg,$approvedVoice);
+                $spoken=(string)$approvedVoice['caption_script'];
+            }
             $duration=(int)($in['duration']??15);if(!in_array($duration,[15,30],true)) throw new RuntimeException('Choose 15 or 30 seconds.');
             $style=(string)($in['style']??'dynamic');if(!in_array($style,['dynamic','showroom'],true)) throw new RuntimeException('Choose a video style.');
             if($style==='dynamic' && $duration!==15) throw new RuntimeException('The dynamic shot sequence is fixed at 15 seconds. Choose showroom for 30 seconds.');
-            if($voice==='native' && $style!=='showroom') throw new RuntimeException('Spoken-in-video uses the showroom style. Choose showroom, or ElevenLabs narration for the dynamic sequence.');
-            if($voice==='native' && $spoken==='') throw new RuntimeException('Write the script the spokesperson will say.');
+            if($voice==='elevenlabs' && (int)($approvedVoice['duration']??0)!==$duration) throw new RuntimeException('The approved voice preview was made for a '.($approvedVoice['duration']??'?').'-second video. Choose that duration.');
+            if($voice!=='narration' && $style!=='showroom') throw new RuntimeException('Spoken-in-video uses the showroom style. Choose showroom, or ElevenLabs narration for the dynamic sequence.');
+            if($voice!=='narration' && $spoken==='') throw new RuntimeException('Write the script the spokesperson will say.');
             $sheetUrl=trim((string)($in['sheet']??''));
             $savedSheet=state($db,'sheet:'.$v['Vin']);
             if($savedSheet && (!$sheetUrl || $sheetUrl===$savedSheet['url'])){if($savedSheet['gallery_hash']!==hash('sha256',json_encode($fresh['photos'])))throw new RuntimeException('Vehicle photos changed. Reopen the vehicle to rebuild its asset sheet.');$sheetUrl=$savedSheet['url'];}
@@ -133,15 +145,22 @@ if (isset($_GET['api'])) {
             $formats=['instagram_reels'=>'9:16','facebook_reels'=>'9:16','facebook_feed'=>'3:4','square'=>'1:1'];
             $format=(string)($in['format']??'');if(!isset($formats[$format])) throw new RuntimeException('Choose a video format.');
             // The exact prompt is part of the fingerprint: a prompt improvement is a new request, a repeat is still blocked.
-            $native=$voice==='native';
-            // Optional voice reference (config voice_reference_url): the same voice on every native-voice video.
-            $voiceRef=$native?trim((string)($cfg['voice_reference_url']??'')):'';
-            if($voiceRef!==''&&!preg_match('~^https://[^\s?#]+\.(mp3|wav|m4a)$~i',$voiceRef))throw new RuntimeException('voice_reference_url in config.php must be a public https link to an MP3, WAV or M4A file.');
-            $promptText=$native?promptNative($fresh,nativeSpeech($spoken),$duration,$presenter['description'],$voiceRef!==''):prompt($fresh,$spoken,$style,$duration,$presenter['description']);
+            $native=$voice!=='narration';
+            // Audio reference: the approved narration (elevenlabs), or the optional config voice sample (native).
+            if($voice==='elevenlabs'){$voiceRef=validateAppBase($cfg).'/assets/narrations/'.$approvedVoice['audio_name'];}
+            else{
+                $voiceRef=$voice==='native'?trim((string)($cfg['voice_reference_url']??'')):'';
+                if($voiceRef!==''&&!preg_match('~^https://[^\s?#]+\.(mp3|wav|m4a)$~i',$voiceRef))throw new RuntimeException('voice_reference_url in config.php must be a public https link to an MP3, WAV or M4A file.');
+            }
+            $promptText=match($voice){
+                'elevenlabs'=>promptNative($fresh,(string)$approvedVoice['text'],$duration,$presenter['description'],'speech'),
+                'native'=>promptNative($fresh,nativeSpeech($spoken),$duration,$presenter['description'],$voiceRef!==''),
+                default=>prompt($fresh,$spoken,$style,$duration,$presenter['description'])};
             $fingerprint=hash('sha256',json_encode([$v['Vin'],$v['price'],$spoken,$sheet,$avatar,$presenter['description'],$format,$style,$duration,$voice,hash('sha256',$promptText),$voiceRef]));
             $id=bin2hex(random_bytes(12));$job=['id'=>$id,'stock'=>$v['StockNumber'],'vehicle'=>title($v),'spokesperson_id'=>$presenter['id'],'spokesperson'=>$presenter['name'],'format'=>$format,'style'=>$style,'duration'=>$duration,'status'=>'preparing_references','created_at'=>gmdate('c'),'script'=>$spoken,'speech_script'=>$voice==='native'?nativeSpeech($spoken):speechScript($spoken),'price'=>$v['price'],'voice'=>$voice];
             // Native voice: one approval builds the final video (captions timed from the video's own audio).
-            if($voice==='native')$job['auto_build']=true;
+            if($voice!=='narration')$job['auto_build']=true;
+            if($voice==='elevenlabs'){$job['narration_id']=$approvedVoice['id'];$job['speech_script']=(string)$approvedVoice['text'];}
             $db->beginTransaction();
             try{
                 $q=$db->prepare('SELECT id,payload FROM jobs WHERE fingerprint=?');$q->execute([$fingerprint]);$previous=$q->fetch(PDO::FETCH_ASSOC);
@@ -172,7 +191,7 @@ if (isset($_GET['api'])) {
 <form id="spokespersonForm"><div class="import-grid"><label>Name<input name="name" maxlength="60" required placeholder="e.g. Maya — showroom"></label><label>Image (JPG, PNG or WebP, at least 300×300)<input name="image" type="file" accept="image/jpeg,image/png,image/webp" required></label></div><label>Description used in the video prompt<textarea name="description" rows="2" maxlength="300" required placeholder="trustworthy friendly adult man age 35–40, navy blazer over open-collar shirt"></textarea></label><p class="hint">Use a clear, well-lit, front-facing photo of one person from the waist up on a plain background. Describe what the image shows (apparent age, look, outfit) so the prompt matches the reference. Only upload people who have agreed to appear in your ads.</p><button id="spokespersonButton">Upload spokesperson</button></form></details>
 <div class="toolbar"><div><h2>Choose a vehicle</h2><p id="syncTime">Refresh to load your current inventory.</p></div><button id="sync">Refresh inventory</button></div><details id="syncLogPanel" class="import-panel"><summary id="syncLogSummary">Inventory changes — no DealerCenter sync yet</summary><div id="syncLog"></div></details><p id="message" role="status"></p>
 <div class="workspace"><section id="inventory" class="vehicle-list"></section><section class="editor"><span class="eyebrow">VEHICLE CAMPAIGN</span><h2 id="selected">Select a vehicle</h2><div id="facts"></div>
-<label>Voice<select id="voice"><option value="native">Spoken in the video — Seedance voice, lips and gestures in one step (recommended)</option><option value="narration">ElevenLabs narration + lip-sync — separate approval steps</option></select></label><label>Video style<select id="style"><option value="showroom">Showroom walkaround — spokesperson walks the car and presents</option><option value="dynamic">Dynamic product sequence — tracking / interior / drone</option></select></label><label>Duration<select id="duration"><option value="30">30 seconds — detailed walkthrough</option><option value="15">15 seconds — short ad</option></select></label><label>Publish format<select id="format"><option value="instagram_reels">Instagram Reels — 9:16</option><option value="facebook_reels">Facebook Reels — 9:16</option><option value="facebook_feed">Facebook Feed — 4:5 (crop after generation)</option><option value="square">Instagram / Facebook Square — 1:1</option></select></label>
+<label>Voice<select id="voice"><option value="elevenlabs">Approved ElevenLabs voice — walkaround with the exact approved words (recommended)</option><option value="native">Seedance voice — made in the video, wording may vary</option><option value="narration">ElevenLabs narration + lip-sync — separate approval steps</option></select></label><label id="approvedVoiceLabel">Approved voice preview (make, listen and approve it in the Narration panel first)<select id="approvedVoice"><option value="">Choose a vehicle first</option></select></label><label>Video style<select id="style"><option value="showroom">Showroom walkaround — spokesperson walks the car and presents</option><option value="dynamic">Dynamic product sequence — tracking / interior / drone</option></select></label><label>Duration<select id="duration"><option value="30">30 seconds — detailed walkthrough</option><option value="15">15 seconds — short ad</option></select></label><label>Publish format<select id="format"><option value="instagram_reels">Instagram Reels — 9:16</option><option value="facebook_reels">Facebook Reels — 9:16</option><option value="facebook_feed">Facebook Feed — 4:5 (crop after generation)</option><option value="square">Instagram / Facebook Square — 1:1</option></select></label>
 <p class="hint" id="formatHint">Vertical master. Check text and face placement before posting.</p>
 <label><span id="scriptLabel">Script — the spokesperson says this in the video</span><textarea id="script" rows="5" maxlength="600" placeholder="Choose a vehicle to draft its script."></textarea></label><p class="hint" id="wordCount">Keep the script within the chosen duration.</p><details><summary>Actual narration text — prices written out</summary><p id="speechPreview"></p></details>
 <details><summary>Website description</summary><p id="description"></p></details>
@@ -183,6 +202,6 @@ if (isset($_GET['api'])) {
 <div class="beats" id="beats"><div><b>00–04</b><span>Low tracking hook</span></div><div><b>04–09</b><span>Interior macro glide</span></div><div><b>09–15</b><span>Drone pull-away + CTA</span></div></div>
 <label class="check"><input type="checkbox" id="approve">I reviewed the vehicle facts and script and approve one paid Higgsfield generation at my account’s current rate.</label>
 <label class="check"><input type="checkbox" id="confirmCurrent">For imported vehicles: I confirm the vehicle is available and its highest advertised price is current.</label><div class="actions"><button class="secondary" id="checkReferences">Check reference uploads</button><button id="generate" disabled>Generate video</button><button class="secondary" id="brief" disabled>Download production brief</button></div>
-<p class="hint" id="voiceHint">Spoken in the video: Seedance 2.5 generates the spokesperson's voice, lip movement and gestures together from the script, and the captioned final video is built automatically after this one approval. Check the car details and the spoken words before using it.</p><p class="hint" id="narrationHint">ElevenLabs narration: Seedance 2.5 renders a silent video: in the walkaround the spokesperson walks along the near side of the car, talking to camera; dynamic style uses a presenter inset. The voice comes from the approved ElevenLabs narration, added by lip-sync below, which then builds the captioned final video automatically. Review identity and car details in the generated video before using it.</p>
+<p class="hint" id="elevenHint">Approved ElevenLabs voice: Seedance films the four-shot walkaround using your approved voice preview as the voice reference, and the final video uses that exact approved audio, so names, numbers and codes sound the way you approved them. Captions are timed from it and the final video is built automatically after this one approval.</p><p class="hint" id="voiceHint">Seedance voice: Seedance 2.5 generates the spokesperson's voice, lip movement and gestures together from the script, and the captioned final video is built automatically after this one approval. Check the car details and the spoken words before using it.</p><p class="hint" id="narrationHint">ElevenLabs narration: Seedance 2.5 renders a silent video: in the walkaround the spokesperson walks along the near side of the car, talking to camera; dynamic style uses a presenter inset. The voice comes from the approved ElevenLabs narration, added by lip-sync below, which then builds the captioned final video automatically. Review identity and car details in the generated video before using it.</p>
 </section></div><section><h2>Video jobs</h2><p class="hint">Refresh status to retrieve the generated master. Download completed files promptly; provider links can expire.</p><div id="jobs"></div><section id="captionEditor" hidden><h2>Review captions</h2><p class="hint">Automatic draft from the script—not a transcription. Check wording and timing against the generated audio. You can paste a corrected SRT here. Numeric prices stay numeric.</p><textarea id="captionSrt" rows="14"></textarea><label class="check"><input id="captionReviewed" type="checkbox">I checked the captions against the video.</label><button id="renderCaptions">Render captioned video</button></section></section><?php require $private.'/narration_panel.php'; ?></main>
-<script>window.CSRF=<?=json_encode($_SESSION['csrf'])?>;</script><script src="app.js?v=7"></script><script src="narration.js?v=4"></script></body></html>
+<script>window.CSRF=<?=json_encode($_SESSION['csrf'])?>;</script><script src="app.js?v=8"></script><script src="narration.js?v=5"></script></body></html>

@@ -77,13 +77,25 @@ function goldenFinishRender(PDO $db,array $cfg,array $job,string $work,string $o
         'ffmpeg'=>$cfg['ffmpeg_path']??'/usr/bin/ffmpeg']);
 }
 
-/** Captions for a native-voice video, timed from the speech in the downloaded master itself. */
-function goldenNativeCaptions(array $cfg,array $job,string $master,string $work):string {
+/**
+ * Captions for a native-voice video, timed from its speech: the master video's own audio, or (voice=elevenlabs)
+ * the approved narration that replaces it, shifted by $offset seconds.
+ */
+function goldenNativeCaptions(array $cfg,array $job,string $source,string $work,float $offset=0.0):string {
     $ffmpeg=(string)($cfg['ffmpeg_path']??'/usr/bin/ffmpeg');$wav=$work.'/speech.wav';
-    $p=proc_open([$ffmpeg,'-nostdin','-v','error','-y','-i',$master,'-vn','-ac','1','-ar','16000','-t','61',$wav],[0=>['file','/dev/null','r'],1=>['file','/dev/null','w'],2=>['file','/dev/null','w']],$pipes);
-    if(!is_resource($p)||proc_close($p)!==0||!is_file($wav))throw new RuntimeException('The generated video has no usable audio track. Check that it was generated with voice.');
+    $p=proc_open([$ffmpeg,'-nostdin','-v','error','-y','-i',$source,'-vn','-ac','1','-ar','16000','-t','61',$wav],[0=>['file','/dev/null','r'],1=>['file','/dev/null','w'],2=>['file','/dev/null','w']],$pipes);
+    if(!is_resource($p)||proc_close($p)!==0||!is_file($wav))throw new RuntimeException('No usable speech audio found for the captions.');
     $timing=goldenFinishPython(['op'=>'analyze','audio'=>$wav,'audio_hash'=>hash_file('sha256',$wav),'ffmpeg'=>$ffmpeg]);
     $cues=captionCues((string)$job['script'],(string)($job['vehicle']??''),$timing['spans']??[],(float)$timing['speech_end']);
     if(!$cues)throw new RuntimeException('Caption script is empty.');
-    return validateSrt(captionSrt($cues,0.0),(float)($job['duration']??30));
+    return validateSrt(captionSrt($cues,$offset),(float)($job['duration']??30));
+}
+/** voice=elevenlabs: the approved narration (hash-checked) that becomes the final video's audio. */
+const NARRATION_OFFSET=0.5;
+function goldenJobNarration(PDO $db,array $cfg,array $job):string {
+    require_once __DIR__.'/narrations.php';
+    $q=$db->prepare('SELECT payload FROM narrations WHERE id=?');$q->execute([$job['narration_id']??'']);
+    $audio=json_decode($q->fetchColumn()?:'null',true);
+    if(!$audio||empty($audio['approved']))throw new RuntimeException('The approved voice preview for this video was deleted. Generate again with an approved preview.');
+    return narrationCheckAudio($cfg,$audio);
 }

@@ -13,6 +13,9 @@ verify(str_contains($p,'four wide shots')&&str_contains($p,'Shot 4 (23–30 s)')
 verify(str_contains($p,'entire car is visible from bumper to bumper')&&str_contains($p,'never closer to the camera than the car'),'whole car in frame, spokesperson beside it');
 verify(str_contains($p,'finishes by 28 seconds')&&!str_contains($p,'Reference audio 1'),'speech ends before the cut-off; no voice reference unless configured');
 verify(str_contains(promptNative($v,$speech,30,'x',true),'Reference audio 1 is the spokesperson'),'voice reference described when configured');
+verify(str_contains(promptNative($v,$speech,30,'x','speech'),'exact recording of her speech'),'approved narration described as the exact speech');
+verify(numberSpeech('2013 Subaru, 2008 Toyota, 1999 Ford, 2020 Kia, 60,000 miles, model 1500')==='twenty thirteen Subaru, two thousand eight Toyota, nineteen ninety-nine Ford, twenty twenty Kia, sixty thousand miles, model 1500','years and comma numbers spoken as words');
+verify(!str_contains(speechScript('This 2013 SUBARU has 60,000 miles. Just $14,688.'),'2013')&&str_contains(speechScript('Just $14,688.'),'fourteen thousand six hundred eighty-eight dollars'),'speech scripts use the number words, prices unchanged');
 verify(str_contains($p,'"San Ramon" is pronounced san ruh-MOHN')&&str_contains($p,'never spelled out letter by letter'),'pronunciation guide for city and website');
 verify(!str_contains(promptNative($v,'Just fourteen thousand dollars.'),'Pronunciation:'),'no pronunciation note when the words are absent');
 try{promptNative($v,'  ');verify(false,'empty script rejected');}catch(RuntimeException $e){verify(true,'empty script rejected');}
@@ -26,9 +29,11 @@ try{
     $put(['id'=>'N1','voice'=>'native','auto_build'=>true,'request_id'=>'r1','status'=>'queued','duration'=>30,'script'=>'x']);
     $put(['id'=>'N2','voice'=>'native','auto_build'=>true,'request_id'=>'r2','status'=>'failed']);
     $put(['id'=>'N3','voice'=>'narration','request_id'=>'r3','status'=>'queued']);
+    $put(['id'=>'E1','voice'=>'elevenlabs','auto_build'=>true,'request_id'=>'e1','status'=>'completed','video_url'=>'https://v.example/e1.mp4']);
     $asked=[];$stub=function($rid)use(&$asked){$asked[]=$rid;return ['status'=>'in_progress'];};
     goldenAutoBuild($db,$cfg,fn($id)=>null,$stub);
     verify($asked===['r1']&&$job('N1')['status']==='in_progress','only running native jobs are checked');
+    verify(($job('E1')['finish_status']??'')==='queued'&&!empty($job('E1')['captions_from_audio']),'approved-voice video is queued for its final render');
     goldenAutoBuild($db,$cfg,fn($id)=>null,fn($rid)=>['status'=>'completed','video'=>['url'=>'https://v.example/n1.mp4']]);
     $n1=$job('N1');
     verify(($n1['finish_status']??'')==='queued'&&!empty($n1['captions_from_audio'])&&$n1['video_url']==='https://v.example/n1.mp4','completed native video is queued for captions from its own audio');
@@ -52,6 +57,9 @@ try{
         verify(str_contains(str_replace("\n",' ',$srt2),'San Ramon'),'"San Ramon" is never split across captions');
         verify(str_contains(str_replace("\n",' ',$srt),'Subaru XV Crosstrek')&&str_contains($srt,'Just $14,688.'),'captions use display wording');
         verify(count($starts)>=2&&$starts[0]<0.5&&abs(end($starts)-3.8)<0.4,'second sentence caption starts at the measured pause');
+        $srt3=goldenNativeCaptions($cfg,['script'=>'Take a look at this 2013 SUBARU XV CROSSTREK. Just $14,688.','vehicle'=>'2013 SUBARU XV CROSSTREK','duration'=>30],$mp4,$dir,NARRATION_OFFSET);
+        preg_match('/(\d\d):(\d\d):(\d\d),(\d{3}) -->/',$srt3,$m3);
+        verify(abs(((int)$m3[3]+(int)$m3[4]/1000)-($starts[0]+NARRATION_OFFSET))<0.01,'narration captions shifted by the audio offset');
         file_put_contents("$dir/captions.srt",$srt);
     }
 }finally{

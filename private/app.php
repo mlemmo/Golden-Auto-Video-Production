@@ -124,14 +124,17 @@ function script30(array $v): string {
  * $speech is the pronunciation form (nativeSpeech); captions use the display script. $voiceReference: an audio
  * reference of the spokesperson's voice is attached to the request.
  */
-function promptNative(array $v,string $speech,int $duration=30,string $presenter=SPOKESPERSON_DEFAULT_DESCRIPTION,bool $voiceReference=false): string {
+function promptNative(array $v,string $speech,int $duration=30,string $presenter=SPOKESPERSON_DEFAULT_DESCRIPTION,bool|string $voiceReference=false): string {
+    // $voiceReference: false; true/'voice' = a sample of her voice; 'speech' = the exact approved narration for this video.
     $presenter=rtrim(trim($presenter),'.');
     $speech=trim(preg_replace('/\s+/',' ',str_replace('"',"'",$speech))??'');
     if($speech==='')throw new RuntimeException('Write the script the spokesperson will say.');
     $t=fn(float $f)=>(string)round($duration*$f);
     $speakUntil=max(4,$duration-2);
     return 'Create a '.$duration.'-second dealership walkaround video made of four wide shots, with synchronized spoken dialogue. '.
-        'Reference image 1 is the exact vehicle asset sheet showing its front, sides and rear; reference image 2 is the spokesperson; match their face, hair, body and outfit exactly. '.($voiceReference?'Reference audio 1 is the spokesperson\'s voice: match its timbre, accent, pitch and delivery exactly. ':'').
+        'Reference image 1 is the exact vehicle asset sheet showing its front, sides and rear; reference image 2 is the spokesperson; match their face, hair, body and outfit exactly. '.
+        ($voiceReference==='speech'?'Reference audio 1 is the exact recording of her speech for this video: she says exactly those words with that voice, timing and pacing, starting at about half a second in, and her lip movements follow that recording word for word. '
+            :($voiceReference?'Reference audio 1 is the spokesperson\'s voice: match its timbre, accent, pitch and delivery exactly. ':'')).
         'Preserve the vehicle paint, trim, wheels, lamps and body exactly; do not invent equipment, badges or license plates, and do not repair cosmetic imperfections. The vehicle is parked and stationary throughout. '.
         'Setting: a bright, upscale modern showroom with polished floors, soft even lighting and tall windows, with open space all around the car, not a representation of Golden Auto’s actual building. '.
         'Framing rules for every shot: the car is the main subject and in sharp focus, and the entire car is visible from bumper to bumper with space around it, never cropped. Use a wide lens with the camera about seven meters away at chest height. '.

@@ -46,7 +46,7 @@ function goldenNativeBuild(PDO $db,callable $hfStatus):array {
     $log=[];
     foreach($db->query('SELECT payload FROM jobs ORDER BY rowid')->fetchAll(PDO::FETCH_COLUMN) as $raw){
         $job=json_decode($raw,true);
-        if(($job['voice']??'')!=='native'||empty($job['auto_build'])||empty($job['request_id'])||!empty($job['finish_status']))continue;
+        if(!in_array($job['voice']??'',['native','elevenlabs'],true)||empty($job['auto_build'])||empty($job['request_id'])||!empty($job['finish_status']))continue;
         if(in_array($job['status']??'',['failed','canceled','nsfw'],true))continue;
         if(($job['status']??'')!=='completed'){
             try{

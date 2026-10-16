@@ -13,11 +13,21 @@ function currencyWords(string $raw):string {
     $d=(int)$m[1];$c=(int)str_pad($m[2]??'',2,'0');
     return integerWords($d).($d===1?' dollar':' dollars').($c?' and '.integerWords($c).($c===1?' cent':' cents'):'');
 }
+/** Years and comma-grouped numbers as words: "2013" → "twenty thirteen", "60,000" → "sixty thousand". */
+function numberSpeech(string $s):string {
+    $s=preg_replace_callback('/(?<![\d,.$])(19[5-9]\d|20[0-3]\d)(?![\d,])/',function($m){
+        $y=(int)$m[1];
+        if($y>=2000&&$y<2010)return integerWords($y);
+        $hi=intdiv($y,100);$lo=$y%100;
+        return integerWords($hi).' '.($lo===0?'hundred':($lo<10?'oh '.integerWords($lo):integerWords($lo)));
+    },$s);
+    return preg_replace_callback('/(?<![\d$.])(\d{1,3}(?:,\d{3})+)(?![\d,]|\.\d)/',fn($m)=>integerWords((int)str_replace(',','',$m[1])),$s);
+}
 function priceSpeech(string $s):string {
     // A sentence-ending period after the price ("Just $14,688.") must not block the conversion.
     return preg_replace_callback('/\$(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)(?![\d,]|\.\d)(?:\s+dollars\b)?/i',fn($m)=>currencyWords($m[1]),$s);
 }
-function speechWordCount(string $s):int{return count(preg_split('/[\s-]+/u',speechScript($s),-1,PREG_SPLIT_NO_EMPTY));}
+function speechWordCount(string $s):int{return count(preg_split('/[\s-]+/u',speechScript($s,false),-1,PREG_SPLIT_NO_EMPTY));}
 function srtTime(float $seconds):string {$ms=(int)round(max(0,$seconds)*1000);return sprintf('%02d:%02d:%02d,%03d',intdiv($ms,3600000),intdiv($ms%3600000,60000),intdiv($ms%60000,1000),$ms%1000);}
 const CAPTION_MAX_LINE=24;
 const CAPTION_MAX_CUE=40;

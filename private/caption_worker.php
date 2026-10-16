@@ -24,9 +24,14 @@ $work=$cfg['data_dir'].'/render-'.bin2hex(random_bytes(10));mkdir($work,0700);$o
 try{
     $job['finish_status']='rendering';$job['finish_started_at']=gmdate('c');saveRenderJob($db,$job);
     downloadMaster($job['video_url'],$work.'/master.mp4');
+    $narration=null;
+    if(($job['voice']??'')==='elevenlabs'){require_once __DIR__.'/finishing.php';$narration=goldenJobNarration($db,$cfg,$job);}
     if(!empty($job['captions_from_audio'])){
         require_once __DIR__.'/finishing.php';
-        $job['captions_srt']=goldenNativeCaptions($cfg,$job,$work.'/master.mp4',$work);saveRenderJob($db,$job);
+        $job['captions_srt']=$narration
+            ?goldenNativeCaptions($cfg,$job,$narration,$work,NARRATION_OFFSET)
+            :goldenNativeCaptions($cfg,$job,$work.'/master.mp4',$work);
+        saveRenderJob($db,$job);
     }
     file_put_contents($work.'/captions.srt',validateSrt($job['captions_srt'],(float)($job['duration']??15)));
     [$w,$h]=match($job['format']){'facebook_feed'=>[1080,1350],'square'=>[1080,1080],default=>[1080,1920]};
@@ -36,12 +41,15 @@ try{
         goldenFinishRender($db,$cfg,$job,$work,$output,$w,$h);
     }else{
     // Native-voice videos use the reference style: bold white words on a solid black box.
-    $style=($job['voice']??'')==='native'
+    $style=in_array($job['voice']??'',['native','elevenlabs'],true)
         ?'FontName=DejaVu Sans,Bold=1,FontSize=13,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BackColour=&H00000000,BorderStyle=3,Outline=6,Shadow=0,Alignment=2,MarginV=55'
         :'FontName=DejaVu Sans,FontSize=10,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=1,Shadow=0,Alignment=2,MarginV=40';
     $filter="scale=$w:$h:force_original_aspect_ratio=increase,crop=$w:$h,setsar=1,subtitles=captions.srt:force_style='$style'";
     
-    $args=[(string)($cfg['ffmpeg_path']??'ffmpeg'),'-nostdin','-n','-hide_banner','-loglevel','error','-i','master.mp4','-vf',$filter,'-c:v','libx264','-preset','veryfast','-crf','20','-threads','1','-pix_fmt','yuv420p','-c:a','aac','-movflags','+faststart',$output];
+    $args=[(string)($cfg['ffmpeg_path']??'ffmpeg'),'-nostdin','-n','-hide_banner','-loglevel','error','-i','master.mp4'];
+    // voice=elevenlabs: the approved narration replaces the generated audio (exact approved pronunciation).
+    if($narration)array_push($args,'-i',$narration,'-filter_complex','[1:a]adelay='.(int)round(NARRATION_OFFSET*1000).':all=1,apad[a]','-map','0:v','-map','[a]','-shortest');
+    array_push($args,'-vf',$filter,'-c:v','libx264','-preset','veryfast','-crf','20','-threads','1','-pix_fmt','yuv420p','-c:a','aac','-movflags','+faststart',$output);
     $p=proc_open($args,[0=>['file','/dev/null','r'],1=>['file',$work.'/ffmpeg.log','a'],2=>['file',$work.'/ffmpeg.log','a']],$pipes,$work);
     if(!is_resource($p))throw new RuntimeException('Cannot start FFmpeg. Check ffmpeg_path and PHP proc_open availability.');
     $status=proc_close($p);if($status!==0||!is_file($output)||filesize($output)<1000){$detail=substr((string)file_get_contents($work.'/ffmpeg.log'),0,1000);throw new RuntimeException('FFmpeg failed: '.$detail);}
