@@ -184,24 +184,117 @@ if (isset($_GET['api'])) {
     } catch(Throwable $e) {if(http_response_code()===200)http_response_code(400);echo json_encode(['error'=>$e->getMessage()]);exit;}
 }
 ?>
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Golden Auto • Video Studio</title><link rel="stylesheet" href="style.css?v=3"></head><body>
-<header><div><span class="eyebrow">GOLDEN AUTO / SAN RAMON</span><h1>Inventory → video</h1><p>Your cars. Your spokespersons. Ready for social.</p></div><button class="secondary" id="logout">Sign out</button></header>
-<main><details class="import-panel" open><summary>Import DealerCenter media ZIP — works without website access</summary><form id="importForm"><div class="import-grid"><label>Stock number<input name="stock" value="870288" required></label><label>Year<input name="year" type="number" required min="1900" max="2100"></label><label>Make<input name="make" required></label><label>Model<input name="model" required></label><label>Trim<input name="trim"></label><label>VIN (optional)<input name="vin"></label><label>Mileage (optional)<input name="mileage" type="number" min="0"></label><label>Advertised prices (highest used)<input name="prices" placeholder="14550; 14688.25"></label></div><label>Vehicle description<textarea name="description" rows="3"></textarea></label><label>DealerCenter media ZIP<input name="media" type="file" accept=".zip" required></label><p class="hint">Enter current listing facts. ZIP photos alone do not supply pricing or availability. Maximum 50 MB; your host’s upload limit may be lower.</p><button id="importButton">Import vehicle and photos</button></form></details>
-<details class="import-panel" id="spokespersonPanel"><summary>Spokespersons — upload new spokesperson images and manage saved ones</summary><div id="spokespersonList" class="spokesperson-list"></div>
-<form id="spokespersonForm"><div class="import-grid"><label>Name<input name="name" maxlength="60" required placeholder="e.g. Maya — showroom"></label><label>Image (JPG, PNG or WebP, at least 300×300)<input name="image" type="file" accept="image/jpeg,image/png,image/webp" required></label></div><label>Description used in the video prompt<textarea name="description" rows="2" maxlength="300" required placeholder="trustworthy friendly adult man age 35–40, navy blazer over open-collar shirt"></textarea></label><p class="hint">Use a clear, well-lit, front-facing photo of one person from the waist up on a plain background. Describe what the image shows (apparent age, look, outfit) so the prompt matches the reference. Only upload people who have agreed to appear in your ads.</p><button id="spokespersonButton">Upload spokesperson</button></form></details>
-<div class="toolbar"><div><h2>Choose a vehicle</h2><p id="syncTime">Refresh to load your current inventory.</p></div><button id="sync">Refresh inventory</button></div><details id="syncLogPanel" class="import-panel"><summary id="syncLogSummary">Inventory changes — no DealerCenter sync yet</summary><div id="syncLog"></div></details><p id="message" role="status"></p>
-<div class="workspace"><section id="inventory" class="vehicle-list"></section><section class="editor"><span class="eyebrow">VEHICLE CAMPAIGN</span><h2 id="selected">Select a vehicle</h2><div id="facts"></div>
-<label>Voice<select id="voice"><option value="elevenlabs">Approved ElevenLabs voice — walkaround with the exact approved words (recommended)</option><option value="native">Seedance voice — made in the video, wording may vary</option><option value="narration">ElevenLabs narration + lip-sync — separate approval steps</option></select></label><label id="approvedVoiceLabel">Approved voice preview (make, listen and approve it in the Narration panel first)<select id="approvedVoice"><option value="">Choose a vehicle first</option></select></label><label>Video style<select id="style"><option value="showroom">Showroom walkaround — spokesperson walks the car and presents</option><option value="dynamic">Dynamic product sequence — tracking / interior / drone</option></select></label><label>Duration<select id="duration"><option value="30">30 seconds — detailed walkthrough</option><option value="15">15 seconds — short ad</option></select></label><label>Publish format<select id="format"><option value="instagram_reels">Instagram Reels — 9:16</option><option value="facebook_reels">Facebook Reels — 9:16</option><option value="facebook_feed">Facebook Feed — 4:5 (crop after generation)</option><option value="square">Instagram / Facebook Square — 1:1</option></select></label>
-<p class="hint" id="formatHint">Vertical master. Check text and face placement before posting.</p>
-<label><span id="scriptLabel">Script — the spokesperson says this in the video</span><textarea id="script" rows="5" maxlength="600" placeholder="Choose a vehicle to draft its script."></textarea></label><p class="hint" id="wordCount">Keep the script within the chosen duration.</p><details><summary>Actual narration text — prices written out</summary><p id="speechPreview"></p></details>
-<details><summary>Website description</summary><p id="description"></p></details>
-<div id="sheetPreview"></div><details><summary>Review or change inventory photos</summary><p class="hint">Default sheet: front, both sides and rear (4 photos, 2×2). Choose up to 9 photos to change it; avoid close-ups with text such as labels or stickers.</p><div id="photoPicker" class="photo-picker"></div><button id="rebuild" class="secondary" disabled>Rebuild asset sheet</button></details><label>Car asset sheet — automatically created; optional URL override<input id="sheet" type="url" placeholder="https://your-domain.com/car-asset-sheet.jpg"></label>
-<label>Spokesperson<select id="spokesperson"><option value="">Loading spokespersons…</option></select></label>
-<div id="spokespersonPreview" class="spokesperson-preview"></div><button type="button" class="secondary" id="manageSpokespersons">Upload or manage spokespersons</button>
-<p class="hint">The selected image is reference image 2 and its description is written into the video prompt. Add or remove spokespersons in the Spokespersons panel above. Native voice consistency is not guaranteed across generations.</p>
-<div class="beats" id="beats"><div><b>00–04</b><span>Low tracking hook</span></div><div><b>04–09</b><span>Interior macro glide</span></div><div><b>09–15</b><span>Drone pull-away + CTA</span></div></div>
-<label class="check"><input type="checkbox" id="approve">I reviewed the vehicle facts and script and approve one paid Higgsfield generation at my account’s current rate.</label>
-<label class="check"><input type="checkbox" id="confirmCurrent">For imported vehicles: I confirm the vehicle is available and its highest advertised price is current.</label><div class="actions"><button class="secondary" id="checkReferences">Check reference uploads</button><button id="generate" disabled>Generate video</button><button class="secondary" id="brief" disabled>Download production brief</button></div>
-<p class="hint" id="elevenHint">Approved ElevenLabs voice: Seedance films the four-shot walkaround using your approved voice preview as the voice reference, and the final video uses that exact approved audio, so names, numbers and codes sound the way you approved them. Captions are timed from it and the final video is built automatically after this one approval.</p><p class="hint" id="voiceHint">Seedance voice: Seedance 2.5 generates the spokesperson's voice, lip movement and gestures together from the script, and the captioned final video is built automatically after this one approval. Check the car details and the spoken words before using it.</p><p class="hint" id="narrationHint">ElevenLabs narration: Seedance 2.5 renders a silent video: in the walkaround the spokesperson walks along the near side of the car, talking to camera; dynamic style uses a presenter inset. The voice comes from the approved ElevenLabs narration, added by lip-sync below, which then builds the captioned final video automatically. Review identity and car details in the generated video before using it.</p>
-</section></div><section><h2>Video jobs</h2><p class="hint">Refresh status to retrieve the generated master. Download completed files promptly; provider links can expire.</p><div id="jobs"></div><section id="captionEditor" hidden><h2>Review captions</h2><p class="hint">Automatic draft from the script—not a transcription. Check wording and timing against the generated audio. You can paste a corrected SRT here. Numeric prices stay numeric.</p><textarea id="captionSrt" rows="14"></textarea><label class="check"><input id="captionReviewed" type="checkbox">I checked the captions against the video.</label><button id="renderCaptions">Render captioned video</button></section></section><?php require $private.'/narration_panel.php'; ?></main>
-<script>window.CSRF=<?=json_encode($_SESSION['csrf'])?>;</script><script src="app.js?v=8"></script><script src="narration.js?v=5"></script></body></html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Golden Auto • Video Studio</title><link rel="stylesheet" href="style.css?v=4"></head><body>
+<header><div><span class="eyebrow">GOLDEN AUTO / SAN RAMON</span><h1>Inventory → video</h1><p>Pick a car, approve the words, generate. The final captioned video is built for you.</p></div><button class="secondary" id="logout">Sign out</button></header>
+<nav class="steps" aria-label="Steps"><a href="#stepVehicle"><b>1</b> Vehicle</a><a href="#stepScript"><b>2</b> Script</a><a href="#stepVoice"><b>3</b> Voice</a><a href="#stepLook"><b>4</b> Look</a><a href="#stepGenerate"><b>5</b> Generate</a><a href="#videos"><b>✓</b> Videos</a></nav>
+<main>
+<div class="workspace">
+
+<section class="panel" id="stepVehicle">
+  <div class="step-head"><span class="step-num">1</span><div><h2>Choose a vehicle</h2><p id="syncTime">Loading your inventory…</p></div></div>
+  <details id="syncLogPanel" class="sub"><summary id="syncLogSummary">Inventory changes — no DealerCenter sync yet</summary><div id="syncLog"></div></details>
+  <p class="status" role="status" hidden></p>
+  <button id="sync" class="secondary">Refresh inventory</button>
+  <div id="inventory" class="vehicle-list"></div>
+</section>
+
+<div class="steps-col">
+<section class="panel" id="stepScript">
+  <div class="step-head"><span class="step-num">2</span><div><h2>Script</h2><p>What the spokesperson says. It is drafted from the listing; edit it freely.</p></div></div>
+  <span class="eyebrow">SELECTED VEHICLE</span><h3 id="selected">Select a vehicle in step 1</h3><div id="facts" class="facts"></div>
+  <details class="sub"><summary>Website description</summary><p id="description"></p></details>
+  <label>Video length<select id="duration"><option value="30">30 seconds — full walkaround</option><option value="15">15 seconds — short ad</option></select></label>
+  <label><span id="scriptLabel">Script</span><textarea id="script" rows="5" maxlength="600" placeholder="Choose a vehicle to draft its script."></textarea></label>
+  <p class="hint" id="wordCount">Keep the script within the video length.</p>
+  <details class="sub"><summary>How it will be spoken (numbers and codes written out)</summary><p id="speechPreview"></p></details>
+</section>
+
+<section class="panel" id="stepVoice">
+  <div class="step-head"><span class="step-num">3</span><div><h2>Voice</h2><p>Choose how the spokesperson's voice is made.</p></div></div>
+  <label>Voice<select id="voice"><option value="elevenlabs">Approved ElevenLabs voice — exact words you approve (recommended)</option><option value="native">Seedance voice — made in the video, wording may vary</option><option value="narration">ElevenLabs narration + lip-sync — older two-step method</option></select></label>
+  <p class="hint" id="elevenHint">You make a voice preview below, listen to it and approve it. The video is filmed using it, and the final video uses that exact audio, so names, numbers and codes sound the way you approved them.</p>
+  <p class="hint" id="voiceHint" hidden>Seedance creates the voice inside the video. Quick, but it may change or mispronounce words, and the voice differs between videos.</p>
+  <p class="hint" id="narrationHint" hidden>Seedance films a silent video; afterwards your approved voice preview is added by lip-sync (Tools → Lip-sync builder) and the final video is built automatically.</p>
+  <div id="voiceStudio" class="studio">
+    <ol class="mini-steps"><li>Copy the script from step 2.</li><li>Pick a voice and fix any word that sounds wrong by respelling it in the spoken text.</li><li>Create a preview, listen to all of it, then approve it.</li></ol>
+    <div class="actions"><button type="button" id="nCopyScript" class="secondary">Copy script from step 2</button><button type="button" id="nLoadVoices" class="secondary">Reload voices</button></div>
+    <label>ElevenLabs voice — use the same one for every car to keep a consistent voice<select id="nVoice"><option value="">Loading voices…</option></select></label>
+    <label>Spoken text — respell words here to fix pronunciation (e.g. San Ruh-mone)<textarea id="nText" rows="4" maxlength="1200"></textarea></label>
+    <label>Caption text — what appears on screen; keep normal spelling<textarea id="nCaptions" rows="3" maxlength="1200"></textarea></label>
+    <select id="nDuration" hidden aria-hidden="true"><option value="15">15</option><option value="30">30</option></select>
+    <label class="check"><input type="checkbox" id="nPreviewSpend">I approve one paid ElevenLabs voice preview at my account’s current rate.</label>
+    <label class="check"><input type="checkbox" id="nNewTake">Make another take even if an identical preview already exists.</label>
+    <p class="status" role="status" hidden></p>
+    <div class="actions"><button type="button" id="nCreatePreview">Create voice preview</button><button type="button" id="nRefresh" class="secondary">Refresh previews</button></div>
+    <div id="nPreviews" class="list"></div>
+  </div>
+  <label id="approvedVoiceLabel">Approved voice preview to use for this video<select id="approvedVoice"><option value="">Choose a vehicle first</option></select></label>
+</section>
+
+<section class="panel" id="stepLook">
+  <div class="step-head"><span class="step-num">4</span><div><h2>Look</h2><p>Spokesperson, style, format and the car photos the video is made from.</p></div></div>
+  <label>Spokesperson<select id="spokesperson"><option value="">Loading spokespersons…</option></select></label>
+  <div id="spokespersonPreview" class="spokesperson-preview"></div>
+  <button type="button" class="secondary small" id="manageSpokespersons">Add or manage spokespersons</button>
+  <label>Video style<select id="style"><option value="showroom">Showroom walkaround — spokesperson walks around the car</option><option value="dynamic">Dynamic product sequence — tracking / interior / drone (lip-sync method only)</option></select></label>
+  <div class="beats" id="beats"></div>
+  <label>Publish format<select id="format"><option value="instagram_reels">Instagram Reels — 9:16</option><option value="facebook_reels">Facebook Reels — 9:16</option><option value="facebook_feed">Facebook Feed — 4:5 (cropped after generation)</option><option value="square">Instagram / Facebook Square — 1:1</option></select></label>
+  <p class="hint" id="formatHint">Vertical video. Check captions and face placement before posting.</p>
+  <span class="eyebrow">CAR PHOTOS SENT TO THE VIDEO MODEL</span>
+  <div id="sheetPreview"></div>
+  <details class="sub"><summary>Change which photos are used</summary>
+    <p class="hint">Default: front, both sides and rear (4 photos, 2×2). Choose up to 9 photos; avoid close-ups with text such as labels or stickers.</p>
+    <div id="photoPicker" class="photo-picker"></div>
+    <label>Optional asset sheet URL override<input id="sheet" type="url" placeholder="https://your-domain.com/car-asset-sheet.jpg"></label>
+    <p class="status" role="status" hidden></p>
+    <button id="rebuild" class="secondary" disabled>Rebuild asset sheet</button>
+  </details>
+</section>
+
+<section class="panel" id="stepGenerate">
+  <div class="step-head"><span class="step-num">5</span><div><h2>Generate</h2><p>One paid generation. The captioned final video is then built automatically and appears under Videos.</p></div></div>
+  <ul class="summary" id="summary"></ul>
+  <label class="check"><input type="checkbox" id="approve">I reviewed the vehicle facts and script and approve one paid Higgsfield generation at my account’s current rate.</label>
+  <label class="check"><input type="checkbox" id="confirmCurrent">I confirm the vehicle is available and its advertised price is current.</label>
+  <p class="status" role="status" hidden></p>
+  <div class="actions"><button id="generate" disabled>Generate video</button><button class="secondary" id="checkReferences">Check reference uploads</button><button class="secondary" id="brief" disabled>Download production brief</button></div>
+</section>
+</div>
+</div>
+
+<section class="panel" id="videos">
+  <div class="step-head"><span class="step-num">✓</span><div><h2>Videos</h2><p>Generation takes a few minutes; this list refreshes itself while a video is being made. Download finished videos promptly.</p></div></div>
+  <p class="status" role="status" hidden></p>
+  <div class="actions"><button type="button" class="secondary" id="refreshJobs">Refresh list</button></div>
+  <div id="jobs" class="list"></div>
+  <section id="captionEditor" class="studio" hidden>
+    <h3>Edit captions</h3>
+    <p class="hint">Check wording and timing against the video. You can paste a corrected SRT. Prices stay numeric.</p>
+    <textarea id="captionSrt" rows="14"></textarea>
+    <label class="check"><input id="captionReviewed" type="checkbox">I checked the captions against the video.</label>
+    <p class="status" role="status" hidden></p>
+    <div class="actions"><button id="renderCaptions">Render captioned video</button><button type="button" class="secondary" id="closeCaptions">Close</button></div>
+  </section>
+</section>
+
+<section class="panel tools" id="tools">
+  <h2>Tools</h2>
+  <details class="import-panel" id="spokespersonPanel"><summary>Spokespersons — upload new spokesperson images and manage saved ones</summary>
+    <div id="spokespersonList" class="spokesperson-list"></div>
+    <form id="spokespersonForm"><div class="import-grid"><label>Name<input name="name" maxlength="60" required placeholder="e.g. Maya — showroom"></label><label>Image (JPG, PNG or WebP, at least 300×300)<input name="image" type="file" accept="image/jpeg,image/png,image/webp" required></label></div>
+      <label>Description used in the video prompt<textarea name="description" rows="2" maxlength="300" required placeholder="trustworthy friendly adult man age 35–40, navy blazer over open-collar shirt"></textarea></label>
+      <p class="hint">Use a clear, well-lit, front-facing photo of one person from the waist up on a plain background. Describe what the image shows (apparent age, look, outfit). Only upload people who have agreed to appear in your ads.</p>
+      <p class="status" role="status" hidden></p>
+      <button id="spokespersonButton">Upload spokesperson</button></form>
+  </details>
+  <details class="import-panel"><summary>Import a vehicle from a DealerCenter media ZIP — for cars not on the website yet</summary>
+    <form id="importForm"><div class="import-grid"><label>Stock number<input name="stock" required></label><label>Year<input name="year" type="number" required min="1900" max="2100"></label><label>Make<input name="make" required></label><label>Model<input name="model" required></label><label>Trim<input name="trim"></label><label>VIN (optional)<input name="vin"></label><label>Mileage (optional)<input name="mileage" type="number" min="0"></label><label>Advertised prices (highest used)<input name="prices" placeholder="14550; 14688.25"></label></div>
+      <label>Vehicle description<textarea name="description" rows="3"></textarea></label><label>DealerCenter media ZIP<input name="media" type="file" accept=".zip" required></label>
+      <p class="hint">Enter current listing facts. ZIP photos alone do not supply pricing or availability. Maximum 50 MB; your host’s upload limit may be lower.</p>
+      <p class="status" role="status" hidden></p>
+      <button id="importButton">Import vehicle and photos</button></form>
+  </details>
+  <?php require $private.'/narration_panel.php'; ?>
+</section>
+</main>
+<script>window.CSRF=<?=json_encode($_SESSION['csrf'])?>;</script><script src="app.js?v=9"></script><script src="narration.js?v=6"></script></body></html>
