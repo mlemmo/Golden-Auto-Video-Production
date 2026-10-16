@@ -17,7 +17,7 @@ nano /opt/goldenauto-video/.env                       # HeyGen, Shotstack, Anthr
 /opt/goldenauto-video/deploy/run.sh --dry-run          # scripts only, no render cost
 /opt/goldenauto-video/deploy/run.sh --only 870288      # one real video
 ```
-After that, `ubuntu/update.sh` refreshes the installed copy automatically on every update.
+After that, `ubuntu/update.sh` refreshes the installed copy on every update while `goldenauto-video.timer` is enabled; with the timer disabled it leaves the pipeline alone.
 
 - Runs nightly at about 5:47 am Pacific as the user that owns `/srv/golden-auto/private/data`.
 - Inventory: newest `*.xml` in `/opt/goldenauto-video/inbox/`, otherwise the dashboard's own inventory
