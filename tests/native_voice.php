@@ -14,6 +14,10 @@ verify(str_contains($p,'entire car is visible from bumper to bumper')&&str_conta
 verify(str_contains($p,'finishes by 28 seconds')&&!str_contains($p,'Reference audio 1'),'speech ends before the cut-off; no voice reference unless configured');
 verify(str_contains(promptNative($v,$speech,30,'x',true),'Reference audio 1 is the spokesperson'),'voice reference described when configured');
 verify(str_contains(promptNative($v,$speech,30,'x','speech'),'exact recording of her speech'),'approved narration described as the exact speech');
+$timed=promptNative($v,$speech,30,'x','speech',20.7);
+verify(str_contains($timed,'finishes by 21.2 seconds')&&str_contains($timed,'At 21.2 seconds she has finished speaking')&&str_contains($timed,'do not slow it down'),'speech limited to the narration length, silent smile afterwards');
+verify(!str_contains($timed,'relaxed and unhurried'),'no pacing instruction that fights the recording');
+verify(!str_contains(promptNative($v,$speech,30,'x','speech',29.0),'has finished speaking'),'no silent tail when the narration fills the video');
 verify(numberSpeech('2013 Subaru, 2008 Toyota, 1999 Ford, 2020 Kia, 60,000 miles, model 1500')==='twenty thirteen Subaru, two thousand eight Toyota, nineteen ninety-nine Ford, twenty twenty Kia, sixty thousand miles, model 1500','years and comma numbers spoken as words');
 verify(!str_contains(speechScript('This 2013 SUBARU has 60,000 miles. Just $14,688.'),'2013')&&str_contains(speechScript('Just $14,688.'),'fourteen thousand six hundred eighty-eight dollars'),'speech scripts use the number words, prices unchanged');
 verify(str_contains($p,'"San Ramon" is pronounced san ruh-MOHN')&&str_contains($p,'never spelled out letter by letter'),'pronunciation guide for city and website');

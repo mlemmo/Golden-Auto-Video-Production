@@ -124,16 +124,22 @@ function script30(array $v): string {
  * $speech is the pronunciation form (nativeSpeech); captions use the display script. $voiceReference: an audio
  * reference of the spokesperson's voice is attached to the request.
  */
-function promptNative(array $v,string $speech,int $duration=30,string $presenter=SPOKESPERSON_DEFAULT_DESCRIPTION,bool|string $voiceReference=false): string {
+function promptNative(array $v,string $speech,int $duration=30,string $presenter=SPOKESPERSON_DEFAULT_DESCRIPTION,bool|string $voiceReference=false,?float $speechSeconds=null): string {
+    // $speechSeconds: length of the approved narration (voice=elevenlabs). Its audio replaces the generated audio at
+    // NARRATION_OFFSET, so she must talk only during that window, at the recording's pace, and be silent after it.
     // $voiceReference: false; true/'voice' = a sample of her voice; 'speech' = the exact approved narration for this video.
     $presenter=rtrim(trim($presenter),'.');
     $speech=trim(preg_replace('/\s+/',' ',str_replace('"',"'",$speech))??'');
     if($speech==='')throw new RuntimeException('Write the script the spokesperson will say.');
     $t=fn(float $f)=>(string)round($duration*$f);
-    $speakUntil=max(4,$duration-2);
+    $speakFrom=0.5;
+    $speakUntil=$speechSeconds!==null?min($duration-0.5,round($speakFrom+$speechSeconds,1)):max(4,$duration-2);
+    $silentAfter=$speechSeconds!==null&&$speakUntil<$duration-1
+        ?'At '.$speakUntil.' seconds she has finished speaking: from then until the end she does not talk at all, keeps her mouth closed with a warm smile, and simply gestures toward the car. '
+        :'';
     return 'Create a '.$duration.'-second dealership walkaround video made of four wide shots, with synchronized spoken dialogue. '.
         'Reference image 1 is the exact vehicle asset sheet showing its front, sides and rear; reference image 2 is the spokesperson; match their face, hair, body and outfit exactly. '.
-        ($voiceReference==='speech'?'Reference audio 1 is the exact recording of her speech for this video: she says exactly those words with that voice, timing and pacing, starting at about half a second in, and her lip movements follow that recording word for word. '
+        ($voiceReference==='speech'?'Reference audio 1 is the exact recording of her speech for this video: she says exactly those words with that voice, at exactly the same pace and timing as the recording, starting at '.$speakFrom.' seconds; do not slow it down, stretch it or add pauses. Her lip movements follow that recording word for word. '
             :($voiceReference?'Reference audio 1 is the spokesperson\'s voice: match its timbre, accent, pitch and delivery exactly. ':'')).
         'Preserve the vehicle paint, trim, wheels, lamps and body exactly; do not invent equipment, badges or license plates, and do not repair cosmetic imperfections. The vehicle is parked and stationary throughout. '.
         'Setting: a bright, upscale modern showroom with polished floors, soft even lighting and tall windows, with open space all around the car, not a representation of Golden Auto’s actual building. '.
@@ -144,7 +150,7 @@ function promptNative(array $v,string $speech,int $duration=30,string $presenter
         'Shot 3 ('.$t(.5).'–'.$t(.75).' s): wide rear three-quarter view of the whole car; she stands beside the rear corner, gesturing to the rear of the car. '.
         'Shot 4 ('.$t(.75).'–'.$duration.' s): wide front three-quarter view of the whole car from the other side; she has walked around to the front corner and finishes speaking to the camera with a warm smile. '.
         'Clean cuts between the four shots; the camera is steady or moves slowly within each shot. '.
-        'Speech: she speaks to the camera throughout, in a warm, clear, natural, friendly American English voice, relaxed and unhurried, with a brief natural pause between sentences, like a real salesperson talking to one customer, not an announcer. Her lip movements match every word exactly, and her open-hand gestures toward the car match what she is saying. Her speech continues seamlessly across the cuts and finishes by '.$speakUntil.' seconds. '.
+        'Speech: she speaks to the camera'.($voiceReference==='speech'?' while the recording plays, in that same voice and pace,':' throughout, in a warm, clear, natural, friendly American English voice, relaxed and unhurried, with a brief natural pause between sentences,').' like a real salesperson talking to one customer, not an announcer. Her lip movements match every word exactly, and her open-hand gestures toward the car match what she is saying. Her speech continues seamlessly across the cuts and finishes by '.$speakUntil.' seconds. '.$silentAfter.
         'She says exactly this, word for word, and nothing else: "'.$speech.'" '.
         speechPronunciationGuide($speech).
         'Audio: only her voice, clear, natural and close to the microphone, with no echo or reverb, over a soft quiet room tone. No music, no other voices, no sound effects. '.
