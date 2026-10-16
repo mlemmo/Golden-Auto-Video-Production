@@ -15,8 +15,9 @@ Read CLAUDE.md first (rules, flows, tests). This note is the current status and 
 
 ## Open problems (next steps)
 1. **"San Ramon" is mispronounced by Seedance.** A pronunciation note and the respelling "San Ruh-mone" both failed.
-   Respelling is configurable: `'respell' => ['San Ramon' => '...']` in private/config.php. Next to try:
-   "San Rah-moan" / "San Ra-MOAN". Fallback: drop the city from the spoken line, keep it in captions.
+   The default respelling is now **"San Rah-moan"** (`SEEDANCE_RESPELL`); it still needs a paid test render.
+   Respelling is configurable: `'respell' => ['San Ramon' => '...']` in private/config.php. If it is still wrong,
+   try "San Ra-MOAN". Fallback: drop the city from the spoken line, keep it in captions.
 2. **Verify on the server** (not possible from the cloud sessions that built this): caption_worker cron runs every
    minute; a native/elevenlabs job goes generating → captions → Ready without clicks; Shotstack/HeyGen pipeline in
    `inventory-ads/` is **not used** — keep its timer disabled (`sudo systemctl disable --now goldenauto-video.timer`).

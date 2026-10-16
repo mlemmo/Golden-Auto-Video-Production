@@ -11,14 +11,14 @@ function nativeSpeech(string $s):string{
     return acronymSpeech(numberSpeech(priceSpeech($s)));
 }
 /** Respellings written into the line Seedance speaks (it ignored the pronunciation note). Captions keep the real spelling. */
-const SEEDANCE_RESPELL=['San Ramon'=>'San Ruh-mone'];
+const SEEDANCE_RESPELL=['San Ramon'=>'San Rah-moan'];
 /** $extra: config 'respell' entries (word => how to write it for the voice), added to or overriding the defaults. */
 function seedanceRespell(string $s,array $extra=[]):string{
     foreach(array_merge(SEEDANCE_RESPELL,$extra) as $word=>$say)if(is_string($word)&&is_string($say)&&$word!=='')$s=preg_replace('/\b'.preg_quote($word,'/').'\b/iu',$say,$s);
     return $s;
 }
 /** Pronunciations given to the native-voice model when the word appears in the script. */
-const SPEECH_PRONUNCIATION=['San Ramon'=>'san ruh-MOHN, written "San Ruh-mone" above (rhymes with "a phone")','my golden auto dot net'=>'my GOLD-en AW-toh dot net, said as words, never spelled out letter by letter','Golden Auto'=>'GOLD-en AW-toh'];
+const SPEECH_PRONUNCIATION=['San Ramon'=>'san rah-MOAN, written "San Rah-moan" above (stress on MOAN, said like the word "moan")','my golden auto dot net'=>'my GOLD-en AW-toh dot net, said as words, never spelled out letter by letter','Golden Auto'=>'GOLD-en AW-toh'];
 function speechScript(string $s,bool $numbers=true):string{
     $s=preg_replace('~(?<![A-Za-z0-9])(?:https?://)?(?:www\.)?mygoldenauto\.net/?(?![A-Za-z0-9/])~i','my golden auto dot N, E, T',$s);
     $s=priceSpeech($s);
