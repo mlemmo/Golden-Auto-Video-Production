@@ -9,8 +9,8 @@ dir=/srv/golden-auto-staging
 url=https://staging.mygoldenauto.net:4343
 
 if [ ! -d "$dir/.git" ]; then
-  git clone --branch staging "$(git -C "$prod" remote get-url origin)" "$dir.tmp"
-  shopt -s dotglob; mv "$dir.tmp"/* "$dir"/; rmdir "$dir.tmp"
+  # setup-root.sh created the folder empty and owned by mark; /srv itself is root-only, so clone straight into it.
+  git clone --branch staging "$(git -C "$prod" remote get-url origin)" "$dir"
 fi
 install -d -m 700 "$dir/private/data"
 install -d -m 755 "$dir/public/assets" "$dir/public/assets/narrations"
