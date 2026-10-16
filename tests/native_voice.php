@@ -7,7 +7,7 @@ $v=['Year'=>2013,'Make'=>'SUBARU','Model'=>'XV CROSSTREK','price'=>14688.25];
 $speech=nativeSpeech('Take a look at this 2013 SUBARU XV CROSSTREK here at Golden Auto in San Ramon. Just $14,688. Book your test drive at mygoldenauto.net.');
 verify(str_contains($speech,'my golden auto dot net')&&!str_contains($speech,'N, E, T'),'website is said as "dot net" for the native voice');
 $p=promptNative($v,$speech,30,'friendly woman, cream dress');
-verify(str_contains($p,'word for word')&&str_contains($p,'"'.$speech.'"'),'prompt carries the exact spoken words');
+verify(str_contains($p,'word for word')&&str_contains($p,'"'.seedanceRespell($speech).'"'),'prompt carries the exact spoken words');
 verify(str_contains($p,'X-V')&&!str_contains($p,'$14,688'),'spoken words use the pronunciation form');
 verify(str_contains($p,'four wide shots')&&str_contains($p,'Shot 4 (23–30 s)')&&str_contains($p,'No music'),'prompt sets four wide shots around the car and clean voice audio');
 verify(str_contains($p,'entire car is visible from bumper to bumper')&&str_contains($p,'never closer to the camera than the car'),'whole car in frame, spokesperson beside it');
@@ -21,6 +21,7 @@ verify(!str_contains(promptNative($v,$speech,30,'x','speech',29.0),'has finished
 verify(numberSpeech('2013 Subaru, 2008 Toyota, 1999 Ford, 2020 Kia, 60,000 miles, model 1500')==='twenty thirteen Subaru, two thousand eight Toyota, nineteen ninety-nine Ford, twenty twenty Kia, sixty thousand miles, model 1500','years and comma numbers spoken as words');
 verify(!str_contains(speechScript('This 2013 SUBARU has 60,000 miles. Just $14,688.'),'2013')&&str_contains(speechScript('Just $14,688.'),'fourteen thousand six hundred eighty-eight dollars'),'speech scripts use the number words, prices unchanged');
 verify(str_contains($p,'"San Ramon" is pronounced san ruh-MOHN')&&str_contains($p,'never spelled out letter by letter'),'pronunciation guide for city and website');
+verify(str_contains($p,'Golden Auto in San Ruh-mone')&&!str_contains(captionDisplayText('Golden Auto in San Ramon.'),'Ruh'),'spoken line respells San Ramon; captions keep the real spelling');
 verify(!str_contains(promptNative($v,'Just fourteen thousand dollars.'),'Pronunciation:'),'no pronunciation note when the words are absent');
 try{promptNative($v,'  ');verify(false,'empty script rejected');}catch(RuntimeException $e){verify(true,'empty script rejected');}
 

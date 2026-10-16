@@ -25,7 +25,9 @@ try{
     $job['finish_status']='rendering';$job['finish_started_at']=gmdate('c');saveRenderJob($db,$job);
     downloadMaster($job['video_url'],$work.'/master.mp4');
     $narration=null;
-    if(($job['voice']??'')==='elevenlabs'){require_once __DIR__.'/finishing.php';$narration=goldenJobNarration($db,$cfg,$job);}
+    // voice=elevenlabs keeps Seedance's own speech (its lips match it); the approved narration only guides the voice.
+    // Swapping in the narration audio is kept for jobs that explicitly ask for it (audio_swap), e.g. later experiments.
+    if(($job['voice']??'')==='elevenlabs'&&!empty($job['audio_swap'])){require_once __DIR__.'/finishing.php';$narration=goldenJobNarration($db,$cfg,$job);}
     if(!empty($job['captions_from_audio'])){
         require_once __DIR__.'/finishing.php';
         $job['captions_srt']=$narration
@@ -47,7 +49,7 @@ try{
     $filter="scale=$w:$h:force_original_aspect_ratio=increase,crop=$w:$h,setsar=1,subtitles=captions.srt:force_style='$style'";
     
     $args=[(string)($cfg['ffmpeg_path']??'ffmpeg'),'-nostdin','-n','-hide_banner','-loglevel','error','-i','master.mp4'];
-    // voice=elevenlabs: the approved narration replaces the generated audio (exact approved pronunciation).
+    // audio_swap jobs: the approved narration replaces the generated audio.
     if($narration)array_push($args,'-i',$narration,'-filter_complex','[1:a]adelay='.(int)round(NARRATION_OFFSET*1000).':all=1,apad[a]','-map','0:v','-map','[a]','-shortest');
     array_push($args,'-vf',$filter,'-c:v','libx264','-preset','veryfast','-crf','20','-threads','1','-pix_fmt','yuv420p','-c:a','aac','-movflags','+faststart',$output);
     $p=proc_open($args,[0=>['file','/dev/null','r'],1=>['file',$work.'/ffmpeg.log','a'],2=>['file',$work.'/ffmpeg.log','a']],$pipes,$work);

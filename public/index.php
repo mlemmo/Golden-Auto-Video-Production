@@ -211,8 +211,8 @@ if (isset($_GET['api'])) {
 
 <section class="panel" id="stepVoice">
   <div class="step-head"><span class="step-num">3</span><div><h2>Voice</h2><p>Choose how the spokesperson's voice is made.</p></div></div>
-  <label>Voice<select id="voice"><option value="elevenlabs">Approved ElevenLabs voice — exact words you approve (recommended)</option><option value="native">Seedance voice — made in the video, wording may vary</option><option value="narration">ElevenLabs narration + lip-sync — older two-step method</option></select></label>
-  <p class="hint" id="elevenHint">You make a voice preview below, listen to it and approve it. The video is filmed using it, and the final video uses that exact audio, so names, numbers and codes sound the way you approved them.</p>
+  <label>Voice<select id="voice"><option value="elevenlabs">Approved ElevenLabs voice — guides the voice and words (recommended)</option><option value="native">Seedance voice — made in the video, wording may vary</option><option value="narration">ElevenLabs narration + lip-sync — older two-step method</option></select></label>
+  <p class="hint" id="elevenHint">You make a voice preview below, listen to it and approve it. Seedance uses it as the voice, wording and pace to follow, and speaks it in the video so her lips match. Check names and numbers in the finished video.</p>
   <p class="hint" id="voiceHint" hidden>Seedance creates the voice inside the video. Quick, but it may change or mispronounce words, and the voice differs between videos.</p>
   <p class="hint" id="narrationHint" hidden>Seedance films a silent video; afterwards your approved voice preview is added by lip-sync (Tools → Lip-sync builder) and the final video is built automatically.</p>
   <div id="voiceStudio" class="studio">
