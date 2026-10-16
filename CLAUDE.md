@@ -1,6 +1,6 @@
 # Golden Auto AI Car Videos — notes for Claude
 
-Continue the existing app; do not rebuild it. PHP 8.x dashboard (`public/`), PHP/Python helpers (`private/`), SQLite state, Ubuntu + Nginx + PHP-FPM, FFmpeg. Read README.md first.
+Continue the existing app; do not rebuild it. Current status and next steps: docs/HANDOFF.md. PHP 8.x dashboard (`public/`), PHP/Python helpers (`private/`), SQLite state, Ubuntu + Nginx + PHP-FPM, FFmpeg. Read README.md first.
 
 - Never commit or print `private/config.php`, API keys, `private/data/`, or `public/assets/*` (all gitignored).
 - Paid APIs (Higgsfield, ElevenLabs, fal.ai): never call them from tests or while fixing finishing/captions. Keep the per-call approval checks and fingerprint duplicate protection.
