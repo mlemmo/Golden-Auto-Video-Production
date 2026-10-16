@@ -142,8 +142,8 @@ function captionWordsMatch(string $a,string $b):bool {
 }
 /**
  * Spoken word sequence: recognized words [[text,start,end],...] aligned to the script (edit-distance DP).
- * A matched word keeps the script's spelling; a word she added keeps the recognized text; a script word she
- * skipped is dropped. Returns [words, matched script word count, script word count].
+ * A matched word keeps the script's spelling; words she added keep the recognized text (a single stray added word
+ * is dropped); a script word she skipped is dropped. Returns [words, matched script word count, script word count].
  */
 function captionAlignWords(string $display,array $heard):array {
     $script=preg_split('/\s+/u',trim($display),-1,PREG_SPLIT_NO_EMPTY);
@@ -162,10 +162,18 @@ function captionAlignWords(string $display,array $heard):array {
     while($i>0||$j>0){
         $f=$from[$i][$j];
         if($f===3){$out[]=[$script[$i-1],(float)$heard[$j-1][1],(float)$heard[$j-1][2]];$matched++;$i--;$j--;}
-        elseif($f===2){$t=trim((string)$heard[$j-1][0]);if($hk[$j-1]!=='')$out[]=[captionDisplayText($t),(float)$heard[$j-1][1],(float)$heard[$j-1][2]];$j--;}
+        elseif($f===2){$t=trim((string)$heard[$j-1][0]);if($hk[$j-1]!=='')$out[]=[captionDisplayText($t),(float)$heard[$j-1][1],(float)$heard[$j-1][2],true];$j--;}
         else $i--;
     }
-    return [array_reverse($out),$matched,$n];
+    $out=array_reverse($out);
+    // A single added word between script words is a stumble or a misheard sound ("just oast over"): leave it out.
+    // Added runs of two or more words ("a Subaru X", a repeated price) are real speech and stay captioned.
+    $keep=[];$c=count($out);
+    for($k=0;$k<$c;$k++){
+        if(!empty($out[$k][3])&&empty($out[$k-1][3])&&empty($out[$k+1][3]))continue;
+        $keep[]=array_slice($out[$k],0,3);
+    }
+    return [$keep,$matched,$n];
 }
 /**
  * The script as she actually spoke it, for captionCues: words she added (a repeated price, an inserted phrase) are

@@ -40,6 +40,8 @@ assertCaption(str_contains((string)$spoken,'Premium,')&&str_contains((string)$sp
 $skipped=captionSpokenScript('Book your test drive today at mygoldenauto.net.',[['Book',0,.3],['your',.3,.5],['test',.5,.8],['drive',.8,1],['at',1.1,1.2],['mygoldenauto.net.',1.2,2]]);
 assertCaption($skipped==='Book your test drive at mygoldenauto.net.','a word she skipped is not captioned');
 assertCaption(captionSpokenScript($take,[['Hello',0,.5],['there',.5,1]])===null,'too little recognized: fall back to the written script');
+$stumble=captionSpokenScript('and just over 60,000 miles. Just $14,688.',[['and',0,.2],['just',.2,.4],['oast',.4,.5],['over',.5,.7],['60,000',.7,1.2],['miles.',1.2,1.5],['Just',2,2.2],['$14,688.',2.2,3],['Just',3.2,3.4],['$14,688.',3.4,4]]);
+assertCaption($stumble==='and just over 60,000 miles. Just $14,688. Just $14,688.','a single stray added word is left out; a repeated two-word phrase stays');
 // Voiced spans measured from that take: every sentence caption starts at its real pause, the repeat included.
 $spans=[[0.4,2.06],[2.27,7.37],[8.52,12.43],[12.7,14.75],[15.87,18.74],[19.19,21.95],[23.43,24.74],[25.02,26.69]];
 $cues=captionCues((string)$spoken,'2013 SUBARU XV CROSSTREK',$spans,26.69);$at=[];foreach($cues as $c)$at[str_replace("\n",' ',$c['text'])]=$c;
