@@ -55,7 +55,8 @@ function captionSyllables(string $text):int {
 /** Break one sentence into short phrase units; names, price and website stay together. */
 function captionUnits(string $sentence,string $vehicle=''):array {
     $s=$sentence;$protect=[];
-    if($vehicle!=='')$protect[]=preg_quote($vehicle,'/');
+    // The car name plus up to three trim words that follow it ("2013 Subaru XV Crosstrek Premium").
+    if($vehicle!=='')$protect[]=preg_quote($vehicle,'/').'(?:\s+(?!(?:'.implode('|',CAPTION_GLUE).'|here|now|today|today\b)\b)[A-Z][\w-]*){0,3}';
     $protect[]='Golden Auto';$protect[]='San Ramon';$protect[]='test drive';$protect[]='(?:Just|Priced at)\s+\$[\d,]+(?:\.\d+)?';
     foreach($protect as $re)$s=preg_replace_callback('/'.$re.'/iu',fn($m)=>preg_replace('/\s+/',"\x01",$m[0]),$s);
     $tokens=preg_split('/\s+/u',trim($s),-1,PREG_SPLIT_NO_EMPTY);$units=[];$carry='';
@@ -84,36 +85,42 @@ function captionWrap(string $text):string {
     }
     return $best??$plain($text);
 }
-/** Cue list: [['text','start','end'],...] with times relative to the start of the narration audio. */
+/**
+ * Cue list: [['text','start','end'],...] with times relative to the start of the speech audio.
+ * The script is split into clauses (sentence ends and commas). Real pauses in the audio are matched to clause
+ * boundaries (dynamic programming on where each boundary is expected by syllable count), and words between
+ * matched pauses are spread by syllables over the speech in between. Cues never cross a clause.
+ */
 function captionCues(string $script,string $vehicle,array $spans,float $audioEnd):array {
     $display=captionDisplayText($script);$vehicle=$vehicle===''?'':captionDisplayText($vehicle);
     $sentences=preg_split('/(?<=[.!?])\s+/u',$display,-1,PREG_SPLIT_NO_EMPTY);if(!$sentences)return [];
     $spans=array_values(array_filter($spans,fn($s)=>$s[1]-$s[0]>=0.05));
     if(!$spans)$spans=[[0.2,max(0.5,$audioEnd-0.2)]];
-    $segments=captionSegments($spans,count($sentences));
-    $sentenceUnits=[];foreach($sentences as $sentence)$sentenceUnits[]=captionUnits($sentence,$vehicle);
-    $cues=[];$grand=max(1,array_sum(array_map(fn($u)=>array_sum(array_column($u,'weight')),$sentenceUnits)));
-    $allVoiced=0.0;foreach($spans as $sp)$allVoiced+=$sp[1]-$sp[0];$before=0;
-    foreach($sentenceUnits as $si=>$units){
-        $total=max(1,array_sum(array_column($units,'weight')));
-        if($segments){ // pauses in the audio match the sentences: map each sentence onto its own segment
-            $segment=$segments[$si];$base=0.0;$voiced=0.0;foreach($segment as $sp)$voiced+=$sp[1]-$sp[0];
-        }else{ // otherwise spread sentences over all speech by syllable weight
-            $segment=$spans;$base=$allVoiced*$before/$grand;$voiced=$allVoiced*$total/$grand;
-        }
-        $before+=$total;
-        $groups=[];$cur=[];$len=0;
-        foreach($units as $u){$l=strlen($u['plain'])+($cur?1:0);
-            if($cur&&$len+$l>CAPTION_MAX_CUE){$groups[]=$cur;$cur=[];$len=0;$l=strlen($u['plain']);}
-            $cur[]=$u;$len+=$l;}
-        if($cur)$groups[]=$cur;
-        $done=0;
-        foreach($groups as $g){
-            $w=array_sum(array_column($g,'weight'));
-            $a=captionVoicedTime($segment,$base+$voiced*$done/$total);$b=captionVoicedTime($segment,$base+$voiced*($done+$w)/$total);$done+=$w;
-            $cues[]=['text'=>captionWrap(implode(' ',array_column($g,'text'))),'start'=>$a,'end'=>$b];
-        }
+    // Units with their clause boundary strength: 2 = sentence end, 1 = comma/semicolon, 0 = none.
+    $units=[];
+    foreach($sentences as $sentence){
+        $us=captionUnits($sentence,$vehicle);
+        foreach($us as $k=>$u){$u['end']=$k===count($us)-1?2:(preg_match('/[,;:]$/',rtrim(str_replace(["\x01","\x02"],' ',$u['text'])))?1:0);$units[]=$u;}
     }
+    $W=array_sum(array_column($units,'weight'));
+    $V=0.0;$gaps=[];
+    foreach($spans as $i=>$sp){$V+=$sp[1]-$sp[0];if($i<count($spans)-1)$gaps[]=['v'=>$V,'len'=>$spans[$i+1][0]-$sp[1]];}
+    $map=captionAnchors($units,$gaps,$W,$V);
+    // Cues: group units inside each clause up to CAPTION_MAX_CUE characters.
+    $cues=[];$cur=[];$len=0;$w0=0.0;$w=0.0;
+    $flush=function()use(&$cues,&$cur,&$len,&$w0,&$w,$map,$spans){
+        if(!$cur)return;
+        $a=captionVoicedTime($spans,captionMapWeight($map,$w0)+1e-6);$b=captionVoicedTime($spans,captionMapWeight($map,$w));
+        $cues[]=['text'=>captionWrap(implode(' ',array_column($cur,'text'))),'start'=>$a,'end'=>max($b,$a+0.1)];
+        $cur=[];$len=0;$w0=$w;
+    };
+    foreach($units as $u){
+        $l=strlen($u['plain'])+($cur?1:0);
+        if($cur&&$len+$l>CAPTION_MAX_CUE)$flush();
+        $cur[]=$u;$len+=strlen($u['plain'])+($len?1:0);$w+=$u['weight'];
+        if($u['end']>0)$flush();
+    }
+    $flush();
     // Small lead-in, short hold, minimum on-screen time, never overlapping.
     $n=count($cues);
     for($i=0;$i<$n;$i++){
@@ -125,6 +132,38 @@ function captionCues(string $script,string $vehicle,array $spans,float $audioEnd
         if($i+1<$n)$cues[$i+1]['start']=max($cues[$i+1]['start'],$cues[$i]['end']+0.04);
     }
     return $cues;
+}
+/**
+ * Match audio pauses to clause boundaries. Returns control points [[weight, voiced seconds], ...] from (0,0) to (W,V).
+ * Pauses shorter than 0.15 s are ignored; a long pause left unmatched, or a sentence end with no pause, costs more.
+ */
+function captionAnchors(array $units,array $gaps,float $W,float $V):array {
+    $cands=[];$cw=0.0;
+    foreach($units as $k=>$u){$cw+=$u['weight'];if($u['end']>0&&$k<count($units)-1)$cands[]=['w'=>$cw,'e'=>$V*$cw/max(1,$W),'s'=>$u['end']];}
+    $gaps=array_values(array_filter($gaps,fn($g)=>$g['len']>=0.15));
+    $n=count($gaps);$m=count($cands);
+    if(!$n||!$m||$V<=0)return [[0,0],[$W,$V]];
+    $skipGap=fn($g)=>0.03+0.12*min(1.5,$g['len']);
+    $skipCand=fn($c)=>$c['s']===2?0.05:0.015;
+    $dp=array_fill(0,$n+1,array_fill(0,$m+1,INF));$from=$dp;$dp[0][0]=0.0;
+    for($i=0;$i<=$n;$i++)for($j=0;$j<=$m;$j++){
+        $c=$dp[$i][$j];if($c===INF)continue;
+        if($i<$n&&$c+$skipGap($gaps[$i])<$dp[$i+1][$j]){$dp[$i+1][$j]=$c+$skipGap($gaps[$i]);$from[$i+1][$j]=0;}
+        if($j<$m&&$c+$skipCand($cands[$j])<$dp[$i][$j+1]){$dp[$i][$j+1]=$c+$skipCand($cands[$j]);$from[$i][$j+1]=1;}
+        if($i<$n&&$j<$m){$cost=$c+abs($gaps[$i]['v']-$cands[$j]['e'])/$V;if($cost<$dp[$i+1][$j+1]){$dp[$i+1][$j+1]=$cost;$from[$i+1][$j+1]=2;}}
+    }
+    $pts=[];$i=$n;$j=$m;
+    while($i>0||$j>0){$f=$from[$i][$j];if($f===2){$pts[]=[$cands[$j-1]['w'],$gaps[$i-1]['v']];$i--;$j--;}elseif($f===0)$i--;else $j--;}
+    $pts=array_reverse($pts);array_unshift($pts,[0,0]);$pts[]=[$W,$V];
+    return $pts;
+}
+/** Voiced-seconds position for a cumulative syllable weight, piecewise linear between anchors. */
+function captionMapWeight(array $pts,float $w):float {
+    for($k=1;$k<count($pts);$k++){
+        [$w1,$v1]=$pts[$k-1];[$w2,$v2]=$pts[$k];
+        if($w<=$w2+1e-9)return $w2>$w1?$v1+($v2-$v1)*($w-$w1)/($w2-$w1):$v2;
+    }
+    return (float)end($pts)[1];
 }
 /** Split voiced spans into exactly $count sentence segments using pauses; null when pauses don't match. */
 function captionSegments(array $spans,int $count):?array {

@@ -153,8 +153,8 @@ if (isset($_GET['api'])) {
                 if($voiceRef!==''&&!preg_match('~^https://[^\s?#]+\.(mp3|wav|m4a)$~i',$voiceRef))throw new RuntimeException('voice_reference_url in config.php must be a public https link to an MP3, WAV or M4A file.');
             }
             $promptText=match($voice){
-                'elevenlabs'=>promptNative($fresh,(string)$approvedVoice['text'],$duration,$presenter['description'],'speech',isset($approvedVoice['audio_duration'])?(float)$approvedVoice['audio_duration']:null),
-                'native'=>promptNative($fresh,nativeSpeech($spoken),$duration,$presenter['description'],$voiceRef!==''),
+                'elevenlabs'=>promptNative($fresh,(string)$approvedVoice['text'],$duration,$presenter['description'],'speech',isset($approvedVoice['audio_duration'])?(float)$approvedVoice['audio_duration']:null,(array)($cfg['respell']??[])),
+                'native'=>promptNative($fresh,nativeSpeech($spoken),$duration,$presenter['description'],$voiceRef!=='',null,(array)($cfg['respell']??[])),
                 default=>prompt($fresh,$spoken,$style,$duration,$presenter['description'])};
             $fingerprint=hash('sha256',json_encode([$v['Vin'],$v['price'],$spoken,$sheet,$avatar,$presenter['description'],$format,$style,$duration,$voice,hash('sha256',$promptText),$voiceRef]));
             $id=bin2hex(random_bytes(12));$job=['id'=>$id,'stock'=>$v['StockNumber'],'vehicle'=>title($v),'spokesperson_id'=>$presenter['id'],'spokesperson'=>$presenter['name'],'format'=>$format,'style'=>$style,'duration'=>$duration,'status'=>'preparing_references','created_at'=>gmdate('c'),'script'=>$spoken,'speech_script'=>$voice==='native'?nativeSpeech($spoken):speechScript($spoken),'price'=>$v['price'],'voice'=>$voice];

@@ -21,6 +21,7 @@ verify(!str_contains(promptNative($v,$speech,30,'x','speech',29.0),'has finished
 verify(numberSpeech('2013 Subaru, 2008 Toyota, 1999 Ford, 2020 Kia, 60,000 miles, model 1500')==='twenty thirteen Subaru, two thousand eight Toyota, nineteen ninety-nine Ford, twenty twenty Kia, sixty thousand miles, model 1500','years and comma numbers spoken as words');
 verify(!str_contains(speechScript('This 2013 SUBARU has 60,000 miles. Just $14,688.'),'2013')&&str_contains(speechScript('Just $14,688.'),'fourteen thousand six hundred eighty-eight dollars'),'speech scripts use the number words, prices unchanged');
 verify(str_contains($p,'"San Ramon" is pronounced san ruh-MOHN')&&str_contains($p,'never spelled out letter by letter'),'pronunciation guide for city and website');
+verify(str_contains(promptNative($v,$speech,30,'x',false,null,['San Ramon'=>'San Rah-moan']),'San Rah-moan'),'respelling can be changed in config');
 verify(str_contains($p,'Golden Auto in San Ruh-mone')&&!str_contains(captionDisplayText('Golden Auto in San Ramon.'),'Ruh'),'spoken line respells San Ramon; captions keep the real spelling');
 verify(!str_contains(promptNative($v,'Just fourteen thousand dollars.'),'Pronunciation:'),'no pronunciation note when the words are absent');
 try{promptNative($v,'  ');verify(false,'empty script rejected');}catch(RuntimeException $e){verify(true,'empty script rejected');}
@@ -60,6 +61,8 @@ try{
         $starts=array_map(fn($x)=>(int)$x[3]+(int)$x[4]/1000,$m);
         $srt2=goldenNativeCaptions($cfg,['script'=>'Visit Golden Auto in San Ramon today.','vehicle'=>'','duration'=>30],$mp4,$dir);
         verify(str_contains(str_replace("\n",' ',$srt2),'San Ramon'),'"San Ramon" is never split across captions');
+        $srt4=goldenNativeCaptions($cfg,['script'=>'Take a look at this 2013 SUBARU XV CROSSTREK PREMIUM, here at Golden Auto. Just $14,688.','vehicle'=>'2013 SUBARU XV CROSSTREK','duration'=>30],$mp4,$dir);
+        verify(str_contains(str_replace("\n",' ',$srt4),'XV Crosstrek Premium,'),'trim stays with the car name and the comma ends the caption');
         verify(str_contains(str_replace("\n",' ',$srt),'Subaru XV Crosstrek')&&str_contains($srt,'Just $14,688.'),'captions use display wording');
         verify(count($starts)>=2&&$starts[0]<0.5&&abs(end($starts)-3.8)<0.4,'second sentence caption starts at the measured pause');
         $srt3=goldenNativeCaptions($cfg,['script'=>'Take a look at this 2013 SUBARU XV CROSSTREK. Just $14,688.','vehicle'=>'2013 SUBARU XV CROSSTREK','duration'=>30],$mp4,$dir,NARRATION_OFFSET);

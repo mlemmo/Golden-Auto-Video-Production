@@ -124,7 +124,7 @@ function script30(array $v): string {
  * $speech is the pronunciation form (nativeSpeech); captions use the display script. $voiceReference: an audio
  * reference of the spokesperson's voice is attached to the request.
  */
-function promptNative(array $v,string $speech,int $duration=30,string $presenter=SPOKESPERSON_DEFAULT_DESCRIPTION,bool|string $voiceReference=false,?float $speechSeconds=null): string {
+function promptNative(array $v,string $speech,int $duration=30,string $presenter=SPOKESPERSON_DEFAULT_DESCRIPTION,bool|string $voiceReference=false,?float $speechSeconds=null,array $respell=[]): string {
     // $speechSeconds: length of the approved narration (voice=elevenlabs). Its audio replaces the generated audio at
     // NARRATION_OFFSET, so she must talk only during that window, at the recording's pace, and be silent after it.
     // $voiceReference: false; true/'voice' = a sample of her voice; 'speech' = the exact approved narration for this video.
@@ -151,7 +151,7 @@ function promptNative(array $v,string $speech,int $duration=30,string $presenter
         'Shot 4 ('.$t(.75).'–'.$duration.' s): wide front three-quarter view of the whole car from the other side; she has walked around to the front corner and finishes speaking to the camera with a warm smile. '.
         'Clean cuts between the four shots; the camera is steady or moves slowly within each shot. '.
         'Speech: she speaks to the camera'.($voiceReference==='speech'?' while the recording plays, in that same voice and pace,':' throughout, in a warm, clear, natural, friendly American English voice, relaxed and unhurried, with a brief natural pause between sentences,').' like a real salesperson talking to one customer, not an announcer. Her lip movements match every word exactly, and her open-hand gestures toward the car match what she is saying. Her speech continues seamlessly across the cuts and finishes by '.$speakUntil.' seconds. '.$silentAfter.
-        'She says exactly this, word for word, and nothing else: "'.seedanceRespell($speech).'" '.
+        'She says exactly this, word for word, and nothing else: "'.seedanceRespell($speech,$respell).'" '.
         speechPronunciationGuide($speech).
         'Audio: only her voice, clear, natural and close to the microphone, with no echo or reverb, over a soft quiet room tone. No music, no other voices, no sound effects. '.
         'Leave space at the bottom of the frame for captions added in post-production. No on-screen text of any kind: no captions, no watermark, no website address, no logo, no signage text, no license-plate text.';
