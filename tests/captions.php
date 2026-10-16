@@ -29,23 +29,23 @@ assertCaption(speechScript('Visit https://www.mygoldenauto.net.')==='Visit my go
 assertCaption(speechScript('Visit mygoldenauto.net.')==='Visit my golden auto dot N, E, T.','plain website for speech');
 assertCaption(str_contains(script(['Year'=>2013,'Make'=>'SUBARU','Model'=>'XV CROSSTREK','price'=>14688.0]),'Just $14,688.'),'default script uses approved "Just" wording and whole dollars');
 
-// --- Captions follow what she actually said (recognized words aligned to the script) ---
+// --- Captions show exactly the approved caption text, timed by what she actually said ---
 // Recognized words from a real Seedance take: she added "a Subaru X", said the price twice and "San Ramon" came back as "Ramio".
 $take='Looking for a dependable SUV? Take a look at this 2013 SUBARU XV CROSSTREK Premium, here at Golden Auto in San Ramon. It comes with all-wheel drive, a silver exterior, and just over 60,000 miles. Just $14,688. Book your test drive today at mygoldenauto.net.';
-$heard=[];foreach(explode(' ','Looking for a dependable SUV? Take a look at this 2013 Subaru XV Crosstrek Premium here at Golden Auto in San Ramio. It comes with all-wheel drive, a Subaru X, a silver exterior, and just over 60,000 miles. Just $14,688. Just $14,688. Book your test drive today at MyGoldenAuto.net.')as $k=>$w)$heard[]=[$w,$k*0.5,$k*0.5+0.4];
-$spoken=captionSpokenScript($take,$heard);
-assertCaption($spoken!==null&&str_contains($spoken,'in San Ramon.')&&!str_contains($spoken,'Ramio'),'matched words keep the script spelling');
-assertCaption(substr_count((string)$spoken,'Just $14,688.')===2&&str_contains((string)$spoken,'drive, a Subaru X, a silver'),'added and repeated words are captioned');
-assertCaption(str_contains((string)$spoken,'Premium,')&&str_contains((string)$spoken,'mygoldenauto.net.'),'script punctuation and spelling kept for matched words');
+$heard=[];foreach(explode(' ','Looking for a dependable SUV? Take a look at this 2013 Subaru XV Crosstrek Premium here at Golden Auto in San Ramio. It comes with all-wheel drive, a Subaru X, a silver exterior, and just oast over 60,000 miles. Just $14,688. Just $14,688. Book your test drive today at MyGoldenAuto.net.')as $k=>$w)$heard[]=[$w,$k*0.5,$k*0.5+0.4];
+$timing=captionSpokenScript($take,$heard);
+assertCaption($timing!==null&&str_replace(CAPTION_EXTRA,'',preg_replace('/\x03\S+ ?/','',$timing))===captionDisplayText($take),'timing text is the caption text plus marked added words');
+assertCaption(substr_count((string)$timing,CAPTION_EXTRA)===6,'added words (a Subaru X, oast, the repeated price) are marked');
 $skipped=captionSpokenScript('Book your test drive today at mygoldenauto.net.',[['Book',0,.3],['your',.3,.5],['test',.5,.8],['drive',.8,1],['at',1.1,1.2],['mygoldenauto.net.',1.2,2]]);
-assertCaption($skipped==='Book your test drive at mygoldenauto.net.','a word she skipped is not captioned');
-assertCaption(captionSpokenScript($take,[['Hello',0,.5],['there',.5,1]])===null,'too little recognized: fall back to the written script');
-$stumble=captionSpokenScript('and just over 60,000 miles. Just $14,688.',[['and',0,.2],['just',.2,.4],['oast',.4,.5],['over',.5,.7],['60,000',.7,1.2],['miles.',1.2,1.5],['Just',2,2.2],['$14,688.',2.2,3],['Just',3.2,3.4],['$14,688.',3.4,4]]);
-assertCaption($stumble==='and just over 60,000 miles. Just $14,688. Just $14,688.','a single stray added word is left out; a repeated two-word phrase stays');
-// Voiced spans measured from that take: every sentence caption starts at its real pause, the repeat included.
+assertCaption($skipped==='Book your test drive today at mygoldenauto.net.','a word she skipped stays in the caption text');
+assertCaption(captionSpokenScript($take,[['Hello',0,.5],['there',.5,1]])===null,'too little recognized: time the caption text alone');
+// Voiced spans measured from that take: captions keep the approved wording and each one starts at its real pause.
 $spans=[[0.4,2.06],[2.27,7.37],[8.52,12.43],[12.7,14.75],[15.87,18.74],[19.19,21.95],[23.43,24.74],[25.02,26.69]];
-$cues=captionCues((string)$spoken,'2013 SUBARU XV CROSSTREK',$spans,26.69);$at=[];foreach($cues as $c)$at[str_replace("\n",' ',$c['text'])]=$c;
+$heard2=[];foreach(explode(' ','Looking for a dependable SUV? Take a look at this 2013 Subaru XV Crosstrek Premium here at Golden Auto in San Ramio. It comes with all-wheel drive, a Subaru X, a silver exterior, and just over 60,000 miles. Just $14,688. Just $14,688. Book your test drive today at MyGoldenAuto.net.')as $k=>$w)$heard2[]=[$w,$k*0.5,$k*0.5+0.4];
+$cues=captionCues((string)captionSpokenScript($take,$heard2),'2013 SUBARU XV CROSSTREK',$spans,26.69);
+$all=implode(' ',array_map(fn($c)=>str_replace("\n",' ',$c['text']),$cues));
+assertCaption($all===captionDisplayText($take),'captions show exactly the approved caption text, nothing added or removed');
+assertCaption(!str_contains($all,CAPTION_EXTRA)&&substr_count($all,'Just $14,688.')===1&&!str_contains($all,'Subaru X,'),'added words and the repeat are never shown');
+$at=[];foreach($cues as $c)$at[str_replace("\n",' ',$c['text'])]=$c;
 assertCaption(abs($at['It comes with all-wheel drive,']['start']-8.48)<0.15&&abs($at['and just over 60,000 miles.']['end']-14.95)<0.25,'mileage caption is gone before the price is said');
-$prices=array_values(array_filter($cues,fn($c)=>$c['text']==='Just $14,688.'));
-assertCaption(count($prices)===2&&abs($prices[0]['start']-15.83)<0.15&&abs($prices[1]['start']-19.15)<0.15,'each spoken price gets its own caption at its pause');
-assertCaption(abs(end($cues)['end']-26.73)<0.25,'last caption ends with the speech');
+assertCaption(abs($at['Book your test drive today']['start']-23.39)<0.15&&abs(end($cues)['end']-26.73)<0.25,'captions after the repeat are still on time');

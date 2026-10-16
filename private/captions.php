@@ -111,7 +111,9 @@ function captionCues(string $script,string $vehicle,array $spans,float $audioEnd
     $flush=function()use(&$cues,&$cur,&$len,&$w0,&$w,$map,$spans){
         if(!$cur)return;
         $a=captionVoicedTime($spans,captionMapWeight($map,$w0)+1e-6);$b=captionVoicedTime($spans,captionMapWeight($map,$w));
-        $cues[]=['text'=>captionWrap(implode(' ',array_column($cur,'text'))),'start'=>$a,'end'=>max($b,$a+0.1)];
+        // Words she added (CAPTION_EXTRA) count for timing but are never shown; a cue of only added words is dropped.
+        $text=captionStripExtra(implode(' ',array_column($cur,'text')));
+        if(trim(str_replace(["\x01","\x02"],'',$text))!=='')$cues[]=['text'=>captionWrap($text),'start'=>$a,'end'=>max($b,$a+0.1)];
         $cur=[];$len=0;$w0=$w;
     };
     foreach($units as $u){
@@ -140,10 +142,12 @@ function captionWordsMatch(string $a,string $b):bool {
     // Misheard spellings of the same word ("Ramon" ≈ "Ramio"): same first letter, up to 40% of letters changed.
     $l=max(strlen($a),strlen($b));return $l>=4&&$a[0]===$b[0]&&levenshtein($a,$b)<=(int)floor($l*0.4);
 }
+/** Marks a word she said that is not in the caption text: used for timing only, never shown. */
+const CAPTION_EXTRA="\x03";
 /**
- * Spoken word sequence: recognized words [[text,start,end],...] aligned to the script (edit-distance DP).
- * A matched word keeps the script's spelling; words she added keep the recognized text (a single stray added word
- * is dropped); a script word she skipped is dropped. Returns [words, matched script word count, script word count].
+ * Recognized words [[text,start,end],...] aligned to the caption text (edit-distance DP). Returns
+ * [words, matched script word count, script word count]; words are every caption-text word in order (each with its
+ * recognized times, or null when she skipped it) plus the words she added, flagged [text,start,end,true].
  */
 function captionAlignWords(string $display,array $heard):array {
     $script=preg_split('/\s+/u',trim($display),-1,PREG_SPLIT_NO_EMPTY);
@@ -161,29 +165,27 @@ function captionAlignWords(string $display,array $heard):array {
     $out=[];$matched=0;$i=$n;$j=$m;
     while($i>0||$j>0){
         $f=$from[$i][$j];
-        if($f===3){$out[]=[$script[$i-1],(float)$heard[$j-1][1],(float)$heard[$j-1][2]];$matched++;$i--;$j--;}
-        elseif($f===2){$t=trim((string)$heard[$j-1][0]);if($hk[$j-1]!=='')$out[]=[captionDisplayText($t),(float)$heard[$j-1][1],(float)$heard[$j-1][2],true];$j--;}
-        else $i--;
+        if($f===3){$out[]=[$script[$i-1],(float)$heard[$j-1][1],(float)$heard[$j-1][2],false];$matched++;$i--;$j--;}
+        elseif($f===2){$t=trim((string)$heard[$j-1][0]);if($hk[$j-1]!=='')$out[]=[$t,(float)$heard[$j-1][1],(float)$heard[$j-1][2],true];$j--;}
+        else{$out[]=[$script[$i-1],null,null,false];$i--;}
     }
-    $out=array_reverse($out);
-    // A single added word between script words is a stumble or a misheard sound ("just oast over"): leave it out.
-    // Added runs of two or more words ("a Subaru X", a repeated price) are real speech and stay captioned.
-    $keep=[];$c=count($out);
-    for($k=0;$k<$c;$k++){
-        if(!empty($out[$k][3])&&empty($out[$k-1][3])&&empty($out[$k+1][3]))continue;
-        $keep[]=array_slice($out[$k],0,3);
-    }
-    return [$keep,$matched,$n];
+    return [array_reverse($out),$matched,$n];
 }
 /**
- * The script as she actually spoke it, for captionCues: words she added (a repeated price, an inserted phrase) are
- * included and words she skipped are dropped, so caption timing no longer drifts after a deviation. Null when too
- * little of the script was recognized; the caller then times the written script.
+ * Timing text for captionCues: the approved caption text with the words she added (an inserted phrase, a repeated
+ * price) placed where she said them and marked CAPTION_EXTRA. They make the pause matching follow her real speech
+ * and are removed from the cues, so captions show exactly the caption text. Null when too little of it was recognized;
+ * the caller then times the caption text alone.
  */
 function captionSpokenScript(string $script,array $heard):?string {
     [$words,$matched,$total]=captionAlignWords(captionDisplayText($script),$heard);
     if(!$words||$total===0||$matched<0.6*$total)return null;
-    return implode(' ',array_column($words,0));
+    return implode(' ',array_map(fn($w)=>$w[3]?CAPTION_EXTRA.$w[0]:$w[0],$words));
+}
+/** Remove CAPTION_EXTRA words from a cue's unit text (words are separated by spaces or the \x01/\x02 markers). */
+function captionStripExtra(string $text):string {
+    if(!str_contains($text,CAPTION_EXTRA))return $text;
+    return trim(preg_replace('/\x03[^ \x01\x02]*[ \x01\x02]*/','',$text)," \x01\x02");
 }
 /**
  * Match audio pauses to clause boundaries. Returns control points [[weight, voiced seconds], ...] from (0,0) to (W,V).

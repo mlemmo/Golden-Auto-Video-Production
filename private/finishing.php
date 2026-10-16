@@ -86,7 +86,7 @@ function goldenNativeCaptions(array $cfg,array $job,string $source,string $work,
     $p=proc_open([$ffmpeg,'-nostdin','-v','error','-y','-i',$source,'-vn','-ac','1','-ar','16000','-t','61',$wav],[0=>['file','/dev/null','r'],1=>['file','/dev/null','w'],2=>['file','/dev/null','w']],$pipes);
     if(!is_resource($p)||proc_close($p)!==0||!is_file($wav))throw new RuntimeException('No usable speech audio found for the captions.');
     $timing=goldenFinishPython(['op'=>'analyze','audio'=>$wav,'audio_hash'=>hash_file('sha256',$wav),'ffmpeg'=>$ffmpeg]);
-    // Caption the words she actually said (local speech recognition, when configured), timed by the measured pauses.
+    // Captions show the caption text; local speech recognition (when configured) tells where she added words, so timing follows her real speech.
     $heard=goldenHeardWords($cfg,$wav,$work);
     $spoken=$heard?captionSpokenScript((string)$job['script'],$heard):null;
     $cues=captionCues($spoken??(string)$job['script'],(string)($job['vehicle']??''),$timing['spans']??[],(float)$timing['speech_end']);
