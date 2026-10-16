@@ -133,6 +133,50 @@ function captionCues(string $script,string $vehicle,array $spans,float $audioEnd
     }
     return $cues;
 }
+/** Word key for matching script words to recognized words: "$14,688." → "14688", "All-Wheel" → "allwheel". */
+function captionWordKey(string $t):string {return preg_replace('/[^a-z0-9]/','',strtolower($t));}
+function captionWordsMatch(string $a,string $b):bool {
+    if($a===''||$b==='')return false;if($a===$b)return true;
+    // Misheard spellings of the same word ("Ramon" ≈ "Ramio"): same first letter, up to 40% of letters changed.
+    $l=max(strlen($a),strlen($b));return $l>=4&&$a[0]===$b[0]&&levenshtein($a,$b)<=(int)floor($l*0.4);
+}
+/**
+ * Spoken word sequence: recognized words [[text,start,end],...] aligned to the script (edit-distance DP).
+ * A matched word keeps the script's spelling; a word she added keeps the recognized text; a script word she
+ * skipped is dropped. Returns [words, matched script word count, script word count].
+ */
+function captionAlignWords(string $display,array $heard):array {
+    $script=preg_split('/\s+/u',trim($display),-1,PREG_SPLIT_NO_EMPTY);
+    $sk=array_map('captionWordKey',$script);$hk=array_map(fn($w)=>captionWordKey((string)$w[0]),$heard);
+    $n=count($script);$m=count($heard);
+    $dp=array_fill(0,$n+1,array_fill(0,$m+1,0));$from=$dp;
+    for($i=1;$i<=$n;$i++){$dp[$i][0]=$i;$from[$i][0]=1;}
+    for($j=1;$j<=$m;$j++){$dp[0][$j]=$j;$from[0][$j]=2;}
+    for($i=1;$i<=$n;$i++)for($j=1;$j<=$m;$j++){
+        $best=$dp[$i-1][$j]+1;$f=1;                                  // script word not spoken
+        if($dp[$i][$j-1]+1<$best){$best=$dp[$i][$j-1]+1;$f=2;}       // spoken word not in the script
+        if(captionWordsMatch($sk[$i-1],$hk[$j-1])&&$dp[$i-1][$j-1]<=$best){$best=$dp[$i-1][$j-1];$f=3;}
+        $dp[$i][$j]=$best;$from[$i][$j]=$f;
+    }
+    $out=[];$matched=0;$i=$n;$j=$m;
+    while($i>0||$j>0){
+        $f=$from[$i][$j];
+        if($f===3){$out[]=[$script[$i-1],(float)$heard[$j-1][1],(float)$heard[$j-1][2]];$matched++;$i--;$j--;}
+        elseif($f===2){$t=trim((string)$heard[$j-1][0]);if($hk[$j-1]!=='')$out[]=[captionDisplayText($t),(float)$heard[$j-1][1],(float)$heard[$j-1][2]];$j--;}
+        else $i--;
+    }
+    return [array_reverse($out),$matched,$n];
+}
+/**
+ * The script as she actually spoke it, for captionCues: words she added (a repeated price, an inserted phrase) are
+ * included and words she skipped are dropped, so caption timing no longer drifts after a deviation. Null when too
+ * little of the script was recognized; the caller then times the written script.
+ */
+function captionSpokenScript(string $script,array $heard):?string {
+    [$words,$matched,$total]=captionAlignWords(captionDisplayText($script),$heard);
+    if(!$words||$total===0||$matched<0.6*$total)return null;
+    return implode(' ',array_column($words,0));
+}
 /**
  * Match audio pauses to clause boundaries. Returns control points [[weight, voiced seconds], ...] from (0,0) to (W,V).
  * Pauses shorter than 0.15 s are ignored; a long pause left unmatched, or a sentence end with no pause, costs more.

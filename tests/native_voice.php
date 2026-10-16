@@ -68,6 +68,7 @@ try{
         $srt3=goldenNativeCaptions($cfg,['script'=>'Take a look at this 2013 SUBARU XV CROSSTREK. Just $14,688.','vehicle'=>'2013 SUBARU XV CROSSTREK','duration'=>30],$mp4,$dir,NARRATION_OFFSET);
         preg_match('/(\d\d):(\d\d):(\d\d),(\d{3}) -->/',$srt3,$m3);
         verify(abs(((int)$m3[3]+(int)$m3[4]/1000)-($starts[0]+NARRATION_OFFSET))<0.01,'narration captions shifted by the audio offset');
+        verify(goldenHeardWords([],"$dir/speech.wav",$dir)===[]&&goldenHeardWords(['whisper_cli'=>"$dir/missing",'whisper_model'=>"$dir/missing.bin"],"$dir/speech.wav",$dir)===[],'no speech recognition configured: captions use pause timing');
         file_put_contents("$dir/captions.srt",$srt);
     }
 }finally{

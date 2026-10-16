@@ -86,9 +86,34 @@ function goldenNativeCaptions(array $cfg,array $job,string $source,string $work,
     $p=proc_open([$ffmpeg,'-nostdin','-v','error','-y','-i',$source,'-vn','-ac','1','-ar','16000','-t','61',$wav],[0=>['file','/dev/null','r'],1=>['file','/dev/null','w'],2=>['file','/dev/null','w']],$pipes);
     if(!is_resource($p)||proc_close($p)!==0||!is_file($wav))throw new RuntimeException('No usable speech audio found for the captions.');
     $timing=goldenFinishPython(['op'=>'analyze','audio'=>$wav,'audio_hash'=>hash_file('sha256',$wav),'ffmpeg'=>$ffmpeg]);
-    $cues=captionCues((string)$job['script'],(string)($job['vehicle']??''),$timing['spans']??[],(float)$timing['speech_end']);
+    // Caption the words she actually said (local speech recognition, when configured), timed by the measured pauses.
+    $heard=goldenHeardWords($cfg,$wav,$work);
+    $spoken=$heard?captionSpokenScript((string)$job['script'],$heard):null;
+    $cues=captionCues($spoken??(string)$job['script'],(string)($job['vehicle']??''),$timing['spans']??[],(float)$timing['speech_end']);
     if(!$cues)throw new RuntimeException('Caption script is empty.');
     return validateSrt(captionSrt($cues,$offset),(float)($job['duration']??30));
+}
+/**
+ * Recognized words [[text,start,end],...] (seconds) from local whisper.cpp (config whisper_cli + whisper_model).
+ * Free and offline. Returns [] when not configured or when recognition fails, so captions fall back to pause timing.
+ */
+function goldenHeardWords(array $cfg,string $wav,string $work):array {
+    $cli=(string)($cfg['whisper_cli']??'');$model=(string)($cfg['whisper_model']??'');
+    if($cli===''||$model===''||!is_executable($cli)||!is_file($model))return [];
+    $base=$work.'/heard';@unlink($base.'.json');
+    // No script prompt: it would bias recognition toward the script and hide words she added.
+    $args=[$cli,'-m',$model,'-f',$wav,'-l','en','-t',(string)max(1,(int)($cfg['whisper_threads']??4)),'-ml','1','-sow','-oj','-of',$base,'-np'];
+    $p=proc_open($args,[0=>['file','/dev/null','r'],1=>['file','/dev/null','w'],2=>['file','/dev/null','w']],$pipes);
+    if(!is_resource($p))return [];
+    $deadline=time()+240;
+    while(proc_get_status($p)['running']){if(time()>$deadline){proc_terminate($p,9);proc_close($p);return [];}usleep(200000);}
+    proc_close($p);
+    $d=json_decode((string)@file_get_contents($base.'.json'),true);$words=[];
+    foreach(($d['transcription']??[]) as $seg){
+        $t=trim((string)($seg['text']??''));if($t===''||!isset($seg['offsets']['from'],$seg['offsets']['to']))continue;
+        $words[]=[$t,$seg['offsets']['from']/1000,$seg['offsets']['to']/1000];
+    }
+    return $words;
 }
 /** voice=elevenlabs: the approved narration (hash-checked) that becomes the final video's audio. */
 const NARRATION_OFFSET=0.5;

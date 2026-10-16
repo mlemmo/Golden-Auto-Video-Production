@@ -13,5 +13,10 @@ return [
     'respell' => ['San Ramon' => 'San Rah-moan'],
     'voice_reference_url' => '',                            // optional: public https MP3/WAV of the spokesperson voice (10–20 s), sent to Seedance so every video uses it
     'ffmpeg_path' => '/usr/bin/ffmpeg',
+    // Optional local speech recognition (whisper.cpp) so captions follow the exact words she says; free, no API.
+    // Leave empty to time captions from pauses only.
+    'whisper_cli' => '',                                    // e.g. /home/mark/.local/bin/whisper-cli
+    'whisper_model' => '',                                  // e.g. /home/mark/.claude-video-vision/models/ggml-large-v3.bin
+    'whisper_threads' => 4,
     'source' => 'https://www.mygoldenauto.net',
 ];

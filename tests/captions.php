@@ -28,3 +28,22 @@ assertCaption(count($fallback)===5&&$fallback[4]['end']<=11.23,'single-span fall
 assertCaption(speechScript('Visit https://www.mygoldenauto.net.')==='Visit my golden auto dot N, E, T.','website spelling for speech');
 assertCaption(speechScript('Visit mygoldenauto.net.')==='Visit my golden auto dot N, E, T.','plain website for speech');
 assertCaption(str_contains(script(['Year'=>2013,'Make'=>'SUBARU','Model'=>'XV CROSSTREK','price'=>14688.0]),'Just $14,688.'),'default script uses approved "Just" wording and whole dollars');
+
+// --- Captions follow what she actually said (recognized words aligned to the script) ---
+// Recognized words from a real Seedance take: she added "a Subaru X", said the price twice and "San Ramon" came back as "Ramio".
+$take='Looking for a dependable SUV? Take a look at this 2013 SUBARU XV CROSSTREK Premium, here at Golden Auto in San Ramon. It comes with all-wheel drive, a silver exterior, and just over 60,000 miles. Just $14,688. Book your test drive today at mygoldenauto.net.';
+$heard=[];foreach(explode(' ','Looking for a dependable SUV? Take a look at this 2013 Subaru XV Crosstrek Premium here at Golden Auto in San Ramio. It comes with all-wheel drive, a Subaru X, a silver exterior, and just over 60,000 miles. Just $14,688. Just $14,688. Book your test drive today at MyGoldenAuto.net.')as $k=>$w)$heard[]=[$w,$k*0.5,$k*0.5+0.4];
+$spoken=captionSpokenScript($take,$heard);
+assertCaption($spoken!==null&&str_contains($spoken,'in San Ramon.')&&!str_contains($spoken,'Ramio'),'matched words keep the script spelling');
+assertCaption(substr_count((string)$spoken,'Just $14,688.')===2&&str_contains((string)$spoken,'drive, a Subaru X, a silver'),'added and repeated words are captioned');
+assertCaption(str_contains((string)$spoken,'Premium,')&&str_contains((string)$spoken,'mygoldenauto.net.'),'script punctuation and spelling kept for matched words');
+$skipped=captionSpokenScript('Book your test drive today at mygoldenauto.net.',[['Book',0,.3],['your',.3,.5],['test',.5,.8],['drive',.8,1],['at',1.1,1.2],['mygoldenauto.net.',1.2,2]]);
+assertCaption($skipped==='Book your test drive at mygoldenauto.net.','a word she skipped is not captioned');
+assertCaption(captionSpokenScript($take,[['Hello',0,.5],['there',.5,1]])===null,'too little recognized: fall back to the written script');
+// Voiced spans measured from that take: every sentence caption starts at its real pause, the repeat included.
+$spans=[[0.4,2.06],[2.27,7.37],[8.52,12.43],[12.7,14.75],[15.87,18.74],[19.19,21.95],[23.43,24.74],[25.02,26.69]];
+$cues=captionCues((string)$spoken,'2013 SUBARU XV CROSSTREK',$spans,26.69);$at=[];foreach($cues as $c)$at[str_replace("\n",' ',$c['text'])]=$c;
+assertCaption(abs($at['It comes with all-wheel drive,']['start']-8.48)<0.15&&abs($at['and just over 60,000 miles.']['end']-14.95)<0.25,'mileage caption is gone before the price is said');
+$prices=array_values(array_filter($cues,fn($c)=>$c['text']==='Just $14,688.'));
+assertCaption(count($prices)===2&&abs($prices[0]['start']-15.83)<0.15&&abs($prices[1]['start']-19.15)<0.15,'each spoken price gets its own caption at its pause');
+assertCaption(abs(end($cues)['end']-26.73)<0.25,'last caption ends with the speech');
