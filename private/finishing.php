@@ -33,7 +33,8 @@ function goldenFinishDraft(PDO $db,array $cfg,array &$job):array {
     $duration=(float)($job['duration']??15);
     if(2+$timing['source_end']+.5>$duration)
         throw new RuntimeException('Narration is too long for a two-second intro and closing card. Shorten the narration or use a longer source video. No audio was cut.');
-    $vehicle=null;foreach(state($db,'inventory')['vehicles']??[] as $v)
+    require_once __DIR__.'/clients.php';
+    $vehicle=null;foreach(clientInventory($db,(string)($job['client']??CLIENT_DEFAULT))['vehicles']??[] as $v)
         if((string)($v['StockNumber']??'')===(string)$job['stock']){$vehicle=$v;break;}
     if(!$vehicle)throw new RuntimeException('Vehicle is missing from inventory. Import its photos before finishing.');
     if((float)($vehicle['price']??-1)!==(float)($job['price']??-2))throw new RuntimeException('Vehicle price changed. Review the narration before finishing.');

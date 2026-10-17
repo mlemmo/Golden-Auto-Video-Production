@@ -395,10 +395,63 @@ $('importForm').onsubmit = async event => {
 };
 $('logout').onclick = async () => { await api('logout'); location.reload(); };
 
+// ---- Clients ----------------------------------------------------------------------------------
+// Each client (dealer) has its own inventory, voice previews and videos. Golden Auto is the first one.
+let clientList = {items: [], current: null};
+const METHOD_TITLE = {feed: 'Daily inventory feed', website_dealercenter: 'Website reader', website_structured: 'Website import',
+  browser_snapshot: 'Browser snapshot', zip: 'Manual import', dealercenter_snapshot: 'DealerCenter website snapshot'};
+function showClient() {
+  const c = clientList.items.find(x => x.id === clientList.current); if (!c) return;
+  document.querySelector('header .eyebrow').textContent = c.name.toUpperCase();
+  const a = c.analysis || {}, box = $('clientAnalysis'); box.replaceChildren();
+  $('clientSummary').textContent = `${c.name} · ${c.website.replace('https://', '')} · import: ${METHOD_TITLE[a.best] || 'not checked yet'}`;
+  if (a.note) box.append(el('p', a.note));
+  if (a.platform) box.append(el('p', 'Website platform: ' + a.platform));
+  if (a.dealer) box.append(el('p', 'Dealer details found: ' + Object.values(a.dealer).join(', ')));
+  if (a.signals?.length) { const ul = el('ul'); for (const sig of a.signals) ul.append(el('li', sig)); box.append(el('b', 'What the website shows'), ul); }
+  if (a.options?.length) {
+    const ol = el('ol'); box.append(el('b', 'Import options, best first'));
+    for (const o of a.options) { const li = el('li'); li.append(el('strong', o.title), el('p', o.why), el('small', o.effort)); ol.append(li); }
+    box.append(ol);
+  }
+  if (a.checked_at) box.append(el('small', 'Checked ' + new Date(a.checked_at).toLocaleString()));
+  $('clientAnalyze').hidden = c.id === 'golden-auto';
+  // DealerCenter sync log and website refresh are Golden Auto's.
+  $('syncLogPanel').hidden = c.id !== 'golden-auto';
+  $('sync').hidden = c.id !== 'golden-auto';
+}
+async function loadClients() {
+  clientList = await api('clients');
+  const sel = $('client'); sel.replaceChildren();
+  for (const c of clientList.items) { const o = el('option', c.name); o.value = c.id; sel.append(o); }
+  sel.value = clientList.current; showClient();
+}
+$('client').onchange = async () => {
+  try { await api('client_select', {id: $('client').value}); location.reload(); } catch (e) { fail(e.message, statusOf('stepVehicle')); }
+};
+$('addClientToggle').onclick = () => { $('clientForm').hidden = !$('clientForm').hidden; };
+$('clientForm').onsubmit = async event => {
+  event.preventDefault(); if (busy) return; busy = true; $('clientAdd').disabled = true;
+  const f = new FormData($('clientForm'));
+  message('Adding the client and analyzing its website…', statusOf('stepVehicle'));
+  try { await api('client_add', {name: f.get('name'), website: f.get('website')}); location.reload(); }
+  catch (e) { fail(e.message, statusOf('stepVehicle')); } finally { busy = false; $('clientAdd').disabled = false; }
+};
+$('clientAnalyze').onclick = async () => {
+  if (busy) return; busy = true; $('clientAnalyze').disabled = true;
+  message('Analyzing the website…', statusOf('stepVehicle'));
+  try {
+    const r = await api('client_analyze', {id: clientList.current});
+    clientList.items = clientList.items.map(c => c.id === r.client.id ? r.client : c); showClient(); $('clientInfo').open = true;
+    message('Website analyzed.', statusOf('stepVehicle'));
+  } catch (e) { fail(e.message, statusOf('stepVehicle')); } finally { busy = false; $('clientAnalyze').disabled = false; }
+};
+
 // ---- Start --------------------------------------------------------------------------------------
 recipe();
 (async () => { try { renderSpokespersons(await api('spokesperson_list')); } catch (e) { fail(e.message, statusOf('stepLook')); } })();
 syncLog();
+loadClients().catch(e => fail(e.message, statusOf('stepVehicle')));
 (async () => {
   try {
     const a = await api('inventory'); render(a.vehicles || []);

@@ -27,7 +27,7 @@ function goldenFootageBuild(PDO $db,array $cfg,array $in,?array $file,?callable 
     $probe??=fn(string $path)=>footageProbe($cfg,$path);
     $move??=fn(string $from,string $to)=>move_uploaded_file($from,$to);
     if(!($in['confirm_current']??false))throw new RuntimeException('Confirm the vehicle is available and its advertised price is current.');
-    $a=state($db,'inventory')??[];$v=null;
+    require_once __DIR__.'/clients.php';$client=(string)($in['client']??CLIENT_DEFAULT);$a=clientInventory($db,$client);$v=null;
     foreach($a['vehicles']??[] as $candidate)if($candidate['StockNumber']===($in['stock']??''))$v=$candidate;
     if(!$v)throw new RuntimeException('Select a current vehicle first.');
     if(($v['active']??true)===false)throw new RuntimeException('This vehicle is no longer in active inventory.');
@@ -57,7 +57,7 @@ function goldenFootageBuild(PDO $db,array $cfg,array $in,?array $file,?callable 
     chmod($dir.'/'.$name,0644);
 
     $id=bin2hex(random_bytes(12));
-    $job=['id'=>$id,'stock'=>$v['StockNumber'],'vehicle'=>title($v),'spokesperson'=>'','format'=>$format,'style'=>'footage',
+    $job=['id'=>$id,'client'=>$client,'stock'=>$v['StockNumber'],'vehicle'=>title($v),'spokesperson'=>'','format'=>$format,'style'=>'footage',
         'duration'=>(int)min($duration,floor($facts['duration'])),'status'=>'completed','provider'=>'footage','created_at'=>gmdate('c'),
         'script'=>(string)$voice['caption_script'],'speech_script'=>(string)$voice['text'],'price'=>$v['price'],'voice'=>'elevenlabs',
         'narration_id'=>$voice['id'],'audio_swap'=>true,'captions_from_audio'=>true,'footage_file'=>$name,

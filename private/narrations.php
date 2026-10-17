@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__.'/clients.php';
 
 function narrationBridge(array $input):array {
     $p=proc_open(['/usr/bin/python3',__DIR__.'/narration_bridge.py'],
@@ -152,18 +153,18 @@ function narrationApi(string $action,array $in,array $cfg,PDO $db):array {
     }
     if($action==='narration_list'){
         $list=[];foreach($db->query('SELECT payload FROM narrations ORDER BY rowid DESC LIMIT 50')->fetchAll(PDO::FETCH_COLUMN)as $raw){
-            $v=json_decode($raw,true);$v['audio_url']=isset($v['audio_name'])?validateAppBase($cfg).'/assets/narrations/'.$v['audio_name']:null;
+            $v=json_decode($raw,true);if(($v['client']??CLIENT_DEFAULT)!==($in['client']??CLIENT_DEFAULT))continue;$v['audio_url']=isset($v['audio_name'])?validateAppBase($cfg).'/assets/narrations/'.$v['audio_name']:null;
             $v['text_mismatch']=narrationTextDifferences((string)($v['text']??''),(string)($v['caption_script']??''),(array)($cfg['respell']??[]));$list[]=$v;
         }
         $sync=[];foreach($db->query('SELECT payload FROM narration_lipsync ORDER BY rowid DESC LIMIT 30')->fetchAll(PDO::FETCH_COLUMN)as $raw){
-            $v=json_decode($raw,true);unset($v['status_url'],$v['response_url'],$v['audio_file']);
+            $v=json_decode($raw,true);if(($v['client']??CLIENT_DEFAULT)!==($in['client']??CLIENT_DEFAULT))continue;unset($v['status_url'],$v['response_url'],$v['audio_file']);
             // Progress of the final captioned video built from this lip-sync (same id in jobs).
             if(($v['status']??'')==='completed'){$q=$db->prepare('SELECT payload FROM jobs WHERE id=?');$q->execute([$v['id']]);$j=json_decode($q->fetchColumn()?:'null',true);
                 if($j)$v['final']=['status'=>$j['finish_status']??'waiting','error'=>$j['finish_error']??'','url'=>$j['captioned_url']??null];}
             $sync[]=$v;
         }
         $videos=[];foreach($db->query('SELECT payload FROM jobs ORDER BY rowid DESC LIMIT 50')->fetchAll(PDO::FETCH_COLUMN)as $raw){
-            $v=json_decode($raw,true);if(($v['status']??'')==='completed'&&!empty($v['video_url']))$videos[]=['id'=>$v['id'],'vehicle'=>$v['vehicle'],'stock'=>$v['stock'],'duration'=>$v['duration']??15];
+            $v=json_decode($raw,true);if(($v['client']??CLIENT_DEFAULT)!==($in['client']??CLIENT_DEFAULT))continue;if(($v['status']??'')==='completed'&&!empty($v['video_url']))$videos[]=['id'=>$v['id'],'vehicle'=>$v['vehicle'],'stock'=>$v['stock'],'duration'=>$v['duration']??15];
         }
         return ['previews'=>$list,'lipsync'=>$sync,'videos'=>$videos];
     }
@@ -173,14 +174,14 @@ function narrationApi(string $action,array $in,array $cfg,PDO $db):array {
         $voice=trim((string)($in['voice_id']??''));if(!preg_match('/^[A-Za-z0-9_-]{1,128}$/',$voice))throw new RuntimeException('Select a voice.');
         $text=trim((string)($in['text']??''));$captions=trim((string)($in['caption_script']??''));
         if(strlen($text)<10||strlen($text)>1200||strlen($captions)<10||strlen($captions)>1200)throw new RuntimeException('Enter narration and correctly spelled caption text, up to 1,200 characters each.');
-        $v=null;foreach((state($db,'inventory')['vehicles']??[])as $candidate)if($candidate['StockNumber']===($in['stock']??''))$v=$candidate;
+        $v=null;foreach((clientInventory($db,($in['client']??CLIENT_DEFAULT))['vehicles']??[])as $candidate)if($candidate['StockNumber']===($in['stock']??''))$v=$candidate;
         if(!$v||($v['active']??true)===false)throw new RuntimeException('Select a saved vehicle that is still in active inventory.');
         $duration=(int)($in['duration']??15);if(!in_array($duration,[15,30],true))throw new RuntimeException('Choose 15 or 30 seconds.');
         $settings=narrationVoiceSettings($cfg,$duration);
         $fingerprint=hash('sha256',json_encode([$v['StockNumber'],$v['price'],$voice,$text,$captions,$duration,$settings]));
         if($in['new_take']??false)$fingerprint=hash('sha256',$fingerprint.random_bytes(16));
         $record=['id'=>bin2hex(random_bytes(16)),'stock'=>$v['StockNumber'],'vehicle'=>title($v),'price'=>$v['price'],
-            'voice_id'=>$voice,'text'=>$text,'caption_script'=>$captions,'duration'=>$duration,'speed'=>$settings['speed']??1.0,'status'=>'submitting','created_at'=>gmdate('c')];
+            'client'=>($in['client']??CLIENT_DEFAULT),'voice_id'=>$voice,'text'=>$text,'caption_script'=>$captions,'duration'=>$duration,'speed'=>$settings['speed']??1.0,'status'=>'submitting','created_at'=>gmdate('c')];
         narrationReserve($db,'narrations',$record,$fingerprint);
         $code=0;
         try{
@@ -217,7 +218,7 @@ function narrationApi(string $action,array $in,array $cfg,PDO $db):array {
         $source=narrationLoad($db,'jobs',(string)($in['video_id']??''));
         if(($source['status']??'')!=='completed'||empty($source['video_url']))throw new RuntimeException('Choose a completed video.');
         if(($source['stock']??'')!==$audio['stock']||($source['price']??null)!==$audio['price'])throw new RuntimeException('Preview and video must be for the same vehicle and price.');
-        $current=null;foreach((state($db,'inventory')['vehicles']??[])as $candidate)if($candidate['StockNumber']===$audio['stock'])$current=$candidate;
+        $current=null;foreach((clientInventory($db,$audio['client']??CLIENT_DEFAULT)['vehicles']??[])as $candidate)if($candidate['StockNumber']===$audio['stock'])$current=$candidate;
         if(!$current||($current['active']??true)===false||$current['price']!==$audio['price'])throw new RuntimeException('Saved vehicle price changed or vehicle was removed. Create a new narration.');
         $duration=(int)($source['duration']??15);
         if($duration!==$audio['duration'])throw new RuntimeException('Preview target duration must match the selected video.');
@@ -238,7 +239,7 @@ function narrationApi(string $action,array $in,array $cfg,PDO $db):array {
             throw new RuntimeException('Cannot make padded narration readable.');
         $padded['audio_url']=validateAppBase($cfg).'/assets/narrations/'.$wavName;
         $record=['id'=>bin2hex(random_bytes(16)),'stock'=>$audio['stock'],'vehicle'=>$audio['vehicle'],
-            'narration_id'=>$audio['id'],'source_video_id'=>$source['id'],'audio_file'=>$wavName,'auto_build'=>!empty($in['auto_build']),'status'=>'submitting','created_at'=>gmdate('c')];
+            'client'=>$audio['client']??CLIENT_DEFAULT,'narration_id'=>$audio['id'],'source_video_id'=>$source['id'],'audio_file'=>$wavName,'auto_build'=>!empty($in['auto_build']),'status'=>'submitting','created_at'=>gmdate('c')];
         narrationReserve($db,'narration_lipsync',$record,hash('sha256',$audio['audio_hash'].'|'.$source['id']));
         $code=0;
         try{
@@ -280,7 +281,7 @@ function narrationApi(string $action,array $in,array $cfg,PDO $db):array {
                 $job=['id'=>$record['id'],'stock'=>$source['stock'],'vehicle'=>$source['vehicle'],'price'=>$source['price'],
                     'format'=>$source['format'],'style'=>$source['style']??'showroom','duration'=>$source['duration']??15,
                     'status'=>'completed','video_url'=>$url,'script'=>$audio['caption_script'],'speech_script'=>$audio['text'],
-                    'created_at'=>gmdate('c'),'provider'=>'fal_lipsync','narration_id'=>$audio['id'],'source_video_id'=>$source['id'],
+                    'created_at'=>gmdate('c'),'provider'=>'fal_lipsync','client'=>$audio['client']??CLIENT_DEFAULT,'narration_id'=>$audio['id'],'source_video_id'=>$source['id'],
                     'auto_build'=>!empty($record['auto_build'])];
                 $q=$db->prepare('INSERT OR IGNORE INTO jobs (id,fingerprint,payload) VALUES (?,NULL,?)');
                 $q->execute([$job['id'],json_encode($job,JSON_THROW_ON_ERROR)]);
