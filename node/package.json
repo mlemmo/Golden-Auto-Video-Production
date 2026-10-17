@@ -7,6 +7,7 @@
   "engines": { "node": ">=20" },
   "scripts": {
     "start": "node src/server.js",
+    "dev": "node --watch-path=src src/server.js",
     "test": "node --test \"test/**/*.test.js\"",
     "parity": "node --test test/parity/parity.test.js"
   }

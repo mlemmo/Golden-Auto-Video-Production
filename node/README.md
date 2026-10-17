@@ -26,6 +26,7 @@ Node 20 or newer, no npm dependencies. On the server Node comes from nvm (docs/N
 cd node
 npm test          # all tests, including the PHP parity check
 npm run parity    # parity only; PARITY_SEEDS=1,2,3 PARITY_COUNT=300 by default
+npm run dev       # same, restarts on every change in src/ (Node's built-in watch; no nodemon needed)
 npm start         # http://127.0.0.1:4350/api/node/health (PORT=4351 on the test site)
 ```
 
