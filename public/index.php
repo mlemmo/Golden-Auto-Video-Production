@@ -31,6 +31,9 @@ require_once $private.'/clients.php';
 $clients=clientsLoad($db);$client=(string)($_SESSION['client']??CLIENT_DEFAULT);
 if(!in_array($client,array_column($clients['items'],'id'),true))$client=CLIENT_DEFAULT;
 $invKey=clientInventoryKey($client);
+// Dealer named in scripts and speech for this client; its website is said as written in its details.
+$dealer=clientDetails(clientFind($db,$client));
+if($client!==CLIENT_DEFAULT)speechSites([$dealer['website']=>$dealer['website_spoken']]);
 if (isset($_GET['api'])) {
     header('Content-Type: application/json');
     try {
@@ -40,7 +43,8 @@ if (isset($_GET['api'])) {
         $in=in_array($action,['import','spokesperson_upload','footage_build'],true)?$_POST:json_decode(file_get_contents('php://input'),true,512,JSON_THROW_ON_ERROR);
         require_once $private.'/spokespersons.php';
         if(is_array($in))$in['client']=$client;
-        if ($action==='clients') {echo json_encode(['items'=>$clients['items'],'current'=>$client],JSON_THROW_ON_ERROR);exit;}
+        if ($action==='clients') {echo json_encode(['items'=>array_map(fn($c)=>$c+['script_details'=>clientDetails($c)],$clients['items']),'current'=>$client],JSON_THROW_ON_ERROR);exit;}
+        if ($action==='client_details') {$c=clientSaveDetails($db,$client,$in);echo json_encode(['client'=>$c+['script_details'=>clientDetails($c)]],JSON_THROW_ON_ERROR);exit;}
         if ($action==='client_select') {clientFind($db,(string)($in['id']??''));$_SESSION['client']=(string)$in['id'];echo json_encode(['message'=>'Client selected.']);exit;}
         if ($action==='client_add') {$c=clientAdd($db,(string)($in['name']??''),(string)($in['website']??''));$_SESSION['client']=$c['id'];echo json_encode(['client'=>$c],JSON_THROW_ON_ERROR);exit;}
         if ($action==='client_analyze') {echo json_encode(['client'=>clientReanalyze($db,(string)($in['id']??$client))],JSON_THROW_ON_ERROR);exit;}
@@ -72,7 +76,7 @@ if (isset($_GET['api'])) {
             $a=state($db,$invKey)??[];$found=false;
             foreach ($a['vehicles']??[] as &$v) if ($v['StockNumber']===($in['stock']??'')) {$v=enrich($v);$out=$v;$found=true;break;}
             if (!$found) throw new RuntimeException('Vehicle not found. Refresh inventory first.');
-            save($db,$invKey,$a);$out['script']=script($out);$out['scripts']=['15'=>$out['script'],'30'=>script($out,30)];
+            save($db,$invKey,$a);$out['script']=script($out,15,$dealer);$out['scripts']=['15'=>$out['script'],'30'=>script($out,30,$dealer)];
             $existing=state($db,'sheet:'.$out['Vin']);
             if($existing && ($existing['gallery_hash']??'')===hash('sha256',json_encode($out['photos']))) $out['asset_sheet']=$existing;
             else try{$out['asset_sheet']=assetSheet($out,$cfg);save($db,'sheet:'.$out['Vin'],$out['asset_sheet']);}catch(Throwable $e){$out['sheet_error']=$e->getMessage();}echo json_encode($out,JSON_THROW_ON_ERROR);exit;
@@ -221,6 +225,13 @@ if (isset($_GET['api'])) {
     <button id="clientAdd">Add client and analyze website</button>
   </form>
   <details id="clientInfo" class="sub"><summary id="clientSummary">Inventory import</summary><div id="clientAnalysis"></div><button type="button" class="secondary small" id="clientAnalyze">Analyze website again</button></details>
+  <details id="dealerInfo" class="sub"><summary id="dealerSummary">Dealer details in scripts</summary>
+    <p class="hint" id="dealerFixed" hidden>Golden Auto’s scripts say “Golden Auto in San Ramon” and mygoldenauto.net.</p>
+    <form id="dealerForm"><div class="import-grid"><label>Dealer name in scripts<input name="name" maxlength="80" required></label><label>City<input name="city" maxlength="60"></label>
+      <label>Website as shown<input name="website" maxlength="100" required placeholder="example.com"></label><label>Website as spoken<input name="website_spoken" maxlength="120" placeholder="example dot com"></label></div>
+      <p class="hint">Scripts say “here at <i>name</i> in <i>city</i>” and “Book your test drive today at <i>website</i>”; the voice says the website as written in “as spoken”. Reopen a vehicle after saving to redraft its script.</p>
+      <button id="dealerSave" class="secondary">Save dealer details</button></form>
+  </details>
   <div class="step-head"><span class="step-num">1</span><div><h2>Choose a vehicle</h2><p id="syncTime">Loading your inventory…</p></div></div>
   <details id="syncLogPanel" class="sub"><summary id="syncLogSummary">Inventory changes — no DealerCenter sync yet</summary><div id="syncLog"></div></details>
   <p class="status" role="status" hidden></p>
@@ -336,4 +347,4 @@ if (isset($_GET['api'])) {
   <?php require $private.'/narration_panel.php'; ?>
 </section>
 </main>
-<script>window.CSRF=<?=json_encode($_SESSION['csrf'])?>;</script><script src="app.js?v=12"></script><script src="narration.js?v=6"></script></body></html>
+<script>window.CSRF=<?=json_encode($_SESSION['csrf'])?>;</script><script src="app.js?v=13"></script><script src="narration.js?v=6"></script></body></html>

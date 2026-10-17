@@ -418,6 +418,11 @@ function showClient() {
   }
   if (a.checked_at) box.append(el('small', 'Checked ' + new Date(a.checked_at).toLocaleString()));
   $('clientAnalyze').hidden = c.id === 'golden-auto';
+  // Dealer named in scripts: fixed for Golden Auto, editable for other clients.
+  const d = c.script_details || {}, fixed = c.id === 'golden-auto';
+  $('dealerFixed').hidden = !fixed; $('dealerForm').hidden = fixed;
+  $('dealerSummary').textContent = `Dealer details in scripts — ${d.name}${d.city ? ' in ' + d.city : ''} · ${d.website}`;
+  for (const k of ['name', 'city', 'website', 'website_spoken']) $('dealerForm').elements[k].value = d[k] || '';
   // DealerCenter sync log and website refresh are Golden Auto's.
   $('syncLogPanel').hidden = c.id !== 'golden-auto';
   // Website refresh: Golden Auto's reader, or a client whose site the importer supports (Dealer Car Search).
@@ -440,6 +445,15 @@ $('clientForm').onsubmit = async event => {
   message('Adding the client and analyzing its website…', statusOf('stepVehicle'));
   try { await api('client_add', {name: f.get('name'), website: f.get('website')}); location.reload(); }
   catch (e) { fail(e.message, statusOf('stepVehicle')); } finally { busy = false; $('clientAdd').disabled = false; }
+};
+$('dealerForm').onsubmit = async event => {
+  event.preventDefault(); if (busy) return; busy = true; $('dealerSave').disabled = true;
+  const f = new FormData($('dealerForm'));
+  try {
+    const r = await api('client_details', Object.fromEntries(f.entries()));
+    clientList.items = clientList.items.map(c => c.id === r.client.id ? r.client : c); showClient();
+    message('Dealer details saved. Reopen a vehicle to redraft its script with them.', statusOf('stepVehicle'));
+  } catch (e) { fail(e.message, statusOf('stepVehicle')); } finally { busy = false; $('dealerSave').disabled = false; }
 };
 $('clientAnalyze').onclick = async () => {
   if (busy) return; busy = true; $('clientAnalyze').disabled = true;

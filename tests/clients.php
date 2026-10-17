@@ -38,6 +38,24 @@ try{
     $expectError(fn()=>clientAdd($db,'Local','http://localhost',$dc),'website','private website rejected');
     $expectError(fn()=>clientAdd($db,'','x.com',$dc),'client name','name required');
     verify(clientInventory($db,'bay-motors')===['vehicles'=>[]],'new client starts with an empty inventory');
+
+    // Dealer details in scripts and speech
+    verify(clientDetails(clientFind($db,'golden-auto'))===['name'=>'Golden Auto','city'=>'San Ramon','website'=>'mygoldenauto.net','website_spoken'=>'my golden auto dot net'],'Golden Auto details unchanged');
+    $bd=clientDetails(clientFind($db,'bay-motors'));
+    verify($bd['name']==='Bay Motors'&&$bd['city']==='Oakland'&&$bd['website']==='baymotors.com'&&$bd['website_spoken']==='bay motors dot com','new client: its name, the city found on its website, and its website by default');
+    verify(clientWebsiteSpoken('eleasereturns.com','eLease Returns')==='e lease returns dot com'&&clientWebsiteSpoken('abc-cars.net','Smith Auto')==='abc cars dot net','spoken website from the name when it matches the domain');
+    $car=['Year'=>2016,'Make'=>'LAND ROVER','Model'=>'RANGE ROVER SPORT','Trim'=>'HSE','Drivetrain'=>'4WD','ExteriorColor'=>'LOIRE BLUE','Odometer'=>67351,'price'=>null];
+    $saved=clientSaveDetails($db,'bay-motors',['name'=>'eLease Returns','city'=>'San Ramon','website'=>'https://www.eleasereturns.com/','website_spoken'=>'']);
+    $ed=clientDetails($saved);
+    verify($ed['website']==='eleasereturns.com'&&$ed['website_spoken']==='e lease returns dot com'&&$ed['city']==='San Ramon','details saved and cleaned');
+    $s30=script($car,30,$ed);$s15=script($car,15,$ed);
+    verify(str_contains($s30,'here at eLease Returns in San Ramon.')&&str_contains($s30,'at eleasereturns.com.')&&!str_contains($s30.$s15,'Golden Auto')&&!str_contains($s30.$s15,'mygoldenauto'),'scripts name the client and its website');
+    verify(str_contains(script($car,30),'Golden Auto in San Ramon')&&str_contains(script($car,30),'mygoldenauto.net'),'Golden Auto scripts unchanged');
+    speechSites([$ed['website']=>$ed['website_spoken']]);
+    verify(str_contains(speechScript($s30),'at e lease returns dot com.')&&str_contains(nativeSpeech($s30),'e lease returns dot com')&&str_contains(speechScript('HSE'),'H-S-E'),'the voice says the client website in words');
+    speechSites([]);
+    $expectError(fn()=>clientSaveDetails($db,'golden-auto',['name'=>'X','website'=>'x.com']),'fixed','Golden Auto details cannot be changed');
+    $expectError(fn()=>clientSaveDetails($db,'bay-motors',['name'=>'X','website'=>'not a site']),'website','bad website rejected');
 }finally{
     foreach(glob("$dir/data/*") as $f)unlink($f);rmdir("$dir/data");rmdir($dir);
 }

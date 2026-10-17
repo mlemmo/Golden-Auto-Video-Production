@@ -26,6 +26,42 @@ function clientInventoryKey(string $client):string {
 }
 function clientInventory(PDO $db,string $client):array {return state($db,clientInventoryKey($client))??['vehicles'=>[]];}
 
+/** How a website is said: "eleasereturns.com" for client "eLease Returns" → "e lease returns dot com". */
+function clientWebsiteSpoken(string $website,string $name):string {
+    $host=preg_replace('/^www\./','',strtolower($website));$dot=strrpos($host,'.');
+    if($dot===false)return $host;$label=substr($host,0,$dot);$tld=substr($host,$dot+1);
+    $words=preg_split('/\s+/',trim(preg_replace('/([a-z])([A-Z])/','$1 $2',preg_replace('/[^A-Za-z0-9 ]+/',' ',$name))));
+    $said=strtolower(implode('',$words))===str_replace(['-','.'],'',$label)?strtolower(implode(' ',$words)):str_replace(['-','.'],' ',$label);
+    return $said.' dot '.$tld;
+}
+/**
+ * Dealer details used in scripts and speech: name, city, website as shown and as spoken. Golden Auto's are fixed;
+ * other clients default to their client name, the city found on their website and the website they were added with,
+ * and can be edited in the dashboard.
+ */
+function clientDetails(array $client):array {
+    if($client['id']===CLIENT_DEFAULT)return DEALER_DEFAULT+['website_spoken'=>'my golden auto dot net'];
+    $d=$client['details']??[];
+    $name=(string)($d['name']??$client['name']);
+    $website=(string)($d['website']??preg_replace('/^www\./','',(string)parse_url($client['website'],PHP_URL_HOST)));
+    return ['name'=>$name,'city'=>(string)($d['city']??$client['dealer']['city']??$client['analysis']['dealer']['city']??''),
+        'website'=>$website,'website_spoken'=>(string)($d['website_spoken']??clientWebsiteSpoken($website,$name))];
+}
+function clientSaveDetails(PDO $db,string $id,array $in):array {
+    if($id===CLIENT_DEFAULT)throw new RuntimeException('Golden Auto’s details are fixed.');
+    $clean=fn($k,$max)=>trim(preg_replace('/\s+/',' ',(string)($in[$k]??'')));
+    $d=['name'=>$clean('name',80),'city'=>$clean('city',60),'website'=>strtolower(preg_replace('~^(https?://)?(www\.)?~i','',$clean('website',100))),'website_spoken'=>strtolower($clean('website_spoken',120))];
+    $d['website']=rtrim($d['website'],'/');
+    if($d['name']===''||strlen($d['name'])>80)throw new RuntimeException('Enter the dealer name as it should be said and shown.');
+    if(strlen($d['city'])>60||preg_match('/[<>"]/',$d['name'].$d['city']))throw new RuntimeException('Check the city.');
+    if(!preg_match('/^[a-z0-9-]+(\.[a-z0-9-]+)+$/',$d['website']))throw new RuntimeException('Enter the website as shown in ads, e.g. example.com.');
+    if($d['website_spoken']==='')$d['website_spoken']=clientWebsiteSpoken($d['website'],$d['name']);
+    if(strlen($d['website_spoken'])>120||!preg_match('/^[a-z0-9 .\'-]+$/',$d['website_spoken']))throw new RuntimeException('Write the spoken website in plain words, e.g. “example dot com”.');
+    $c=clientsLoad($db);
+    foreach($c['items'] as &$x)if($x['id']===$id){$x['details']=$d;save($db,'clients',$c);return $x;}
+    throw new RuntimeException('Client not found.');
+}
+
 /** Validates and normalises a website address to its https origin. */
 function clientWebsite(string $url):string {
     $url=trim($url);if($url!==''&&!preg_match('~^https?://~i',$url))$url='https://'.$url;
