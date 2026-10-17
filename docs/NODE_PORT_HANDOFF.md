@@ -42,8 +42,15 @@ site), same Python helper (async), parity on generated action runs with fake Ele
 has an optional test hook (`narrationBridgeHook`). Checked on the node site: real helper probe, narration_list, and a
 preview request without approval refused before any API call.
 
-Next per the order below: jobs (5), the caption worker (6), dashboard pages (7). The dashboard's ZIP
-import action (`import`) and the vehicle `detail`/`sheet` actions can now use media.js.
+Jobs (5) done: `src/lib/prompts.js`, `src/lib/jobs.js`, `src/lib/spokespersons.js`, `src/lib/multipart.js`,
+`src/routes/jobs.js` — generate/poll/jobs/job_delete/references/footage_build/detail/sheet/import/speech/sync_log and
+spokesperson_* run on Node on the node site (the upload forms use `actionUrl()` in app.js). Same paid-call rules:
+approval, fingerprint (PHP's is now `jobFingerprint()` in app.php, compared by parity), reference upload failure
+releases it, unclear submissions stay `submission_uncertain`. Higgsfield POST/PUT go through private/reference_http.py
+as in PHP; tests use a fake transport. PHP's `enrich()` takes an optional page fetcher for parity. The Node server now
+sets the selected client's spoken website per request (PHP's `speechSites`), which narration routes also lacked.
+
+Next per the order below: the caption worker (6; caption_draft/finish stay PHP until then), dashboard pages (7).
 
 ## How to port each area (the method so far)
 

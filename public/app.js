@@ -33,9 +33,9 @@ async function responseJson(r) {
   return d;
 }
 // On the Node test site, actions already ported to Node (window.NODE_ACTIONS, set by index.php) go to /api/node/.
+function actionUrl(action) { return (window.NODE_ACTIONS || []).includes(action) ? '/api/node/' + action : '?api=' + action; }
 async function api(action, data = {}) {
-  const url = (window.NODE_ACTIONS || []).includes(action) ? '/api/node/' + action : '?api=' + action;
-  const r = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF}, body: JSON.stringify(data)});
+  const r = await fetch(actionUrl(action), {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF}, body: JSON.stringify(data)});
   return responseJson(r);
 }
 function el(tag, text) { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; return n; }
@@ -225,7 +225,7 @@ $('spokespersonForm').onsubmit = async event => {
   event.preventDefault(); if (busy) return; busy = true; $('spokespersonButton').disabled = true;
   message('Uploading spokesperson image…');
   try {
-    const r = await fetch('?api=spokesperson_upload', {method: 'POST', headers: {'X-CSRF-Token': window.CSRF}, body: new FormData($('spokespersonForm'))});
+    const r = await fetch(actionUrl('spokesperson_upload'), {method: 'POST', headers: {'X-CSRF-Token': window.CSRF}, body: new FormData($('spokespersonForm'))});
     const lib = await responseJson(r), added = lib.items[lib.items.length - 1];
     renderSpokespersons(lib); if (added) $('spokesperson').value = added.id; showPresenter(); $('spokespersonForm').reset();
     message('Spokesperson uploaded and selected for the next video.');
@@ -314,7 +314,7 @@ $('buildFootage').onclick = async () => {
     form.append('stock', chosen.StockNumber); form.append('format', $('format').value); form.append('narration_id', $('approvedVoice').value);
     if ($('confirmCurrent').checked) form.append('confirm_current', '1');
     form.append('footage', file);
-    const r = await fetch('?api=footage_build', {method: 'POST', headers: {'X-CSRF-Token': window.CSRF}, body: form});
+    const r = await fetch(actionUrl('footage_build'), {method: 'POST', headers: {'X-CSRF-Token': window.CSRF}, body: form});
     message((await responseJson(r)).message);
     await jobs(); $('videos').scrollIntoView({behavior: 'smooth'});
   } catch (e) { fail(e.message); } finally { busy = false; $('buildFootage').disabled = !chosen; }
@@ -397,7 +397,7 @@ $('importForm').onsubmit = async event => {
   event.preventDefault(); if (busy) return; busy = true; $('importButton').disabled = true;
   message('Importing DealerCenter photos and creating the asset sheet…');
   try {
-    const r = await fetch('?api=import', {method: 'POST', headers: {'X-CSRF-Token': window.CSRF}, body: new FormData($('importForm'))});
+    const r = await fetch(actionUrl('import'), {method: 'POST', headers: {'X-CSRF-Token': window.CSRF}, body: new FormData($('importForm'))});
     const d = await responseJson(r); render(d.vehicles);
     message('Imported ' + d.imported.photos.length + ' photos for stock ' + d.imported.StockNumber + '. Select it in step 1.');
   } catch (e) { fail(e.message); } finally { busy = false; $('importButton').disabled = false; }

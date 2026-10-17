@@ -8,12 +8,13 @@ require_once __DIR__.'/../../../private/clients.php';
 require_once __DIR__.'/../../../private/importers.php';
 require_once __DIR__.'/../../../private/dealercenter_sync.php';
 require_once __DIR__.'/../../../private/narrations.php';
+require_once __DIR__.'/../../../private/spokespersons.php';
 const ALLOWED=['integerWords','currencyWords','numberSpeech','priceSpeech','speechWordCount','speechScript','nativeSpeech',
  'seedanceRespell','acronymSpeech','captionDisplayText','captionSyllables','captionUnits','captionWrap','captionCues',
  'captionWordKey','captionWordsMatch','captionAlignWords','captionSpokenScript','captionStripExtra','captionSegments',
  'captionVoicedTime','captionSrt','captionDraft','validateSrt','srtTime','highestPrice','money','adPrice','title','script','script30',
  'speechClientSites','shorthandSpeech','captionCallForPrice','priceMatches','clientWebsiteSpoken','clientDetails',
- 'clientInventoryKey','clientWebsite','html_entity_decode','parityParseUrl','parityClientAnalyze','parityClientAdd','paritySaveDetails','dcsParseVdp','parityImportDcs','jsonp','parityGoldenInventory','parityImportMedia','strip_tags','strnatcasecmp','parityFilterInt','dcNormalize','dcCleanDescription','parityDcSync','parityPhotoWorker','narrationTextDifferences','narrationVoiceSettings','parityNarrations'];
+ 'clientInventoryKey','clientWebsite','html_entity_decode','parityParseUrl','parityClientAnalyze','parityClientAdd','paritySaveDetails','dcsParseVdp','parityImportDcs','jsonp','parityGoldenInventory','parityImportMedia','strip_tags','strnatcasecmp','parityFilterInt','dcNormalize','dcCleanDescription','parityDcSync','parityPhotoWorker','narrationTextDifferences','narrationVoiceSettings','parityNarrations','promptNative','prompt','speechPronunciationGuide','galleryPhotos','parityEnrich','jobError','referenceImageUrl','spokespersonClean','jobFingerprint'];
 // Fixture wrappers: the same inputs Node gets, with a fake website and an in-memory database (no network, no files).
 function parityDb():PDO{$db=new PDO('sqlite::memory:');$db->setAttribute(PDO::ATTR_ERRMODE,PDO::ERRMODE_EXCEPTION);
     $db->exec('CREATE TABLE state (id TEXT PRIMARY KEY, payload TEXT NOT NULL); CREATE TABLE jobs (id TEXT PRIMARY KEY, fingerprint TEXT UNIQUE, payload TEXT NOT NULL)');return $db;}
@@ -25,6 +26,8 @@ function parityClientAdd(array $items,string $name,string $website,array $pages)
     $c=clientAdd($db,$name,$website,parityFetch($pages));unset($c['created_at'],$c['analysis']['checked_at']);return ['client'=>$c,'ids'=>array_column(clientsLoad($db)['items'],'id')];}
 function paritySaveDetails(string $id,array $input):array{$db=parityDb();save($db,'clients',['items'=>[['id'=>'golden-auto','name'=>'Golden Auto','website'=>'https://www.mygoldenauto.net'],['id'=>'x','name'=>'X Motors','website'=>'https://x.com']]]);
     $c=clientSaveDetails($db,$id,$input);return [$c,state($db,'clients')];}
+/** A website car read from a fake detail page (the check time removed). */
+function parityEnrich(array $v,string $html):array{$v=enrich($v,fn(string $u)=>$html);unset($v['detail_checked_at']);return $v;}
 $cases=json_decode(stream_get_contents(STDIN),true,512,JSON_THROW_ON_ERROR);$out=[];
 foreach($cases as $c){
     if(!in_array($c['fn'],ALLOWED,true)){$out[]=['error'=>'not allowed'];continue;}

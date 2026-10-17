@@ -184,7 +184,7 @@ if (isset($_GET['api'])) {
                 'elevenlabs'=>promptNative($fresh,(string)$approvedVoice['text'],$duration,$presenter['description'],'speech',isset($approvedVoice['audio_duration'])?(float)$approvedVoice['audio_duration']:null,(array)($cfg['respell']??[])),
                 'native'=>promptNative($fresh,nativeSpeech($spoken),$duration,$presenter['description'],$voiceRef!=='',null,(array)($cfg['respell']??[])),
                 default=>prompt($fresh,$spoken,$style,$duration,$presenter['description'])};
-            $fingerprint=hash('sha256',json_encode([$v['Vin'],$v['price'],$spoken,$sheet,$avatar,$presenter['description'],$format,$style,$duration,$voice,hash('sha256',$promptText),$voiceRef]));
+            $fingerprint=jobFingerprint($v,$spoken,$sheet,$avatar,$presenter['description'],$format,$style,$duration,$voice,$promptText,$voiceRef);
             $id=bin2hex(random_bytes(12));$job=['id'=>$id,'client'=>$client,'stock'=>$v['StockNumber'],'vehicle'=>title($v),'spokesperson_id'=>$presenter['id'],'spokesperson'=>$presenter['name'],'format'=>$format,'style'=>$style,'duration'=>$duration,'status'=>'preparing_references','created_at'=>gmdate('c'),'script'=>$spoken,'speech_script'=>$voice==='native'?nativeSpeech($spoken):speechScript($spoken),'price'=>$v['price'],'voice'=>$voice];
             // Native voice: one approval builds the final video (captions timed from the video's own audio).
             if($voice!=='narration')$job['auto_build']=true;
@@ -348,4 +348,4 @@ if (isset($_GET['api'])) {
   <?php require $private.'/narration_panel.php'; ?>
 </section>
 </main>
-<script>window.CSRF=<?=json_encode($_SESSION['csrf'])?>;<?php if($env==='node'):?>window.NODE_ACTIONS=<?=json_encode(['clients','client_add','client_analyze','client_details','inventory','sync','narration_voices','narration_list','narration_preview','narration_approve','narration_lipsync','narration_poll','narration_delete','narration_lipsync_delete'])?>;<?php endif;?></script><script src="app.js?v=15"></script><script src="narration.js?v=6"></script></body></html>
+<script>window.CSRF=<?=json_encode($_SESSION['csrf'])?>;<?php if($env==='node'):?>window.NODE_ACTIONS=<?=json_encode(['clients','client_add','client_analyze','client_details','inventory','sync','narration_voices','narration_list','narration_preview','narration_approve','narration_lipsync','narration_poll','narration_delete','narration_lipsync_delete','detail','sheet','speech','sync_log','import','references','generate','poll','jobs','job_delete','footage_build','spokesperson_list','spokesperson_upload','spokesperson_default','spokesperson_delete'])?>;<?php endif;?></script><script src="app.js?v=16"></script><script src="narration.js?v=6"></script></body></html>

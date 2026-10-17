@@ -8,6 +8,9 @@ import { jsonp, goldenInventory } from '../../src/lib/website.js';
 import { importMediaZip } from '../../src/lib/media.js';
 import { dcNormalize, dcCleanDescription, dcSync } from '../../src/lib/dealercenter.js';
 import { dcsProcessPhotos } from '../../src/lib/photos.js';
+import { promptNative, prompt, speechPronunciationGuide } from '../../src/lib/prompts.js';
+import { galleryPhotos, enrich, jobError, referenceImageUrl, jobFingerprint } from '../../src/lib/jobs.js';
+import { spokespersonClean } from '../../src/lib/spokespersons.js';
 import { narrationApi, narrationTables, narrationTextDifferences, narrationVoiceSettings } from '../../src/lib/narrations.js';
 import { readdirSync, mkdirSync } from 'node:fs';
 import { probeImage } from '../../src/lib/images.js';
@@ -39,6 +42,9 @@ function fakeBridge(inp, net) {
   return { status: r.status, body: Buffer.from(body).toString('base64'), detail: r.detail ?? null };
 }
 export const wrappers = {
+  galleryPhotos, jobError, referenceImageUrl, spokespersonClean, jobFingerprint,
+  parityEnrich: async (v, html) => { const r = await enrich(v, async () => html); delete r.detail_checked_at; return r; },
+  promptNative, prompt, speechPronunciationGuide,
   narrationTextDifferences, narrationVoiceSettings,
   async parityNarrations(setup, steps, net, cfgExtra) {
     const dir = mkdtempSync(tmpdir() + '/ga-nnr-'); mkdirSync(dir + '/assets');

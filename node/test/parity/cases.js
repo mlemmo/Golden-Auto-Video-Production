@@ -142,6 +142,8 @@ export function buildCases(seed = 42, count = 400) {
     if (i % 10 === 3) dealercenterCases(r, add);
     if (i % 8 === 5) photoWorkerCases(r, add);
     if (i % 5 === 4) narrationCases(r, add);
+    promptCases(r, add, v, t);
+    jobCases(r, add, v, t);
   }
   return cases;
 }
@@ -362,3 +364,43 @@ function narrationCases(r, add) {
   add('narrationTextDifferences', pick(r, [preview.text, 'and just over sixty thousand miles', 'San Ruh-mone']), pick(r, [preview.caption_script, 'with just over 60,000 miles', 'San Ramon']), r() < 0.3 ? { 'San Ramon': 'San Ruh-mone' } : {});
   add('narrationVoiceSettings', r() < 0.5 ? {} : { narration_speed: pick(r, [1.5, 0.5, '0.85', 'x', 1.0]) }, pick(r, [15, 30, 20]));
 }
+
+
+// ---- Seedance prompts: durations, approved-narration lengths (pan shots), voice references, presenters ----
+function promptCases(r, add, v, t) {
+  const presenter = pick(r, ['friendly adult woman, navy blazer.', '  x  ', 'Café owner, 40s...', '']);
+  const sec = pick(r, [null, 20.7, 22.0, 24.3, 26.0, 26.95, 27.45, 29.0, 12.3, 14.9, 5.04]);
+  const speech = pick(r, [t, t + ' in San Ramon at my golden auto dot net', 'Visit "Golden Auto" today.', '   ', 'Book at mygoldenauto.net, Golden Auto.']);
+  add('promptNative', v, speech, pick(r, [15, 30, 30]), presenter, pick(r, [false, true, 'speech', 'voice']), sec, pick(r, [{}, { 'San Ramon': 'San Ra-MOAN' }, { Crosstrek: 'Cross-trek' }]));
+  add('prompt', v, t, pick(r, ['showroom', 'dynamic', 'other']), pick(r, [15, 30]), presenter);
+  add('speechPronunciationGuide', speech);
+}
+
+
+// ---- Video jobs: detail pages (gallery, price, notes), errors, reference URLs, spokesperson text, fingerprints ----
+const CDN = ['https://imagescf.dealercenter.net/1024/768/202401-abc.jpg', 'https://imagescf.dealercenter.net/W/H/logo/202401-def.jpg',
+  'http://imagescf.dealercenter.net/640/480/x.jpg', 'https://images.example.com/1/2/y.jpg', 'https://imagescf.dealercenter.net/800/600/202401-abc.jpg', '0', ''];
+function detailPage(r) {
+  const img = () => { const a = pick(r, ['data-pin-media', 'data-base-img-url', 'both', 'src']); const u = pick(r, CDN);
+    return a === 'both' ? `<img data-pin-media="${pick(r, CDN)}" data-base-img-url="${u}">` : `<img ${a}="${u}">`; };
+  const media = () => `<div id="${pick(r, ['DWS_VDP_Media_1', 'DWS_VDP_Media_', 'dws_vdp_media_2', 'Gallery'])}"><ul><li>${img()}</li><li>${img()}<div>${img()}</div></li></ul></div>`;
+  const meta = () => pick(r, [`<meta name="description" content="2013 Subaru for $14,688.25 at Golden Auto">`, `<meta property="og:description" content="Only $9,000! Call $1,234,567.891">`,
+    `<meta property="product:price:amount" content="${pick(r, ['14688', '14,688', ' 9000', '1e4', 'abc', '0'])}">`, `<meta property="og:image" content="${pick(r, CDN)}">`, `<meta name="keywords" content="$99">`]);
+  const notes = pick(r, ['', '<div class="x dws-vdp-seller-notes-container  y">  Clean\n title,\t one owner.  </div>', '<p class="dws-vdp-seller-notes-container-x">no</p>', '<div class="dws-vdp-seller-notes-container">Café naïve</div>']);
+  let h = pick(r, ['<html><head><meta charset="utf-8">', '<html><head>']);
+  for (let i = Math.floor(r() * 3); i > 0; i--) h += meta();
+  h += '</head><body>';
+  for (let i = Math.floor(r() * 3); i > 0; i--) h += media();
+  return h + notes + '</body></html>';
+}
+function jobCases(r, add, v, t) {
+  const page = detailPage(r);
+  add('galleryPhotos', page);
+  add('parityEnrich', { ...v, url: 'https://www.mygoldenauto.net/x', source: pick(r, ['website', 'zip', 'dcs', undefined]) }, page);
+  add('jobError', pick(r, [null, 'Failed at https://storage.example.com/x?sig=abc "y"', { detail: [{ msg: 'bad', url: 'http://a.b/c' }] }, 'é'.repeat(1500), 42, 'x'.repeat(2500)]));
+  const cfg = { public_base_url: pick(r, ['https://video.mygoldenauto.net:4343', 'https://video.mygoldenauto.net:4343/', 'http://127.0.0.1:4343', 'https://example.com']), allow_local_http: r() < 0.5 };
+  add('referenceImageUrl', pick(r, ['https://video.mygoldenauto.net:4343/assets/sheet-abc.jpg', 'https://video.mygoldenauto.net:4343/assets/../x.jpg', 'https://cdn.example.com/a.png', 'https://10.0.0.1/a.png', 'https://user:p@cdn.example.com/a.png', 'http://127.0.0.1:4343/assets/spokesperson.png', 'https://x.local/a.jpg']), cfg);
+  add('spokespersonClean', pick(r, ['  friendly   adult\nwoman ', 'Say "hi"', '', 'é'.repeat(61), 'é'.repeat(60), 'a b c']), pick(r, [60, 300]), pick(r, ['name', 'description']));
+  add('jobFingerprint', v, t, 'https://a/assets/sheet.jpg', 'https://a/assets/s.png', SPOKESPERSON_DESC, 'instagram_reels', 'showroom', pick(r, [15, 30]), pick(r, ['elevenlabs', 'native']), t + ' café', pick(r, ['', 'https://a/assets/narrations/x.mp3']));
+}
+const SPOKESPERSON_DESC = 'trustworthy friendly adult woman age 28–33, casual professional attire';

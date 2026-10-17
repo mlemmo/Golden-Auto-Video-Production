@@ -72,9 +72,11 @@ function inventory(string $source,?callable $get=null): array {
     }
     return $vehicles;
 }
-function enrich(array $v): array {
+/** $get(url) → page text, replaceable in tests (default: request). */
+function enrich(array $v,?callable $get=null): array {
     if(in_array($v['source']??'',['zip','dcs'],true))return $v;  // imported cars already carry their details
-    $html=request($v['url']); $x=doc($html); $detail=[];
+    $get??=fn(string $u)=>request($u);
+    $html=$get($v['url']); $x=doc($html); $detail=[];
     // Price only from this vehicle's metadata and its own price widget: never related cars or loan calculators.
     foreach ($x->query('//meta[@name="description" or @property="og:description" or @property="product:price:amount"]') as $n) {
         $s=$n->getAttribute('content');
@@ -219,6 +221,10 @@ function publicImage(string $url): string {
     return $url;
 }
 
+/** Duplicate-request fingerprint of a generation; the exact prompt is part of it (a prompt improvement is a new request). */
+function jobFingerprint(array $v,string $spoken,string $sheet,string $avatar,string $description,string $format,string $style,int $duration,string $voice,string $promptText,string $voiceRef):string {
+    return hash('sha256',json_encode([$v['Vin']??null,$v['price']??null,$spoken,$sheet,$avatar,$description,$format,$style,$duration,$voice,hash('sha256',$promptText),$voiceRef]));
+}
 function galleryPhotos(string $html): array {
     $x=doc($html);$photos=[];
     foreach ($x->query('//*[starts-with(@id,"DWS_VDP_Media_")]//*[@data-pin-media or @data-base-img-url]') as $n) {

@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, existsSync, readdirSync } from 'node:fs';
+import { JPEG_1800x900 } from './fixtures/images.js';
 import { tmpdir } from 'node:os';
 import { server } from '../src/server.js';
 import { setConfig } from '../src/lib/config.js';
@@ -65,6 +66,18 @@ test('actions need the PHP sign-in, a CSRF token, and use the session’s client
     assert.equal((await (await post('inventory', {}, { cookie: 's=bay', 'x-csrf-token': 't' })).json()).vehicles[0].StockNumber, 'B1');
     const saved = await (await post('client_details', { name: 'Bay Motors', city: 'Oakland', website: 'bay.com' }, { cookie: 's=bay', 'x-csrf-token': 't' })).json();
     assert.equal(saved.client.script_details.city, 'Oakland');
+    // Speech says the selected client's website as written in its details (as PHP sets per request).
+    const bay = { cookie: 's=bay', 'x-csrf-token': 't' };
+    assert.equal((await (await post('speech', { script: 'Visit bay.com today.' }, bay)).json()).speech, 'Visit bay dot com today.');
+    assert.equal((await (await post('speech', { script: 'Visit bay.com today.' }, signedIn)).json()).speech, 'Visit bay.com today.');
+    // Multipart upload (spokesperson form): fields and the file arrive like $_POST/$_FILES; temp files are removed.
+    mkdirSync(dir + '/assets', { recursive: true }); cfg.asset_dir = dir + '/assets';
+    const form = new FormData(); form.append('name', 'Ann'); form.append('description', 'adult woman'); form.append('image', new Blob([Buffer.from(JPEG_1800x900, 'base64')]), 'ann.jpg');
+    const up = await (await fetch(base + '/api/node/spokesperson_upload', { method: 'POST', headers: signedIn, body: form })).json();
+    assert.ok(up.items.some((i) => i.name === 'Ann' && existsSync(dir + '/assets/' + i.file)), JSON.stringify(up));
+    const noFile = await fetch(base + '/api/node/spokesperson_upload', { method: 'POST', headers: signedIn, body: (() => { const f = new FormData(); f.append('name', 'B'); f.append('description', 'x'); return f; })() });
+    assert.match((await noFile.json()).error, /Image upload failed/);
+    assert.equal(readdirSync(tmpdir()).filter((n) => n.startsWith('ga-upload-')).length, 0, 'upload temp folders removed');
   } finally {
     server.close(); auth.close(); closeDb(cfg); delete process.env.NODE_AUTH_URL;
     rmSync(dir, { recursive: true, force: true });
