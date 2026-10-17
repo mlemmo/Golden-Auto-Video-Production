@@ -141,3 +141,101 @@ export function parseUrl(url) {
   }
   return out;
 }
+
+/** filter_var($v, FILTER_VALIDATE_INT): the integer, or false. Strings may have surrounding whitespace and a sign,
+ *  but no leading zeros (except "0"), decimals or exponents; floats count only when whole; true is 1. */
+export function filterValidateInt(v) {
+  if (typeof v === 'number') return Number.isInteger(v) && Number.isSafeInteger(v) ? v : false;
+  if (v === true) return 1;
+  if (typeof v !== 'string') return false;
+  const m = v.match(/^[ \t\n\r\v\f]*([+-]?)(0|[1-9][0-9]*)[ \t\n\r\v\f]*$/);
+  if (!m) return false;
+  const n = Number(m[1] + m[2]);
+  return Number.isSafeInteger(n) && Math.abs(n) <= 9223372036854775807 ? (n === 0 ? 0 : n) : false;
+}
+
+/** strnatcasecmp(): natural-order, case-insensitive (ASCII) comparison; <0, 0, >0 like PHP 8 (returns -1/0/1). */
+export function strnatcasecmp(a, b) {
+  a = lower(a); b = lower(b);
+  let ai = 0, bi = 0;
+  const isDigit = (c) => c >= '0' && c <= '9';
+  const isSpace = (c) => c === ' ' || (c >= '\t' && c <= '\r');
+  // PHP skips leading whitespace and leading zeros of the whole string first.
+  while (isSpace(a[ai] ?? '')) ai++;
+  while (isSpace(b[bi] ?? '')) bi++;
+  while (a[ai] === '0' && isDigit(a[ai + 1] ?? '')) ai++;
+  while (b[bi] === '0' && isDigit(b[bi + 1] ?? '')) bi++;
+  for (;;) {
+    let ca = a[ai] ?? '', cb = b[bi] ?? '';
+    while (isSpace(ca)) ca = a[++ai] ?? '';
+    while (isSpace(cb)) cb = b[++bi] ?? '';
+    if (isDigit(ca) && isDigit(cb)) {
+      const fractional = ca === '0' || cb === '0';
+      if (fractional) {
+        // compare_left: digits compared one by one, the first difference wins.
+        for (;; ai++, bi++) {
+          const x = a[ai] ?? '', y = b[bi] ?? '';
+          if (!isDigit(x) && !isDigit(y)) break;
+          if (!isDigit(x)) return -1;
+          if (!isDigit(y)) return 1;
+          if (x < y) return -1;
+          if (x > y) return 1;
+        }
+      } else {
+        // compare_right: the longer run of digits is bigger; else the first difference.
+        let bias = 0;
+        for (;; ai++, bi++) {
+          const x = a[ai] ?? '', y = b[bi] ?? '';
+          if (!isDigit(x) && !isDigit(y)) { if (bias) return bias; break; }
+          if (!isDigit(x)) return -1;
+          if (!isDigit(y)) return 1;
+          if (x < y) { if (!bias) bias = -1; } else if (x > y) { if (!bias) bias = 1; }
+        }
+      }
+      if (ai >= a.length && bi >= b.length) return 0;
+      continue;
+    }
+    if (ca === '' && cb === '') return 0;
+    if (ca === '') return -1;
+    if (cb === '') return 1;
+    if (ca < cb) return -1;
+    if (ca > cb) return 1;
+    ai++; bi++;
+  }
+}
+
+/** strip_tags($s) with no allowed tags: PHP's state machine for tags, quotes inside tags, comments and <? ?>.
+ *  Checked against PHP on text, tags, comments (also inside an unclosed tag), quotes and stray < >. */
+export function stripTags(s) {
+  let out = '', state = 0, depth = 0, quote = '', i = 0;
+  const n = s.length;
+  for (; i < n; i++) {
+    const c = s[i];
+    if (state === 0) {
+      if (c === '<') {
+        const next = s[i + 1] ?? '';
+        if (/[\t\n\v\f\r ]/.test(next)) { out += c; continue; }
+        if (s.startsWith('<!--', i)) { state = 4; i += 3; continue; }
+        if (next === '?') { state = 3; i++; continue; }
+        if (next === '!') { state = 5; continue; }
+        state = 1; depth = 0; continue;
+      }
+      out += c;
+    } else if (state === 1) {
+      // PHP: a ">" first closes a nested "<" even inside quotes; quotes only hide the final ">".
+      if (c === '>' && depth) { depth--; continue; }
+      if (quote) { if (c === quote) quote = ''; continue; }
+      if (c === '"' || c === "'") { quote = c; continue; }
+      if (c === '<' && s.startsWith('<!--', i)) { state = 4; depth = 0; i += 3; continue; }  // its "-->" ends the tag too
+      if (c === '<') { depth++; continue; }
+      if (c === '>') state = 0;
+    } else if (state === 3) {
+      if (c === '>' && s[i - 1] === '?') state = 0;
+    } else if (state === 4) {
+      if (s.startsWith('-->', i)) { state = 0; i += 2; }
+    } else if (state === 5) {
+      if (c === '>') state = 0;
+    }
+  }
+  return out;
+}
