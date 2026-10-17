@@ -1,0 +1,23 @@
+# Node service for node.mygoldenauto.net, installed by ubuntu/node/setup-root.sh. Listens on localhost only;
+# Nginx forwards /api/node/ to it.
+[Unit]
+Description=Golden Auto Node service (node.mygoldenauto.net)
+After=network.target
+
+[Service]
+Type=simple
+User=mark
+Group=mark
+WorkingDirectory=/srv/golden-auto-node/node
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=PORT=4351
+ExecStart=/usr/bin/node src/server.js
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

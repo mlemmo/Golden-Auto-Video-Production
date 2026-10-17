@@ -6,7 +6,8 @@ $path=$private.'/config.php';
 if (!is_file($path)) {http_response_code(503);exit('Setup required: copy private/config.example.php to private/config.php, set a password hash and Higgsfield API key. Keep private outside the web document root.');}
 $cfg=require $path;
 $cfg['asset_dir']=__DIR__.'/assets';
-$staging=($cfg['environment']??'')==='staging';  // staging.mygoldenauto.net: banner on every page
+$env=$cfg['environment']??'';$staging=in_array($env,['staging','node'],true);  // staging / node test site: banner on every page
+$envLabel=$env==='node'?'NODE TEST':'STAGING';
 if (empty($cfg['password_hash'])) {http_response_code(503);exit('Set the private dashboard password hash before use.');}
 $isHttps=isset($_SERVER['HTTPS'])&&$_SERVER['HTTPS']!=='off';
 if (!$isHttps && !in_array($_SERVER['REMOTE_ADDR']??'', ['127.0.0.1','::1'],true)) {http_response_code(403);exit('Use HTTPS to access this dashboard.');}
@@ -23,7 +24,7 @@ if (isset($_POST['password'])) {
     else {$_SESSION['attempts'][]=time();$loginError='Incorrect password.';}
 }
 if (!($_SESSION['auth']??false)) { ?>
-<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title><?=$staging?'STAGING • ':''?>Golden Auto • Sign in</title><link rel="stylesheet" href="style.css"></head><body><main class="login"><span class="eyebrow">GOLDEN AUTO</span><h1>Video Studio</h1><p>Private inventory video dashboard.</p><form method="post"><input type="hidden" name="csrf" value="<?=esc($_SESSION['csrf'])?>"><label>Dashboard password<input type="password" name="password" required autocomplete="current-password"></label><button>Sign in</button><p><?=esc($loginError)?></p></form></main></body></html>
+<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title><?=$staging?$envLabel.' • ':''?>Golden Auto • Sign in</title><link rel="stylesheet" href="style.css"></head><body><main class="login"><span class="eyebrow">GOLDEN AUTO</span><h1>Video Studio</h1><p>Private inventory video dashboard.</p><form method="post"><input type="hidden" name="csrf" value="<?=esc($_SESSION['csrf'])?>"><label>Dashboard password<input type="password" name="password" required autocomplete="current-password"></label><button>Sign in</button><p><?=esc($loginError)?></p></form></main></body></html>
 <?php exit; }
 $db=db($cfg);
 if (isset($_GET['api'])) {
@@ -185,8 +186,8 @@ if (isset($_GET['api'])) {
     } catch(Throwable $e) {if(http_response_code()===200)http_response_code(400);echo json_encode(['error'=>$e->getMessage()]);exit;}
 }
 ?>
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title><?=$staging?'STAGING • ':''?>Golden Auto • Video Studio</title><link rel="stylesheet" href="style.css?v=4"></head><body>
-<?php if($staging):?><div class="staging-banner">STAGING — test copy. Paid generations here cost real money; production is video.mygoldenauto.net.</div><?php endif;?><header><div><span class="eyebrow">GOLDEN AUTO / SAN RAMON</span><h1>Inventory → video</h1><p>Pick a car, approve the words, generate. The final captioned video is built for you.</p></div><button class="secondary" id="logout">Sign out</button></header>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title><?=$staging?$envLabel.' • ':''?>Golden Auto • Video Studio</title><link rel="stylesheet" href="style.css?v=4"></head><body>
+<?php if($staging):?><div class="staging-banner"><?=$envLabel?> — test copy. Paid generations here cost real money; production is video.mygoldenauto.net.</div><?php endif;?><header><div><span class="eyebrow">GOLDEN AUTO / SAN RAMON</span><h1>Inventory → video</h1><p>Pick a car, approve the words, generate. The final captioned video is built for you.</p></div><button class="secondary" id="logout">Sign out</button></header>
 <nav class="steps" aria-label="Steps"><a href="#stepVehicle"><b>1</b> Vehicle</a><a href="#stepScript"><b>2</b> Script</a><a href="#stepVoice"><b>3</b> Voice</a><a href="#stepLook"><b>4</b> Look</a><a href="#stepGenerate"><b>5</b> Generate</a><a href="#videos"><b>✓</b> Videos</a></nav>
 <main>
 <div class="workspace">

@@ -5,7 +5,7 @@ the PHP version keeps doing that job; Nginx sends only ported routes (`/api/node
 (`private/finish_video.py`, `private/narration_bridge.py`), FFmpeg, whisper.cpp and the SQLite database stay as they are.
 All the rules in the top-level CLAUDE.md still apply (no paid API calls from tests, approvals, price rule, …).
 
-Nothing here is deployed yet: `deploy/` holds a systemd unit and an Nginx location as templates.
+It runs on the test site https://node.mygoldenauto.net:4343 (setup and deploys: docs/NODE_TEST_SITE.md).
 
 ## Status
 
@@ -26,7 +26,7 @@ Node 20 or newer, no npm dependencies.
 cd node
 npm test          # all tests, including the PHP parity check
 npm run parity    # parity only; PARITY_SEEDS=1,2,3 PARITY_COUNT=300 by default
-npm start         # http://127.0.0.1:4350/api/node/health
+npm start         # http://127.0.0.1:4350/api/node/health (PORT=4351 on the test site)
 ```
 
 ## PHP parity check

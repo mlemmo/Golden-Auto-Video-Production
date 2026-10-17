@@ -1,4 +1,6 @@
-# Production and staging
+# Production, staging and the Node test site
+
+The Node.js port has its own test site, set up the same way: see docs/NODE_TEST_SITE.md.
 
 | | Production | Staging |
 |---|---|---|
