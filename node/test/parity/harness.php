@@ -6,12 +6,13 @@ error_reporting(E_ALL & ~E_WARNING & ~E_NOTICE & ~E_DEPRECATED);
 require __DIR__.'/../../../private/app.php';
 require_once __DIR__.'/../../../private/clients.php';
 require_once __DIR__.'/../../../private/importers.php';
+require_once __DIR__.'/../../../private/dealercenter_sync.php';
 const ALLOWED=['integerWords','currencyWords','numberSpeech','priceSpeech','speechWordCount','speechScript','nativeSpeech',
  'seedanceRespell','acronymSpeech','captionDisplayText','captionSyllables','captionUnits','captionWrap','captionCues',
  'captionWordKey','captionWordsMatch','captionAlignWords','captionSpokenScript','captionStripExtra','captionSegments',
  'captionVoicedTime','captionSrt','captionDraft','validateSrt','srtTime','highestPrice','money','adPrice','title','script','script30',
  'speechClientSites','shorthandSpeech','captionCallForPrice','priceMatches','clientWebsiteSpoken','clientDetails',
- 'clientInventoryKey','clientWebsite','html_entity_decode','parityParseUrl','parityClientAnalyze','parityClientAdd','paritySaveDetails','dcsParseVdp','parityImportDcs','jsonp','parityGoldenInventory','parityImportMedia','strip_tags','strnatcasecmp','parityFilterInt'];
+ 'clientInventoryKey','clientWebsite','html_entity_decode','parityParseUrl','parityClientAnalyze','parityClientAdd','paritySaveDetails','dcsParseVdp','parityImportDcs','jsonp','parityGoldenInventory','parityImportMedia','strip_tags','strnatcasecmp','parityFilterInt','dcNormalize','dcCleanDescription','parityDcSync'];
 // Fixture wrappers: the same inputs Node gets, with a fake website and an in-memory database (no network, no files).
 function parityDb():PDO{$db=new PDO('sqlite::memory:');$db->setAttribute(PDO::ATTR_ERRMODE,PDO::ERRMODE_EXCEPTION);
     $db->exec('CREATE TABLE state (id TEXT PRIMARY KEY, payload TEXT NOT NULL); CREATE TABLE jobs (id TEXT PRIMARY KEY, fingerprint TEXT UNIQUE, payload TEXT NOT NULL)');return $db;}
@@ -48,3 +49,19 @@ function parityImportMedia(array $fields,array $files,array $img):array{
         $v['photos']=$sizes;unset($v['imported_at'],$v['detail_checked_at']);return $v;}
     finally{foreach(glob($dir.'/assets/*')?:[] as $f)unlink($f);@rmdir($dir.'/assets');unlink($zip);rmdir($dir);}}
 function parityFilterInt(mixed $v):mixed{return filter_var($v,FILTER_VALIDATE_INT);}
+/** A run of dcSync calls. steps: [{snapshot, zips:{stock:n}, fail:[cdn ids that fail to download]}], prior inventory. */
+function parityDcSync(array $prior,array $steps,string $jpg):array{
+    $dir=sys_get_temp_dir().'/ga-pdc-'.bin2hex(random_bytes(4));foreach(['assets','zips'] as $d)mkdir("$dir/$d",0700,true);
+    $cfg=['asset_dir'=>"$dir/assets",'public_base_url'=>'https://node.example.com:4343'];$db=parityDb();
+    if($prior)save($db,'inventory',['vehicles'=>$prior]);$out=[];
+    try{foreach($steps as $st){
+        foreach(glob("$dir/zips/*")?:[] as $f)unlink($f);
+        foreach($st['zips'] as $stock=>$n){$z=new ZipArchive;$z->open("$dir/zips/$stock.zip",ZipArchive::CREATE);for($i=1;$i<=$n;$i++)$z->addFromString("p$i.jpg",base64_decode($jpg));$z->close();}
+        $fail=$st['fail'];$dl=function(array $urls)use($fail,$jpg){$o=[];foreach($urls as $i=>$u){$id=basename($u,'.jpg');if(!in_array($id,$fail,true))$o[$i]=base64_decode($jpg);}return $o;};
+        try{$log=dcSync($db,$cfg,$st['snapshot'],"$dir/zips",$dl);unset($log['at']);$r=['log'=>$log];}catch(Throwable $e){$r=['error'=>$e->getMessage()];}
+        $inv=state($db,'inventory');
+        if($inv){unset($inv['dealercenter_checked_at']);foreach($inv['vehicles'] as &$v){$v['photos']=count($v['photos']??[]);foreach(['imported_at','detail_checked_at','dc_checked_at','price_changed_at','removed_at'] as $k)if(isset($v[$k]))$v[$k]='set';unset($v['original_filenames']);}unset($v);}
+        $sheets=[];foreach($db->query("SELECT id,payload FROM state WHERE id LIKE 'sheet:%' ORDER BY id") as $row){$sh=json_decode($row['payload'],true);$sheets[$row['id']]=$sh['photo_count'];}
+        $r['inventory']=$inv;$r['sheets']=$sheets;$r['files']=count(glob("$dir/assets/*.jpg"));$r['log_entries']=count(state($db,'sync_log')['entries']??[]);$out[]=$r;}}
+    finally{foreach(['assets','zips'] as $d){foreach(glob("$dir/$d/*")?:[] as $f)unlink($f);rmdir("$dir/$d");}rmdir($dir);}
+    return $out;}

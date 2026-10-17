@@ -6,6 +6,8 @@ import { openMemoryDb, save, state } from '../../src/lib/db.js';
 import { dcsParseVdp, clientImportDcs } from '../../src/lib/importers.js';
 import { jsonp, goldenInventory } from '../../src/lib/website.js';
 import { importMediaZip } from '../../src/lib/media.js';
+import { dcNormalize, dcCleanDescription, dcSync } from '../../src/lib/dealercenter.js';
+import { readdirSync, mkdirSync } from 'node:fs';
 import { probeImage } from '../../src/lib/images.js';
 import { writeZip } from '../../src/lib/zip.js';
 import { stripTags, strnatcasecmp, filterValidateInt } from '../../src/lib/php.js';
@@ -18,6 +20,38 @@ const fakeFetch = (pages) => async (url) => {
   return p ? { code: Number(p.code), body: String(p.body ?? ''), url, headers: String(p.headers ?? '') } : { code: 404, body: '', url, headers: '' };
 };
 export const wrappers = {
+  dcNormalize, dcCleanDescription,
+  async parityDcSync(prior, steps, jpg) {
+    const dir = mkdtempSync(tmpdir() + '/ga-ndc-');
+    mkdirSync(dir + '/assets'); mkdirSync(dir + '/zips');
+    const cfg = { asset_dir: dir + '/assets', public_base_url: 'https://node.example.com:4343' };
+    const db = openMemoryDb();
+    if (prior.length) save(db, 'inventory', { vehicles: prior });
+    const out = [];
+    try {
+      for (const st of steps) {
+        for (const f of readdirSync(dir + '/zips')) rmSync(dir + '/zips/' + f);
+        for (const [stock, n] of Object.entries(st.zips)) writeFileSync(`${dir}/zips/${stock}.zip`, writeZip(Array.from({ length: n }, (_, i) => [`p${i + 1}.jpg`, Buffer.from(jpg, 'base64')])));
+        const dl = async (urls) => { const o = {}; urls.forEach((u, i) => { if (!st.fail.includes(u.split('/').pop().replace(/\.jpg$/, ''))) o[i] = Buffer.from(jpg, 'base64'); }); return o; };
+        let r;
+        try { const log = await dcSync(db, cfg, st.snapshot, dir + '/zips', dl); delete log.at; r = { log }; } catch (e) { r = { error: e.message }; }
+        const inv = state(db, 'inventory');
+        if (inv) {
+          delete inv.dealercenter_checked_at;
+          for (const v of inv.vehicles) {
+            v.photos = (v.photos ?? []).length;
+            for (const k of ['imported_at', 'detail_checked_at', 'dc_checked_at', 'price_changed_at', 'removed_at']) if (v[k] !== undefined && v[k] !== null) v[k] = 'set';
+            delete v.original_filenames;
+          }
+        }
+        const sheets = {};
+        for (const row of db.prepare("SELECT id, payload FROM state WHERE id LIKE 'sheet:%' ORDER BY id").all()) sheets[row.id] = JSON.parse(row.payload).photo_count;
+        Object.assign(r, { inventory: inv, sheets, files: readdirSync(dir + '/assets').filter((f) => f.endsWith('.jpg')).length, log_entries: (state(db, 'sync_log')?.entries ?? []).length });
+        out.push(r);
+      }
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+    return out;
+  },
   strip_tags: stripTags,
   strnatcasecmp: (a, b) => Math.sign(strnatcasecmp(a, b)),
   parityFilterInt: (v) => filterValidateInt(v),

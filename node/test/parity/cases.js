@@ -139,6 +139,7 @@ export function buildCases(seed = 42, count = 400) {
     if (i % 4 === 0) importerCases(r, add, i);
     if (i % 4 === 2) goldenCases(r, add);
     if (i % 6 === 1) mediaCases(r, add);
+    if (i % 10 === 3) dealercenterCases(r, add);
   }
   return cases;
 }
@@ -281,4 +282,34 @@ function mediaCases(r, add) {
   add('strip_tags', pick(r, ['Clean <b>Carfax</b>', 'a < b > c', '<p>x</p>y', 'tail<', '<!-- n -->t', 'Café <i>crème</i>']));
   add('strnatcasecmp', pick(r, ZIP_NAMES), pick(r, ZIP_NAMES));
   add('parityFilterInt', pick(r, ['0', '05', '+5', ' 7 ', '5.0', '1e3', '', 'x', 5, 5.5, -3, true, null, '2016']));
+}
+
+
+// ---- DealerCenter sync: snapshots over several runs, ZIP and CDN photos, prices, removals, sheet picks ----
+function dcCar(r, stock) {
+  // Mostly valid cars (one invalid car fails the whole snapshot), with the odd bad value.
+  const f = (good, bad) => (r() < 0.985 ? pick(r, good) : pick(r, bad));
+  const car = { stock, year: f([2015, '2016', 2018], [1899, 'x']), make: f(['Honda', ' ford '], ['']), model: pick(r, ['CR-V', 'Focus']),
+    trim: pick(r, ['EX-L', '', 'S']), color: pick(r, ['Blue', '']), mileage: f([100000, 100500, '', null], ['12,000', -1]),
+    prices: f([[9000], [9000, 8500.5], ['9000', 0], [], 12000], ['x']), vin: f(['', '', 'JF2GPAWC5D2870288'], ['BAD']),
+    description: pick(r, ['', 'Total price does not include State Sales Tax or Registration fees, please call us for the total price. Clean car!', ' <b>One</b> owner ']) };
+  if (r() < 0.55) { const n = r() < 0.95 ? 1 + Math.floor(r() * 3) : 0; car.photo_urls = Array.from({ length: n }, (_, k) => `https://imagescf.dealercenter.net/${pick(r, ['640/480/', '1600/1200/202512-aa/', ''])}${stock}-${k}${pick(r, ['', '', 'b'])}.jpg`); }
+  else car.photo_count = f([2, 3, 0, '3'], [101]);
+  const shown = car.photo_urls ? car.photo_urls.length : Number(car.photo_count);
+  if (r() < 0.25) car.sheet_photos = r() < 0.9 && shown >= 2 ? pick(r, [[1, 2], [2, 1]]) : r() < 0.9 && shown >= 1 ? [1] : pick(r, [[1, 1], [], [9]]);
+  return car;
+}
+function dealercenterCases(r, add) {
+  const stocks = ['S1', 'S2', 'S3', 'OLD1'];
+  const prior = r() < 0.5 ? [{ source: 'zip', StockNumber: 'OLD1', Vin: 'stock:OLD1', Year: 2010, Make: 'FORD', Model: 'FOCUS', price: 5000.0, photos: [] }] : [];
+  const steps = Array.from({ length: 2 + Math.floor(r() * 2) }, () => {
+    const snap = stocks.filter(() => r() < 0.6).map((s) => dcCar(r, s));
+    if (r() < 0.05) snap.push(snap[0] ?? dcCar(r, 'S1'));
+    const zips = {};
+    for (const s of stocks) if (r() < 0.5) zips[s] = 1 + Math.floor(r() * 3);
+    const fail = r() < 0.2 ? ['S1-0', 'S2-1'] : [];
+    return { snapshot: snap, zips, fail };
+  });
+  add('parityDcSync', prior, steps, JPEG_40x30);
+  add('dcNormalize', dcCar(r, pick(r, ['S1', 'bad stock', ''])));
 }
