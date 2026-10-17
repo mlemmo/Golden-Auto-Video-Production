@@ -5,12 +5,13 @@ declare(strict_types=1);
 error_reporting(E_ALL & ~E_WARNING & ~E_NOTICE & ~E_DEPRECATED);
 require __DIR__.'/../../../private/app.php';
 require_once __DIR__.'/../../../private/clients.php';
+require_once __DIR__.'/../../../private/importers.php';
 const ALLOWED=['integerWords','currencyWords','numberSpeech','priceSpeech','speechWordCount','speechScript','nativeSpeech',
  'seedanceRespell','acronymSpeech','captionDisplayText','captionSyllables','captionUnits','captionWrap','captionCues',
  'captionWordKey','captionWordsMatch','captionAlignWords','captionSpokenScript','captionStripExtra','captionSegments',
  'captionVoicedTime','captionSrt','captionDraft','validateSrt','srtTime','highestPrice','money','adPrice','title','script','script30',
  'speechClientSites','shorthandSpeech','captionCallForPrice','priceMatches','clientWebsiteSpoken','clientDetails',
- 'clientInventoryKey','clientWebsite','html_entity_decode','parityParseUrl','parityClientAnalyze','parityClientAdd','paritySaveDetails'];
+ 'clientInventoryKey','clientWebsite','html_entity_decode','parityParseUrl','parityClientAnalyze','parityClientAdd','paritySaveDetails','dcsParseVdp','parityImportDcs','jsonp','parityGoldenInventory'];
 // Fixture wrappers: the same inputs Node gets, with a fake website and an in-memory database (no network, no files).
 function parityDb():PDO{$db=new PDO('sqlite::memory:');$db->setAttribute(PDO::ATTR_ERRMODE,PDO::ERRMODE_EXCEPTION);
     $db->exec('CREATE TABLE state (id TEXT PRIMARY KEY, payload TEXT NOT NULL); CREATE TABLE jobs (id TEXT PRIMARY KEY, fingerprint TEXT UNIQUE, payload TEXT NOT NULL)');return $db;}
@@ -29,3 +30,12 @@ foreach($cases as $c){
     try{$out[]=['ok'=>($c['fn'])(...$c['args'])];}catch(Throwable $e){$out[]=['error'=>$e->getMessage()];}
 }
 echo json_encode($out,JSON_THROW_ON_ERROR|JSON_PRESERVE_ZERO_FRACTION|JSON_INVALID_UTF8_SUBSTITUTE);
+/** Two imports in a row against a fake site (the second after the site changed); timestamps removed. */
+function parityImportDcs(array $client,array $first,array $second,array $prior):array{$db=parityDb();
+    save($db,'clients',['items'=>[['id'=>'golden-auto','name'=>'Golden Auto','website'=>'https://www.mygoldenauto.net'],$client]]);
+    if($prior)save($db,clientInventoryKey($client['id']),['vehicles'=>$prior]);$out=[];
+    foreach([$first,$second] as $pages){try{$r=clientImportDcs($db,[],$client,parityFetch($pages));$out[]=$r['report'];}catch(Throwable $e){$out[]=['error'=>$e->getMessage()];}}
+    $inv=state($db,clientInventoryKey($client['id']));if($inv){unset($inv['checked_at']);foreach($inv['vehicles'] as &$v)unset($v['imported_at'],$v['detail_checked_at']);}
+    return ['reports'=>$out,'inventory'=>$inv,'dealer'=>clientFind($db,$client['id'])['dealer']??null];}
+function parityGoldenInventory(string $source,array $pages):array{return inventory($source,function(string $u)use($pages){
+    if(!isset($pages[$u]))throw new RuntimeException('Remote request failed (HTTP 404).');return (string)$pages[$u];});}

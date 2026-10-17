@@ -135,6 +135,8 @@ export function buildCases(seed = 42, count = 400) {
     add('script', v);
     add('script30', v);
     if (i % 3 === 0) clientCases(r, add, i);
+    if (i % 4 === 0) importerCases(r, add, i);
+    if (i % 4 === 2) goldenCases(r, add);
   }
   return cases;
 }
@@ -154,10 +156,10 @@ const LD = [
   '{bad json', 'null', '"text"', '{"@graph":{"a":{"@type":"Car"},"b":{"@type":"AutoDealer","name":"Graph Map"}}}', '{"@type":"Car","@graph":5}',
   '{"@type":"AutoDealer","name":"First"} ', '{"@type":"AutoDealer","name":"Second","telephone":null}', '{"@type":[1,true,"Car"]}'];
 function sitePages(r, website) {
-  const code = pick(r, [200, 200, 200, 200, 403, 503, 500, 0, 301]);
-  let body = '<html><head><title>' + pick(r, ['Used Cars', 'Just a moment...', 'Attention Required! | Cloudflare', 'Home']) + '</title>';
+  const code = pick(r, [200, 200, 200, 200, 200, 200, 200, 403, 503, 500, 0, 301]);
+  let body = '<html><head><title>' + pick(r, ['Used Cars', 'Used Cars', 'Home', 'Home', 'Just a moment...', 'Attention Required! | Cloudflare']) + '</title>';
   for (let k = 0, n = Math.floor(r() * 3); k < n; k++) body += '<script type="application/ld+json">' + pick(r, LD) + '</script>';
-  body += '<script src="/x.js"></script><div>' + pick(r, MARKS) + ' ' + pick(r, ENT) + (r() < 0.1 ? ' cf-chl' : '') + '</div></html>';
+  body += '<script src="/x.js"></script><div>' + pick(r, MARKS) + ' ' + pick(r, ENT) + (r() < 0.04 ? ' cf-chl' : '') + '</div></html>';
   const headers = code === 503 && r() < 0.5 ? 'HTTP/1.1 503\r\nServer: cloudflare\r\n' : 'HTTP/1.1 ' + code + '\r\n';
   const pages = { [website]: { code, body, headers } };
   const sm = pick(r, [null, website + '/sitemap.xml', website + '/sitemap', 'https://elsewhere.com/sitemap.xml', website + '/sm.xml']);
@@ -179,12 +181,77 @@ function clientCases(r, add, i) {
   const typed2 = pick(r, ['baymotors.com', 'https://www.baymotors.com', 'eleasereturns.com', 'https://mygoldenauto.net', 'localhost', 'https://new-dealer.com', 'new-dealer.com/x']);
   const site2 = (() => { try { return clientWebsiteLike(typed2); } catch { return 'https://none.example'; } })();
   add('parityClientAdd', existing, name, typed2, sitePages(r, site2));
-  add('paritySaveDetails', pick(r, ['x', 'x', 'golden-auto', 'missing']), {
-    name: pick(r, ['eLease Returns', '', '  Bay\tMotors ', 'A "quoted" name', 'x'.repeat(81), 'Café Cars']),
-    city: pick(r, ['San Ramon', '', 'Hay<ward', 'x'.repeat(61), ' Dublin  ']),
-    website: pick(r, ['eleasereturns.com', 'https://www.EleaseReturns.com/', 'http://best-auto.net//', 'not a site', '', 'a.b', 'x_y.com']),
-    website_spoken: pick(r, ['', 'e lease returns dot com', 'E LEASE DOT COM', 'bad<>chars', 'x'.repeat(121), "o'neil dot com"]),
+  add('paritySaveDetails', pick(r, ['x', 'x', 'x', 'x', 'golden-auto', 'missing']), {
+    name: pick(r, ['eLease Returns', 'eLease Returns', 'Café Cars', '  Bay\tMotors ', '', 'A "quoted" name', 'x'.repeat(81)]),
+    city: pick(r, ['San Ramon', 'San Ramon', '', ' Dublin  ', 'Hay<ward', 'x'.repeat(61)]),
+    website: pick(r, ['eleasereturns.com', 'https://www.EleaseReturns.com/', 'http://best-auto.net//', 'a.b', 'not a site', '', 'x_y.com']),
+    website_spoken: pick(r, ['', '', 'e lease returns dot com', 'E LEASE DOT COM', "o'neil dot com", 'bad<>chars', 'x'.repeat(121)]),
   });
 }
 // The address clientWebsite would make, used only to put the fake website at the right URL.
 function clientWebsiteLike(t) { t = t.trim(); if (!/^https?:\/\//i.test(t)) t = 'https://' + t; return 'https://' + new URL(t).hostname.toLowerCase(); }
+
+
+// ---- Dealer Car Search listing pages: realistic markup plus the messes real pages have ----
+const TRIM_TXT = ['S COUPE**LIFT**HEAT SEATS', 'P400 SE', '4WD 4dr V6 HSE', '', '*NO TRIM', 'Premium Plus &amp; Tech', 'Café Edition'];
+const NOTE_TXT = ['LOCAL TRADE IN**CLEAN CARFAX', 'WE CHARGE A $80.00 DOC FEE', 'Café &amp; crème', '', '  spaced out  text  ', 'Line<br>break'];
+function vdpPage(r, id, opts = {}) {
+  const priceVal = opts.price ?? pick(r, ['177995.00', '0.00', '', 'abc', '31995', '1e5', '-5']);
+  const charset = r() < 0.85 ? '<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />' : r() < 0.5 ? '<meta charset="UTF-8">' : '';
+  const li = (cls, label, value) => `<li class="${cls}"><label>${label}</label> ${value}${r() < 0.15 ? '' : '</li>'}`;
+  const details = [
+    li('detailOptTrim', 'Trim:', pick(r, TRIM_TXT)), li('detailOptColor', 'Color:', pick(r, ['CHALK', 'LOIRE BLUE', ''])),
+    r() < 0.5 ? li('detailOptInterior', 'Interior:', 'COGNAC') : '', li('detailOptInteriorColor', 'Interior Color:', pick(r, ['BLACK', ''])),
+    li('detailOptEngine', 'Engine:', '3.0L <span>V6</span>'), li('detailOptDrive', 'Drive Train:', pick(r, ['RWD', '4WD', ''])),
+    li('detailOptMPG', 'Mileage:', pick(r, ['2,599', '110,621', '', 'N/A', '12 345'])), li('detailOptStock', 'Stock #:', opts.stock ?? pick(r, ['0931', 'crlo', '', '0', '0867T'])),
+    li('detailOptVin', 'Vin:', pick(r, ['WP0AH2A90TS214310', '', 'VIN1'])), r() < 0.2 ? li('detailOptTrim', 'Trim:', 'SECOND TRIM') : '',
+    r() < 0.1 ? '<li class="detailOptX">no label here</li>' : '', r() < 0.1 ? li('detailOptEmpty', ':', '') : '',
+  ].join(' ');
+  const photos = Array.from({ length: opts.photos ?? Math.floor(r() * 5) }, (_, k) => `<img data-src='https://imagescdn.dealercarsearch.com/Media/3073/${id}/p${k}${pick(r, ['.jpg', '.JPG', '.webp', '.png'])}'>`).join('');
+  return '<!DOCTYPE html><html><head>' + charset + '<title>Car</title>'
+    + `<script>var init_utag_data = { "site_company_name": "${pick(r, ['eLeaseReturns', 'Caf&eacute; Cars', '', '0'])}", "site_company_city": "San Ramon", "site_phone_main": "800-407-0303",`
+    + ` "product_make": "${opts.make ?? pick(r, ['Porsche', 'Mercedes-Benz', 'BMW', ' Land Rover ', ''])}", "product_model": "${pick(r, ['911', 'C63 AMG', 'Range Rover'])}",`
+    + ` "product_year": "${opts.year ?? pick(r, ['2026', '1996', '2018', '2024 ', '1899', 'x', ''])}", "product_price": "${priceVal}", "product_condition": "USED", "product_id": "${id}", };</script>`
+    + '<script>if (a < b && "</div>") {}</script><!-- <li class="detailOptTrim"><label>Trim:</label> COMMENTED</li> --></head><body>'
+    + `<div class="i05r_detailNamePrice"><span class="price">${pick(r, ['$177,995', ' $ 31,995.50 ', '$0', 'Call', '$1,2', '$9.999'])}</span><span class="priceold">$999,999</span></div>`
+    + '<form class="calcWrap"><span class="price">$5,000,000</span><input class="loanCalcPrice" value="999999"></form>'
+    + `<ul class="i05r_detailTrimEtc">${details}</ul>`
+    + (r() < 0.8 ? `<div class="${pick(r, ['i05r_detailNotes', ' i05r_detailNotes  x', 'i05r_detailNotesX', 'col i05r_detailNotes'])}"><h3>Vehicle Description</h3> ${pick(r, NOTE_TXT)}</div>` : '')
+    + photos + `<img src="https://imagescdn.dealercarsearch.com/Media/3073/999${id}/other.jpg">` + '</body></html>';
+}
+function importerCases(r, add, i) {
+  const id = String(24000000 + i);
+  add('dcsParseVdp', vdpPage(r, id), 'https://lr.com/vdp/' + id + '/x');
+  const client = { id: 'lr', name: 'LR', website: 'https://lr.com', ...(r() < 0.7 ? { analysis: { sitemap: 'https://lr.com/sitemap' } } : {}) };
+  const site = (cars) => {
+    const pages = {};
+    const map = r() < 0.9 ? 'https://lr.com/sitemap' : 'https://lr.com/other';
+    pages[map] = { code: r() < 0.95 ? 200 : 500, body: cars.map((c) => `<loc>https://lr.com/vdp/${c.id}/Used-Car</loc>`).join('') + '<loc>https://lr.com/bdp/1/blog</loc>' };
+    for (const c of cars) pages[`https://lr.com/vdp/${c.id}/Used-Car`] = r() < 0.95 ? { code: 200, body: vdpPage(r, c.id, c) } : { code: 404, body: '' };
+    return pages;
+  };
+  const cars = Array.from({ length: 1 + Math.floor(r() * 4) }, (_, k) => ({ id: String(500 + k), stock: 'S' + k, year: '2020', make: 'Audi', photos: Math.floor(r() * 3) }));
+  const later = cars.filter(() => r() < 0.8).map((c) => ({ ...c, price: pick(r, ['31995', '0.00', '42000.50']), photos: r() < 0.5 ? c.photos : c.photos + 1 }));
+  if (r() < 0.3) later.push({ id: '999', stock: 'NEW', year: '2024', make: 'Kia', photos: 1 });
+  const prior = r() < 0.3 ? [{ StockNumber: 'S0', photos: ['https://x/a.jpg'], photo_sources_done: [], sheet_photos: [2, 1], imported_at: '2026-01-01T00:00:00+00:00' }, { StockNumber: 'OLD', active: true }] : [];
+  add('parityImportDcs', client, site(cars), site(later), prior);
+}
+
+
+// ---- Golden Auto website reader: the listing page's script tag and the JSONP vehicle list ----
+function goldenCases(r, add) {
+  const src = 'https://www.mygoldenauto.net';
+  const script = pick(r, ['/inv-scripts-v2/inv/vehicles?cb=dws_inventory_listing_7&x=1', '/inv-scripts-v2/inv/vehicles?cb=other', '/other/vehicles?cb=dws_inventory_listing_7', '']);
+  const html = `<html><head><script src="/a.js"></script>${script ? `<script src="${script.replace('&', pick(r, ['&', '&amp;']))}"></script>` : ''}</head><body></body></html>`;
+  const v = () => ({ Make: pick(r, ['SUBARU', 'Land Rover', 'MERCEDES-BENZ', "O'Brien (Custom)", 'Café']), Model: pick(r, ['XV CROSSTREK', 'RANGE ROVER SPORT', 'C 300!', '911']),
+    StockNumber: pick(r, ['870288', 'A13806', 870288, 'x y*']), VehiclePrice: price(r), TotalPrice: price(r), Year: 2013 });
+  const list = Array.from({ length: Math.floor(r() * 4) }, v);
+  const json = pick(r, [
+    JSON.stringify({ Vehicles: list, TotalRecordCount: list.length }), JSON.stringify({ Vehicles: list }), JSON.stringify({ Vehicles: list, TotalRecordCount: list.length + 1 }),
+    JSON.stringify({ Vehicles: list, TotalRecordCount: String(list.length) }), JSON.stringify({ NoVehicles: 1 }), JSON.stringify({ Vehicles: 'x' }), '5', '{bad', JSON.stringify(list)]);
+  const body = pick(r, ['cb_123(' + json + ');', ' jQuery$1 ( ' + json + ' ) ', json, '1x(' + json + ')']);
+  const pages = { [src]: html };
+  if (script) pages[src + script] = body;
+  add('parityGoldenInventory', src, pages);
+  add('jsonp', body);
+}

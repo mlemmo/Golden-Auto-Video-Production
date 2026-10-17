@@ -54,14 +54,16 @@ function money(?float $p): string { return $p===null?'Call for price':'$'.number
 /** Ad-copy price: whole dollars, cents dropped ($14,688.25 → "$14,688"). */
 function adPrice(float $p): string { return '$'.number_format(floor($p)); }
 function title(array $v): string {return trim(($v['Year']??'').' '.($v['Make']??'').' '.($v['Model']??''));}
-function inventory(string $source): array {
-    $html=request($source); $x=doc($html); $url=null;
+/** Golden Auto's website reader (DealerCenter website). $get(url) → page text, replaceable in tests. */
+function inventory(string $source,?callable $get=null): array {
+    $get??=fn(string $u)=>request($u);
+    $html=$get($source); $x=doc($html); $url=null;
     foreach ($x->query('//script[@src]') as $n) {
         $src=$n->getAttribute('src');
         if (str_contains($src,'cb=dws_inventory_listing_') && str_starts_with($src,'/inv-scripts-v2/inv/vehicles?')) {$url=$source.$src;break;}
     }
     if (!$url) throw new RuntimeException('Website inventory format changed; reader needs updating.');
-    $d=jsonp(request($url)); $vehicles=$d['Vehicles']??null;
+    $d=jsonp($get($url)); $vehicles=$d['Vehicles']??null;
     if (!is_array($vehicles)) throw new RuntimeException('No readable vehicle list returned.');
     if (($d['TotalRecordCount']??count($vehicles))>count($vehicles)) throw new RuntimeException('Inventory exceeds this page; add pagination before syncing.');
     foreach ($vehicles as &$v) {
