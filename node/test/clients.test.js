@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openMemoryDb } from '../src/lib/db.js';
 import { clientsLoad, clientFind, clientInventoryKey, clientInventory, clientAnalyze, clientAdd, clientReanalyze, clientDetails,
-  clientWebsiteSpoken, clientSaveDetails, clientWebsite, isPublicIPv4 } from '../src/lib/clients.js';
+  clientWebsiteSpoken, clientSaveDetails, clientWebsite, isPublicIPv4, pinnedLookup } from '../src/lib/clients.js';
 import { script } from '../src/lib/scripts.js';
 import { speechScript, nativeSpeech, withSpeechSites } from '../src/lib/speech.js';
 
@@ -84,4 +84,10 @@ test('fetching only public addresses', () => {
   for (const ip of ['10.0.0.1', '127.0.0.1', '192.168.1.5', '172.16.0.1', '169.254.1.1', '0.0.0.0', '100.64.0.1', '224.0.0.1']) assert.ok(!isPublicIPv4(ip), ip);
   for (const ip of ['50.209.159.73', '8.8.8.8', '172.32.0.1']) assert.ok(isPublicIPv4(ip), ip);
   assert.equal(clientWebsite(' WWW.Example.COM/path '), 'https://www.example.com');
+});
+
+test('pinned DNS lookup answers both ways Node asks', () => {
+  const l = pinnedLookup('50.209.159.73');
+  l('x.com', {}, (e, a, f) => assert.deepEqual([e, a, f], [null, '50.209.159.73', 4]));
+  l('x.com', { all: true }, (e, a) => assert.deepEqual([e, a], [null, [{ address: '50.209.159.73', family: 4 }]]));
 });

@@ -1,4 +1,4 @@
-import { JPEG_40x30, PNG_20x20_TRANSPARENT, JPEG_1800x900 } from '../fixtures/images.js';
+import { JPEG_40x30, PNG_20x20_TRANSPARENT, JPEG_1800x900, JPEG_1800x900_B } from '../fixtures/images.js';
 // Seeded generator of realistic and awkward inputs for the parity check.
 export function rng(seed) {
   let s = seed >>> 0;
@@ -140,6 +140,7 @@ export function buildCases(seed = 42, count = 400) {
     if (i % 4 === 2) goldenCases(r, add);
     if (i % 6 === 1) mediaCases(r, add);
     if (i % 10 === 3) dealercenterCases(r, add);
+    if (i % 8 === 5) photoWorkerCases(r, add);
   }
   return cases;
 }
@@ -312,4 +313,18 @@ function dealercenterCases(r, add) {
   });
   add('parityDcSync', prior, steps, JPEG_40x30);
   add('dcNormalize', dcCar(r, pick(r, ['S1', 'bad stock', ''])));
+}
+
+
+// ---- Photo worker: downloads (good, too small, not an image, missing), model labels, keep/drop, shared files ----
+function photoWorkerCases(r, add) {
+  const photos = {}, cars = [];
+  for (let c = 0, n = 1 + Math.floor(r() * 3); c < n; c++) {
+    const srcs = Array.from({ length: Math.floor(r() * 5) }, (_, k) => `https://imagescdn.dealercarsearch.com/Media/3073/${c}/p${k}.jpg`);
+    if (r() < 0.2 && srcs.length) srcs.push(srcs[0]);
+    for (const u of srcs) photos[u] ??= pick(r, ['big', 'big', 'big', 'other', 'tiny', 'bad', 'missing']);
+    cars.push({ StockNumber: 'S' + c, source: pick(r, ['dcs', 'dcs', 'dcs', 'zip']), photos_pending: r() < 0.85, photo_sources: srcs, photos: r() < 0.3 ? ['https://x/old.jpg'] : [], ...(r() < 0.3 ? { sheet_photos: [1, 2] } : {}) });
+  }
+  const labels = r() < 0.15 ? [] : Array.from({ length: 1 + Math.floor(r() * 4) }, () => pick(r, ['exterior', 'exterior', 'interior', 'open', 'text', 'detail']));
+  add('parityPhotoWorker', cars, photos, labels, { big: JPEG_1800x900, other: JPEG_1800x900_B, tiny: JPEG_40x30 }, r() < 0.3 ? { note: 'keeps nothing' } : {});
 }

@@ -12,7 +12,7 @@ const ALLOWED=['integerWords','currencyWords','numberSpeech','priceSpeech','spee
  'captionWordKey','captionWordsMatch','captionAlignWords','captionSpokenScript','captionStripExtra','captionSegments',
  'captionVoicedTime','captionSrt','captionDraft','validateSrt','srtTime','highestPrice','money','adPrice','title','script','script30',
  'speechClientSites','shorthandSpeech','captionCallForPrice','priceMatches','clientWebsiteSpoken','clientDetails',
- 'clientInventoryKey','clientWebsite','html_entity_decode','parityParseUrl','parityClientAnalyze','parityClientAdd','paritySaveDetails','dcsParseVdp','parityImportDcs','jsonp','parityGoldenInventory','parityImportMedia','strip_tags','strnatcasecmp','parityFilterInt','dcNormalize','dcCleanDescription','parityDcSync'];
+ 'clientInventoryKey','clientWebsite','html_entity_decode','parityParseUrl','parityClientAnalyze','parityClientAdd','paritySaveDetails','dcsParseVdp','parityImportDcs','jsonp','parityGoldenInventory','parityImportMedia','strip_tags','strnatcasecmp','parityFilterInt','dcNormalize','dcCleanDescription','parityDcSync','parityPhotoWorker'];
 // Fixture wrappers: the same inputs Node gets, with a fake website and an in-memory database (no network, no files).
 function parityDb():PDO{$db=new PDO('sqlite::memory:');$db->setAttribute(PDO::ATTR_ERRMODE,PDO::ERRMODE_EXCEPTION);
     $db->exec('CREATE TABLE state (id TEXT PRIMARY KEY, payload TEXT NOT NULL); CREATE TABLE jobs (id TEXT PRIMARY KEY, fingerprint TEXT UNIQUE, payload TEXT NOT NULL)');return $db;}
@@ -65,3 +65,15 @@ function parityDcSync(array $prior,array $steps,string $jpg):array{
         $r['inventory']=$inv;$r['sheets']=$sheets;$r['files']=count(glob("$dir/assets/*.jpg"));$r['log_entries']=count(state($db,'sync_log')['entries']??[]);$out[]=$r;}}
     finally{foreach(['assets','zips'] as $d){foreach(glob("$dir/$d/*")?:[] as $f)unlink($f);rmdir("$dir/$d");}rmdir($dir);}
     return $out;}
+/** One photo worker run: cars (inventory:lr), photo URL => 'big'|'tiny'|'bad'|'missing', labels by position. */
+function parityPhotoWorker(array $cars,array $photos,array $labels,array $img,array $other):array{
+    $dir=sys_get_temp_dir().'/ga-ppw-'.bin2hex(random_bytes(4));mkdir("$dir/assets",0700,true);
+    $cfg=['asset_dir'=>"$dir/assets",'public_base_url'=>'https://node.example.com:4343'];$db=parityDb();
+    save($db,'inventory:lr',['vehicles'=>$cars]);if($other)save($db,'other',$other);
+    $fetch=function(string $u)use($photos,$img){$k=$photos[$u]??'missing';if($k==='missing')return ['code'=>404,'body'=>'','url'=>$u,'headers'=>''];
+        return ['code'=>200,'body'=>$k==='bad'?str_repeat('x',2000):base64_decode($img[$k]),'url'=>$u,'headers'=>''];};
+    $classify=$labels?function(array $paths)use($labels){$o=[];foreach(array_values($paths) as $i=>$p)$o[$p]=$labels[$i%count($labels)];return $o;}:fn(array $paths)=>null;
+    try{$log=dcsProcessPhotos($db,$cfg,50,$fetch,$classify);$inv=state($db,'inventory:lr');
+        foreach($inv['vehicles'] as &$v){$v['photos']=count($v['photos']??[]);if(isset($v['photos_checked_at']))$v['photos_checked_at']='set';}unset($v);
+        return ['log'=>$log,'inventory'=>$inv,'files'=>count(glob("$dir/assets/*.jpg"))];}
+    finally{foreach(glob("$dir/assets/*")?:[] as $f)unlink($f);rmdir("$dir/assets");rmdir($dir);}}

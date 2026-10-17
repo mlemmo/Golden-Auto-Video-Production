@@ -144,16 +144,18 @@ async function publicAddress(host) {
   try { for (const a of await lookup(host, { all: true, family: 4 })) if (isPublicIPv4(a.address)) return a.address; } catch { /* unresolvable */ }
   return null;
 }
+/** DNS lookup that only ever answers the checked public address (Node asks for all addresses when it can try several). */
+export const pinnedLookup = (ip) => (_host, opts, cb) => (opts && opts.all ? cb(null, [{ address: ip, family: 4 }]) : cb(null, ip, 4));
 function getOnce(url, host, ip) {
   return new Promise((resolve) => {
     let body = Buffer.alloc(0), headers = '';
     const req = httpsRequest(url, {
-      lookup: (_h, _o, cb) => cb(null, ip, 4), servername: host, timeout: 20000,
+      lookup: pinnedLookup(ip), servername: host, timeout: 20000,
       headers: { Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', 'User-Agent': 'Mozilla/5.0 (compatible; GoldenAutoVideoStudio/1.0; inventory check)' },
     }, (res) => {
       headers = `HTTP/${res.httpVersion} ${res.statusCode} ${res.statusMessage}\r\n` + Object.entries(res.headers).map(([k, v]) => `${k}: ${[].concat(v).join(', ')}`).join('\r\n') + '\r\n\r\n';
       res.on('data', (d) => { body = Buffer.concat([body, d]); if (body.length > 3_000_000) { req.destroy(); resolve({ code: 0, body: '', url, headers: '', location: '' }); } });
-      res.on('end', () => resolve({ code: res.statusCode, body: body.toString('utf8'), url, headers, location: res.headers.location ?? '' }));
+      res.on('end', () => resolve({ code: res.statusCode, body: body.toString('utf8'), bodyBuffer: body, url, headers, location: res.headers.location ?? '' }));
       res.on('error', () => resolve({ code: 0, body: '', url, headers: '', location: '' }));
     });
     req.on('timeout', () => req.destroy(new Error('timeout')));
@@ -174,7 +176,7 @@ export async function clientFetch(url, redirects = 3) {
     if (!ip) return { code: 0, body: '', url, headers: '' };
     const r = await getOnce(url, host, ip);
     if (r.code >= 300 && r.code < 400 && r.location !== '') { url = new URL(r.location, url).href; continue; }
-    return { code: r.code, body: r.body, url: r.url, headers: r.headers };
+    return { code: r.code, body: r.body, bodyBuffer: r.bodyBuffer, url: r.url, headers: r.headers };  // bodyBuffer: the raw bytes (photos)
   }
   return { code: 0, body: '', url, headers: '' };
 }

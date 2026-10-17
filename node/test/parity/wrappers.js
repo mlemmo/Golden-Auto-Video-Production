@@ -7,6 +7,7 @@ import { dcsParseVdp, clientImportDcs } from '../../src/lib/importers.js';
 import { jsonp, goldenInventory } from '../../src/lib/website.js';
 import { importMediaZip } from '../../src/lib/media.js';
 import { dcNormalize, dcCleanDescription, dcSync } from '../../src/lib/dealercenter.js';
+import { dcsProcessPhotos } from '../../src/lib/photos.js';
 import { readdirSync, mkdirSync } from 'node:fs';
 import { probeImage } from '../../src/lib/images.js';
 import { writeZip } from '../../src/lib/zip.js';
@@ -21,6 +22,21 @@ const fakeFetch = (pages) => async (url) => {
 };
 export const wrappers = {
   dcNormalize, dcCleanDescription,
+  async parityPhotoWorker(cars, photos, labels, img, other) {
+    const dir = mkdtempSync(tmpdir() + '/ga-npw-'); mkdirSync(dir + '/assets');
+    const cfg = { asset_dir: dir + '/assets', public_base_url: 'https://node.example.com:4343' };
+    const db = openMemoryDb();
+    save(db, 'inventory:lr', { vehicles: cars }); if (other && Object.keys(other).length) save(db, 'other', other);
+    const fetchFn = async (u) => { const k = photos[u] ?? 'missing'; if (k === 'missing') return { code: 404, body: '', url: u, headers: '' };
+      return { code: 200, bodyBuffer: k === 'bad' ? Buffer.from('x'.repeat(2000)) : Buffer.from(img[k], 'base64'), body: '', url: u, headers: '' }; };
+    const classify = labels.length ? (paths) => Object.fromEntries(paths.map((p, i) => [p, labels[i % labels.length]])) : () => null;
+    try {
+      const log = await dcsProcessPhotos(db, cfg, 50, fetchFn, classify);
+      const inv = state(db, 'inventory:lr');
+      for (const v of inv.vehicles) { v.photos = (v.photos ?? []).length; if (v.photos_checked_at !== undefined) v.photos_checked_at = 'set'; }
+      return { log, inventory: inv, files: readdirSync(dir + '/assets').filter((f) => f.endsWith('.jpg')).length };
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  },
   async parityDcSync(prior, steps, jpg) {
     const dir = mkdtempSync(tmpdir() + '/ga-ndc-');
     mkdirSync(dir + '/assets'); mkdirSync(dir + '/zips');
