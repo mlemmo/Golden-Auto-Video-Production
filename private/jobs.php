@@ -23,5 +23,8 @@ function goldenJobDelete(PDO $db,array $cfg,string $id):array {
         $name=substr($url,strlen($base));
         if(preg_match('/^[a-f0-9]{40}\.mp4$/',$name)){$path=($cfg['asset_dir']??__DIR__.'/../public/assets').'/'.$name;if(is_file($path))unlink($path);}
     }
+    // Uploaded footage belongs to this job only.
+    if(($job['provider']??'')==='footage'&&preg_match('/^[a-f0-9]{32}\.(mp4|mov)$/',(string)($job['footage_file']??''))){$path=($cfg['asset_dir']??__DIR__.'/../public/assets').'/footage/'.$job['footage_file'];if(is_file($path))unlink($path);}
+    if(($job['provider']??'')==='footage')return ['message'=>'Video and its uploaded footage deleted.'];
     return ['message'=>'Video deleted from the dashboard. The original generation stays in your Higgsfield history.'];
 }

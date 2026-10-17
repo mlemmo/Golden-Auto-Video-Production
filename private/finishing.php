@@ -33,10 +33,11 @@ function goldenFinishDraft(PDO $db,array $cfg,array &$job):array {
     $duration=(float)($job['duration']??15);
     if(2+$timing['source_end']+.5>$duration)
         throw new RuntimeException('Narration is too long for a two-second intro and closing card. Shorten the narration or use a longer source video. No audio was cut.');
-    $vehicle=null;foreach(state($db,'inventory')['vehicles']??[] as $v)
+    require_once __DIR__.'/clients.php';
+    $vehicle=null;foreach(clientInventory($db,(string)($job['client']??CLIENT_DEFAULT))['vehicles']??[] as $v)
         if((string)($v['StockNumber']??'')===(string)$job['stock']){$vehicle=$v;break;}
     if(!$vehicle)throw new RuntimeException('Vehicle is missing from inventory. Import its photos before finishing.');
-    if((float)($vehicle['price']??-1)!==(float)($job['price']??-2))throw new RuntimeException('Vehicle price changed. Review the narration before finishing.');
+    if(!priceMatches($vehicle['price']??null,$job['price']??null))throw new RuntimeException('Vehicle price changed. Review the narration before finishing.');
     $index=(int)($cfg['finishing_photo_index'][$job['stock']]??0);
     $url=(string)($vehicle['photos'][$index]??'');
     $base=rtrim($cfg['public_base_url'],'/').'/assets/';
@@ -49,6 +50,7 @@ function goldenFinishDraft(PDO $db,array $cfg,array &$job):array {
     // Cues follow the pauses measured in the approved audio. Speech starts at t=2 on the FINAL timeline.
     $cues=captionCues($job['script'],(string)$job['vehicle'],$timing['spans']??[],(float)$timing['speech_end']);
     if(!$cues)throw new RuntimeException('Caption script is empty.');
+    if(($vehicle['price']??null)===null)$cues=captionCallForPrice($cues,$duration-2.0);
     $srt=captionSrt($cues,2.0);
     $q=$db->prepare('UPDATE jobs SET payload=? WHERE id=?');
     $q->execute([json_encode($job,JSON_THROW_ON_ERROR),$job['id']]);
@@ -91,6 +93,8 @@ function goldenNativeCaptions(array $cfg,array $job,string $source,string $work,
     $spoken=$heard?captionSpokenScript((string)$job['script'],$heard):null;
     $cues=captionCues($spoken??(string)$job['script'],(string)($job['vehicle']??''),$timing['spans']??[],(float)$timing['speech_end']);
     if(!$cues)throw new RuntimeException('Caption script is empty.');
+    // No advertised price: nobody says a price, and "Call For Price" is shown once the speech has finished.
+    if(array_key_exists('price',$job)&&$job['price']===null)$cues=captionCallForPrice($cues,(float)($job['duration']??30)-$offset);
     return validateSrt(captionSrt($cues,$offset),(float)($job['duration']??30));
 }
 /**

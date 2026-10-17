@@ -11,12 +11,14 @@ can be checked without touching either.
 | Git branch | `nodejs` |
 | Config | its own `private/config.php` (`environment` = `node`, own `data_dir` and `public_base_url`) |
 | Data | its own copies (started as a copy of production on setup day) |
-| Caption worker | its own cron line, every minute (PHP, until it is ported) |
+| Caption and photo workers | their own cron lines, every minute (PHP, until they are ported) |
 | PHP-FPM pool / socket | `goldenauto-node` / `golden-auto-node.sock` |
 | Node service | `golden-auto-node.service`, 127.0.0.1:4351; Nginx sends `/api/node/` to it |
 | Node.js | nvm in `/home/mark/.nvm`, default alias `lts/*` (no system package) |
 
-Same API keys as production, so paid generations cost the same; every paid call still needs approval in its
+Code: branch `nodejs` carries everything on `staging` (merged in) plus the Node port, so the PHP dashboard here
+matches staging. Data starts as a copy of production, so clients added only on staging (e.g. eLease Returns) are not
+there until added again. Same API keys as production, so paid generations cost the same; every paid call still needs approval in its
 dashboard. The inventory-ads timer stays production-only.
 
 ## One-time setup

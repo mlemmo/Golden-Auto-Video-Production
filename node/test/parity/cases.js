@@ -13,7 +13,13 @@ const COLORS = ['', 'Silver', 'BLACK', 'Pearl White', 'Magnetic Gray Metallic', 
 const WORDS = ['Explore', 'this', 'at', 'Golden', 'Auto', 'in', 'San', 'Ramon', 'Just', 'Priced', 'Book', 'your', 'test', 'drive', 'today',
   'mygoldenauto.net', 'https://www.mygoldenauto.net/', 'SUV', 'AWD', 'with', 'a', 'great', 'the', 'and', 'miles', 'It', 'comes', 'LED',
   'headlights', 'clean', 'title', 'one-owner', 'All-Wheel', 'Drive', 'XV', 'CR-V', 'CX-30', 'XC90', 'T6', '328d', 'EX-L', '4RUNNER',
-  'F-150', 'call', 'now!', 'ready?', 'fuel', 'efficient;', 'roomy:', 'here', 'Café', 'Rogue’s', 'naïve', 'USB', 'GT', 'STI', 'EV', 'ok'];
+  'F-150', 'call', 'now!', 'ready?', 'fuel', 'efficient;', 'roomy:', 'here', 'Café', 'Rogue’s', 'naïve', 'USB', 'GT', 'STI', 'EV', 'ok',
+  '4WD', '4wd', 'AWD,', 'FWD.', 'rwd', '4x4', '4X4', '4D', '4dr', '4-dr', '4 door', '4DR.', '4DRV', 'Q4', 'HSE', 'XT6', '2WD', 'X4WD',
+  'eleasereturns.com', 'www.eleasereturns.com/', 'https://eleasereturns.com', 'eleasereturns.com.au', 'best-auto.net', 'BEST-AUTO.NET'];
+const SITES = [{}, { 'eleasereturns.com': 'e lease returns dot com' }, { 'best-auto.net': 'best auto dot net', 'eleasereturns.com': 'e lease returns dot com' }, { '': 'x', 'a.com': '' }];
+const DEALERS = [undefined, { name: 'eLease Returns', city: 'Hayward', website: 'eleasereturns.com' }, { name: 'Best Auto', city: '', website: 'best-auto.net' }, { name: 'Best Auto', website: 'best-auto.net' }];
+const CLIENT_NAMES = ['eLease Returns', 'Best Auto', 'BMW of Walnut Creek', 'A&B Motors', 'AutoNation', 'Golden Auto', ''];
+const CLIENT_SITES = ['https://www.eleasereturns.com', 'https://best-auto.net/', 'http://WWW.AutoNation.com/cars', 'https://www.bmwofwalnutcreek.com', 'https://a-b-motors.co.uk', 'eleasereturns.com', 'https://user@host.com:8080/x'];
 const pick = (r, a) => a[Math.floor(r() * a.length)];
 
 export function price(r) {
@@ -80,6 +86,22 @@ export function buildCases(seed = 42, count = 400) {
   const add = (fn, ...args) => cases.push({ fn, args });
   for (let i = 0; i < count; i++) {
     const v = vehicle(r), t = text(r), veh = `${v.Year} ${v.Make} ${v.Model}`;
+    const sites = pick(r, SITES);
+    for (const fn of ['speechScript', 'nativeSpeech', 'speechWordCount', 'speechClientSites', 'shorthandSpeech']) cases.push({ fn, args: [t], sites });
+    const dealer = pick(r, DEALERS);
+    cases.push({ fn: 'script', args: dealer ? [v, 15, dealer] : [v], sites });
+    cases.push({ fn: 'script30', args: dealer ? [v, dealer] : [v], sites });
+    const cname = pick(r, CLIENT_NAMES), csite = pick(r, CLIENT_SITES);
+    add('clientWebsiteSpoken', csite.replace(/^https?:\/\//, '').replace(/\/.*$/, ''), cname);
+    add('clientDetails', r() < 0.15 ? { id: 'golden-auto', name: 'Golden Auto', website: 'https://mygoldenauto.net' }
+      : { id: 'c' + i, name: cname, website: csite, ...(r() < 0.3 ? { details: { name: 'Edited ' + cname, city: 'Dublin', website: 'edited.com' } } : {}),
+        ...(r() < 0.3 ? { dealer: { city: 'Hayward' } } : {}), ...(r() < 0.3 ? { analysis: { dealer: { city: 'Fremont' } } } : {}) });
+    const nc = Math.floor(r() * 3), cues = [];
+    let at = r() * 5;
+    for (let k = 0; k < nc; k++) { const a = at, b = at + 0.3 + r() * 6; cues.push({ text: 'Cue ' + k, start: a, end: b }); at = b + 0.05; }
+    add('captionCallForPrice', cues, at + r() * 4);
+    const pa = price(r), pb = r() < 0.3 ? pa : price(r);
+    if (typeof pa !== 'boolean' && typeof pb !== 'boolean') add('priceMatches', pa, r() < 0.2 && typeof pa === 'number' ? pa + 0.004 : pb);
     add('integerWords', Math.floor(r() * 1.2e9) * (r() < 0.02 ? -1 : 1));
     add('currencyWords', moneyText(r));
     for (const fn of ['numberSpeech', 'priceSpeech', 'speechWordCount', 'speechScript', 'nativeSpeech', 'acronymSpeech', 'captionDisplayText', 'captionSyllables', 'captionWordKey', 'captionStripExtra']) add(fn, t);

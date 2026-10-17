@@ -5,16 +5,19 @@ import { intdiv, lower, numberFormat, str, toFloat, toInt, trim, truthy, upper }
 
 const hasPrice = (v) => v.price !== undefined && v.price !== null;
 
+/** Dealer named in scripts: Golden Auto unless the selected client's details are passed (clientDetails). */
+export const DEALER_DEFAULT = Object.freeze({ name: 'Golden Auto', city: 'San Ramon', website: 'mygoldenauto.net' });
+
 /** 15-second script (30 → script30). */
-export function script(v, duration = 15) {
-  if (duration === 30) return script30(v);
+export function script(v, duration = 15, dealer = DEALER_DEFAULT) {
+  if (duration === 30) return script30(v, dealer);
   const name = title(v);
   const drive = v.Drivetrain ?? '';
   // Keep drive codes uppercase so speech spells them ("A-W-D") and captions keep "AWD".
   const feature = truthy(drive) ? ' with ' + (/^[A-Za-z0-9]{2,4}$/.test(str(drive)) ? upper(str(drive)) : lower(str(drive))) : '';
-  return 'Explore this ' + name + feature + ' at Golden Auto. ' +
+  return 'Explore this ' + name + feature + ' at ' + str(dealer.name) + '. ' +
     (hasPrice(v) ? 'Just ' + adPrice(toFloat(v.price)) + '. ' : '') +
-    'Book your test drive at mygoldenauto.net.';
+    'Book your test drive at ' + str(dealer.website) + '.';
 }
 
 const DRIVES = { AWD: 'all-wheel drive', '4WD': 'four-wheel drive', '4X4': 'four-wheel drive', FWD: 'front-wheel drive', RWD: 'rear-wheel drive' };
@@ -23,7 +26,7 @@ const DRIVES = { AWD: 'all-wheel drive', '4WD': 'four-wheel drive', '4X4': 'four
  * 30-second script. Targets about 55–60 spoken words (roughly 22–25 s of speech), which fits the 27.5 s left after
  * the 2 s intro card; optional sentences are dropped for long vehicle names.
  */
-export function script30(v) {
+export function script30(v, dealer = DEALER_DEFAULT) {
   const trimRaw = trim(str(v.Trim ?? ''));
   const body = /pickup|crew cab|truck/i.test(trimRaw + ' ' + str(v.Model ?? '')) ? 'truck'
     : /sport utility|suv/i.test(trimRaw) ? 'SUV'
@@ -46,11 +49,11 @@ export function script30(v) {
       : 'It is a great fit for daily commutes and weekend drives.';
   const parts = {
     hook: 'Looking for a dependable ' + body + '?',
-    name: 'Take a look at this ' + name + ', here at Golden Auto in San Ramon.',
+    name: 'Take a look at this ' + name + ', here at ' + str(dealer.name) + (str(dealer.city ?? '') !== '' ? ' in ' + str(dealer.city) : '') + '.',
     facts: factLine,
     use,
     price: hasPrice(v) ? 'Just ' + adPrice(toFloat(v.price)) + '.' : '',
-    cta: 'Book your test drive today at mygoldenauto.net.',
+    cta: 'Book your test drive today at ' + str(dealer.website) + '.',
   };
   const join = (p) => trim(Object.values(p).filter(truthy).join(' ').replace(/[\t\n\v\f\r ]+/g, ' '));
   for (const optional of ['use', 'hook']) if (speechWordCount(join(parts)) > 62) delete parts[optional];

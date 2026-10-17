@@ -277,6 +277,21 @@ export function captionVoicedTime(spans, voiced) {
   return spans[spans.length - 1][1];
 }
 
+/** Adds a "Call For Price" caption after the last spoken caption, until the end of the video (videoEnd, cue time). */
+export function captionCallForPrice(cues, videoEnd) {
+  cues = cues.map((c) => ({ ...c }));
+  const last = cues.length ? Number(cues[cues.length - 1].end) : 0;
+  let start = Math.min(last + 0.3, Math.max(last + 0.05, videoEnd - 1.5));
+  const end = videoEnd - 0.2;
+  if (end - start < 0.8 && cues.length) {
+    const i = cues.length - 1;
+    cues[i].end = Math.min(cues[i].end, Math.max(cues[i].start + 0.4, videoEnd - 1.4));
+    start = cues[i].end + 0.04;
+  }
+  cues.push({ text: 'Call For Price', start, end: Math.max(start + 0.5, end) });
+  return cues;
+}
+
 export function captionSrt(cues, offset = 0) {
   return cues.map((c, i) => `${i + 1}\n${srtTime(c.start + offset)} --> ${srtTime(c.end + offset)}\n${c.text}\n\n`).join('');
 }

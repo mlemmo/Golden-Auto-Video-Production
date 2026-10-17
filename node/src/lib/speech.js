@@ -1,5 +1,6 @@
 // Spoken text for the voice models. Port of integerWords…speechWordCount (private/captions.php) and
 // nativeSpeech, seedanceRespell, speechScript, acronymSpeech (private/references.php). Output must match PHP exactly.
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { intdiv, lower, quote, ucfirst, U_BOUNDARY, U_SPACE } from './php.js';
 
 const SMALL = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve',
@@ -54,7 +55,43 @@ const WEBSITE = /(?<![A-Za-z0-9])(?:https?:\/\/)?(?:www\.)?mygoldenauto\.net\/?(
  */
 export function nativeSpeech(s) {
   s = s.replace(WEBSITE, 'my golden auto dot net');
+  s = shorthandSpeech(speechClientSites(s));
   return acronymSpeech(numberSpeech(priceSpeech(s)));
+}
+
+/**
+ * Websites of the current client besides mygoldenauto.net, as {display: spoken} ("eleasereturns.com" → "e lease
+ * returns dot com"); used by speechScript and nativeSpeech. PHP keeps them in a per-request static; a Node server
+ * handles many requests at once, so a request should wrap its work in withSpeechSites(sites, fn), which keeps the
+ * sites to that request. speechSites(set) outside such a wrapper sets a process-wide default (scripts and tests).
+ */
+const siteStore = new AsyncLocalStorage();
+let defaultSites = {};
+export function speechSites(set = null) {
+  const store = siteStore.getStore();
+  if (set !== null && set !== undefined) {
+    if (store) store.sites = set; else defaultSites = set;
+  }
+  return store ? store.sites : defaultSites;
+}
+export const withSpeechSites = (sites, fn) => siteStore.run({ sites: sites ?? {} }, fn);
+
+export function speechClientSites(s) {
+  for (const [display, spoken] of Object.entries(speechSites())) {
+    if (display !== '' && typeof spoken === 'string' && spoken !== '') {
+      s = s.replace(new RegExp('(?<![A-Za-z0-9])(?:https?:\\/\\/)?(?:www\\.)?' + quote(display) + '\\/?(?![A-Za-z0-9/])', 'gi'), () => spoken);
+    }
+  }
+  return s;
+}
+
+/** Listing shorthand said as words (4WD → "four wheel drive", 4D / 4dr → "four door", ...). Captions keep the shorthand. */
+export const SPEECH_SHORTHAND = { '4WD': 'four wheel drive', AWD: 'all wheel drive', FWD: 'front wheel drive', RWD: 'rear wheel drive', '4X4': 'four by four' };
+export function shorthandSpeech(s) {
+  for (const [code, words] of Object.entries(SPEECH_SHORTHAND)) {
+    s = s.replace(new RegExp('(?<![A-Za-z0-9])' + quote(code) + '(?![A-Za-z0-9])', 'gi'), () => words);
+  }
+  return s.replace(/(?<![A-Za-z0-9])4[ -]?(?:d|dr|door)\.?(?![A-Za-z0-9])/gi, 'four door');
 }
 
 /** Respellings written into the line Seedance speaks (it ignored the pronunciation note). Captions keep the real spelling. */
@@ -81,12 +118,13 @@ export const SPEECH_PRONUNCIATION = {
 
 export function speechScript(s, numbers = true) {
   s = s.replace(WEBSITE, 'my golden auto dot N, E, T');
+  s = shorthandSpeech(speechClientSites(s));
   s = priceSpeech(s);
   return acronymSpeech(numbers ? numberSpeech(s) : s);
 }
 
 /** Acronyms that contain vowels but are still said letter by letter. */
-export const SPEECH_SPELLED = ['SUV', 'AWD', 'FWD', 'RWD', '2WD', '4WD', '4X4', 'EX', 'EXL', 'LX', 'LE', 'SE', 'SEL', 'XLE', 'GT',
+export const SPEECH_SPELLED = ['SUV', 'HSE', 'AWD', 'FWD', 'RWD', '2WD', '4WD', '4X4', 'EX', 'EXL', 'LX', 'LE', 'SE', 'SEL', 'XLE', 'GT',
   'GTI', 'AMG', 'STI', 'TDI', 'TSI', 'SRT', 'LED', 'USB', 'ABS', 'EV', 'ES', 'RS', 'SS', 'SV', 'SL', 'SR', 'SR5', 'LT', 'LS',
   'LTZ', 'XLT', 'ST'];
 /** Between spelled letters. Commas made Bella pause too long; hyphens keep the letters quick. */

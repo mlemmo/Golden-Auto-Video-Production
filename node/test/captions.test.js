@@ -2,10 +2,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  CAPTION_EXTRA, CAPTION_MAX_LINE, captionCues, captionDisplayText, captionDraft, captionSpokenScript, captionSrt, validateSrt,
+  CAPTION_EXTRA, CAPTION_MAX_LINE, captionCallForPrice, captionCues, captionDisplayText, captionDraft, captionSpokenScript, captionSrt, validateSrt,
 } from '../src/lib/captions.js';
-import { nativeSpeech, seedanceRespell, speechScript, speechWordCount } from '../src/lib/speech.js';
-import { adPrice, highestPrice } from '../src/lib/price.js';
+import { nativeSpeech, seedanceRespell, speechScript, speechWordCount, withSpeechSites } from '../src/lib/speech.js';
+import { adPrice, highestPrice, priceMatches } from '../src/lib/price.js';
+import { clientDetails } from '../src/lib/clients.js';
 import { script } from '../src/lib/scripts.js';
 
 test('prices are spoken as words', () => {
@@ -92,9 +93,9 @@ test('prices, scripts and acronym speech (tests/run.php)', () => {
   assert.ok(speechWordCount(s30) >= 45 && speechWordCount(s30) <= 62, `30-second script fills most of the time (${speechWordCount(s30)} spoken words)`);
   assert.ok(s30.includes('Laramie Longhorn') && !s30.includes('Pickup 4D') && s30.includes('four-wheel drive') && s30.includes('just over 154,000 miles') && s30.includes('truck'), '30-second script uses trim, drive, mileage and body style');
   assert.ok(s30.includes('Just $15,688.') && !s30.includes('.25') && s30.includes('mygoldenauto.net'), '30-second script keeps whole-dollar price and website');
-  assert.equal(speechScript('Explore this 2013 SUBARU XV CROSSTREK with AWD. A great SUV!'), 'Explore this twenty thirteen Subaru X-V Crosstrek with A-W-D. A great S-U-V!');
+  assert.equal(speechScript('Explore this 2013 SUBARU XV CROSSTREK with AWD. A great SUV!'), 'Explore this twenty thirteen Subaru X-V Crosstrek with all wheel drive. A great S-U-V!');
   assert.equal(speechScript('2011 HONDA CR-V EX-L, 2022 MAZDA CX-30, 2018 VOLVO XC90 T6, 2015 BMW 3 SERIES 328d, 2015 RAM 1500 CREW CAB, 2008 TOYOTA 4RUNNER, 4WD'),
-    'twenty eleven Honda C-R-V E-X-L, twenty twenty-two Mazda C-X 30, twenty eighteen Volvo X-C 90 T 6, twenty fifteen B-M-W 3 Series 328d, twenty fifteen Ram 1500 Crew Cab, two thousand eight Toyota 4 Runner, 4-W-D');
+    'twenty eleven Honda C-R-V E-X-L, twenty twenty-two Mazda C-X 30, twenty eighteen Volvo X-C 90 T 6, twenty fifteen B-M-W 3 Series 328d, twenty fifteen Ram 1500 Crew Cab, two thousand eight Toyota 4 Runner, four wheel drive');
   assert.ok(script(v).includes('with 4WD'), '15-second script keeps drive code uppercase');
   assert.equal(speechScript('with 2WD'), 'with 2-W-D');
   assert.ok(adPrice(14688.25) === '$14,688' && adPrice(14688.0) === '$14,688' && adPrice(999.99) === '$999', 'ad price drops cents');
@@ -105,4 +106,41 @@ test('native voice speech (tests/native_voice.php)', () => {
   const speech = nativeSpeech('Take a look at this 2013 SUBARU XV CROSSTREK here at Golden Auto in San Ramon. Just $14,688. Book your test drive at mygoldenauto.net.');
   assert.ok(speech.includes('my golden auto dot net') && !speech.includes('N, E, T'), 'native voice says "dot net"');
   assert.ok(seedanceRespell(speech).includes('San Rah-moan') && seedanceRespell(speech, { 'San Ramon': 'San Ra-MOAN' }).includes('San Ra-MOAN'), 'respelling default and config override');
+});
+
+test('no advertised price: no price in scripts, "Call For Price" caption (tests/captions.php)', () => {
+  const noPrice = { Year: 2016, Make: 'LAND ROVER', Model: 'RANGE ROVER SPORT', Trim: 'HSE', Drivetrain: '4WD', ExteriorColor: 'LOIRE BLUE', Odometer: 67351, price: null };
+  assert.ok(!script(noPrice).includes('$') && !script(noPrice, 30).includes('$') && !script(noPrice, 30).toLowerCase().includes('price'), 'no price: scripts never mention a price');
+  const cfp = captionCallForPrice([{ text: 'Book your test drive', start: 20.0, end: 23.5 }], 29.5);
+  assert.ok(cfp.at(-1).text === 'Call For Price' && Math.abs(cfp.at(-1).start - 23.8) < 0.01 && Math.abs(cfp.at(-1).end - 29.3) < 0.01, 'Call For Price shown after the speech until the end');
+  const tight = captionCallForPrice([{ text: 'Book', start: 20.0, end: 29.4 }], 29.5);
+  assert.ok(tight.at(-1).text === 'Call For Price' && tight[0].end <= 28.1 && tight.at(-1).start > tight[0].end && validateSrt(captionSrt(tight, 0.5), 30) !== '', 'speech to the very end: last caption shortened to make room');
+  assert.ok(priceMatches(null, null) && !priceMatches(null, 14688.0) && priceMatches(14688.25, 14688.25) && !priceMatches(14688.0, 14690.0), 'no price matches no price only');
+});
+
+test('listing shorthand said as words; captions keep it (tests/captions.php)', () => {
+  assert.equal(speechScript('2016 RANGE ROVER SPORT 4WD 4dr V6 HSE'), 'twenty sixteen Range Rover Sport four wheel drive four door V 6 H-S-E');
+  assert.equal(nativeSpeech('Sedan 4D with 4WD'), 'Sedan four door with four wheel drive');
+  assert.ok(speechScript('Q4 4DRV') !== '' && !speechScript('Q4 4DRV').includes('four door') && captionDisplayText('SPORT 4WD 4dr') === 'Sport 4WD 4dr', 'other codes untouched; captions keep 4WD and 4dr');
+  assert.equal(speechScript('XT6 AWD, FWD sedan, RWD coupe, a 4x4 truck'), 'X-T 6 all wheel drive, front wheel drive sedan, rear wheel drive coupe, a four by four truck');
+  assert.equal(captionDisplayText('AWD FWD RWD 4x4'), 'AWD FWD RWD 4x4');
+});
+
+test('each client is named in scripts and its website is said in words', async () => {
+  const client = { id: 'elease', name: 'eLease Returns', website: 'https://www.eleasereturns.com', analysis: { dealer: { city: 'Hayward' } } };
+  const dealer = clientDetails(client);
+  assert.deepEqual(dealer, { name: 'eLease Returns', city: 'Hayward', website: 'eleasereturns.com', website_spoken: 'e lease returns dot com' });
+  assert.equal(clientDetails({ id: 'golden-auto' }).website_spoken, 'my golden auto dot net');
+  const v = { Year: 2019, Make: 'BMW', Model: 'X3', Drivetrain: 'AWD', price: 21500 };
+  const s30 = script(v, 30, dealer);
+  assert.ok(s30.includes('here at eLease Returns in Hayward.') && s30.endsWith('today at eleasereturns.com.') && !s30.includes('Golden Auto'), '30-second script names the client');
+  assert.ok(script(v, 15, dealer).includes('at eLease Returns.') && script(v).includes('at Golden Auto.'), '15-second script names the client; default stays Golden Auto');
+  // Client websites stay with the request that set them, even when two requests interleave.
+  const sites = { [dealer.website]: dealer.website_spoken };
+  const [a, b] = await Promise.all([
+    withSpeechSites(sites, async () => { await new Promise((r) => setTimeout(r, 5)); return speechScript('Visit eleasereturns.com.'); }),
+    withSpeechSites({}, async () => speechScript('Visit eleasereturns.com.')),
+  ]);
+  assert.equal(a, 'Visit e lease returns dot com.');
+  assert.equal(b, 'Visit eleasereturns.com.');
 });

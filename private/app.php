@@ -45,6 +45,11 @@ function highestPrice(array $vehicle, array $detail=[]): ?float {
         if (isset($v[$k]) && is_numeric($v[$k]) && (float)$v[$k]>0) $p[]=(float)$v[$k];
     return $p?max($p):null;
 }
+/** Same advertised price: both "no price" (call for price), or within half a cent. */
+function priceMatches(mixed $a,mixed $b): bool {
+    if($a===null||$b===null)return $a===null&&$b===null;
+    return abs((float)$a-(float)$b)<0.005;
+}
 function money(?float $p): string { return $p===null?'Call for price':'$'.number_format($p,fmod($p,1.0)==0.0?0:2); }
 /** Ad-copy price: whole dollars, cents dropped ($14,688.25 → "$14,688"). */
 function adPrice(float $p): string { return '$'.number_format(floor($p)); }
@@ -66,7 +71,7 @@ function inventory(string $source): array {
     return $vehicles;
 }
 function enrich(array $v): array {
-    if(($v['source']??'')==='zip')return $v;
+    if(in_array($v['source']??'',['zip','dcs'],true))return $v;  // imported cars already carry their details
     $html=request($v['url']); $x=doc($html); $detail=[];
     // Price only from this vehicle's metadata and its own price widget: never related cars or loan calculators.
     foreach ($x->query('//meta[@name="description" or @property="og:description" or @property="product:price:amount"]') as $n) {
@@ -79,14 +84,16 @@ function enrich(array $v): array {
     $v['photos']=array_values(array_unique($v['photos'])); $v['price']=highestPrice($v,$detail);
     $v['detail_checked_at']=gmdate('c'); return $v;
 }
-function script(array $v,int $duration=15): string {
-    if($duration===30)return script30($v);
+/** Dealer named in scripts: Golden Auto unless the selected client's details are passed (clientDetails). */
+const DEALER_DEFAULT=['name'=>'Golden Auto','city'=>'San Ramon','website'=>'mygoldenauto.net'];
+function script(array $v,int $duration=15,array $dealer=DEALER_DEFAULT): string {
+    if($duration===30)return script30($v,$dealer);
     $name=title($v);$drive=$v['Drivetrain']??'';
     // Keep drive codes uppercase so speech spells them ("A,W,D") and captions keep "AWD".
     $feature=$drive?' with '.(preg_match('/^[A-Za-z0-9]{2,4}$/',$drive)?strtoupper($drive):strtolower($drive)):'';
-    return 'Explore this '.$name.$feature.' at Golden Auto. '.
+    return 'Explore this '.$name.$feature.' at '.$dealer['name'].'. '.
         ($v['price']!==null?'Just '.adPrice((float)$v['price']).'. ':'').
-        'Book your test drive at mygoldenauto.net.';
+        'Book your test drive at '.$dealer['website'].'.';
 
 }
 const SPOKESPERSON_DEFAULT_DESCRIPTION='trustworthy friendly adult woman age 28–33, casual professional attire';
@@ -94,7 +101,7 @@ const SPOKESPERSON_DEFAULT_DESCRIPTION='trustworthy friendly adult woman age 28�
  * 30-second script built only from inventory facts. Targets about 55–60 spoken words (roughly 22–25 s of speech),
  * which fits the 27.5 s left after the 2 s intro card; optional sentences are dropped for long vehicle names.
  */
-function script30(array $v): string {
+function script30(array $v,array $dealer=DEALER_DEFAULT): string {
     $trimRaw=trim((string)($v['Trim']??''));
     $body=match(true){(bool)preg_match('/pickup|crew cab|truck/i',$trimRaw.' '.($v['Model']??''))=>'truck',
         (bool)preg_match('/sport utility|suv/i',$trimRaw)=>'SUV',(bool)preg_match('/sedan/i',$trimRaw)=>'sedan',
@@ -110,9 +117,9 @@ function script30(array $v): string {
     $use=match($body){'truck'=>'It is ready for work during the week and adventures on the weekend.',
         'SUV'=>'It is a great fit for daily commutes, family errands, and weekend road trips.',
         default=>'It is a great fit for daily commutes and weekend drives.'};
-    $parts=['hook'=>'Looking for a dependable '.$body.'?','name'=>'Take a look at this '.$name.', here at Golden Auto in San Ramon.',
+    $parts=['hook'=>'Looking for a dependable '.$body.'?','name'=>'Take a look at this '.$name.', here at '.$dealer['name'].(($dealer['city']??'')!==''?' in '.$dealer['city']:'').'.',
         'facts'=>$factLine,'use'=>$use,'price'=>$v['price']!==null?'Just '.adPrice((float)$v['price']).'.':'',
-        'cta'=>'Book your test drive today at mygoldenauto.net.'];
+        'cta'=>'Book your test drive today at '.$dealer['website'].'.'];
     $join=fn($p)=>trim(preg_replace('/\s+/',' ',implode(' ',array_filter($p)))??'');
     foreach(['use','hook'] as $optional)if(speechWordCount($join($parts))>62)unset($parts[$optional]);
     return $join($parts);
@@ -154,7 +161,7 @@ function promptNative(array $v,string $speech,int $duration=30,string $presenter
         ($voiceReference==='speech'?'Reference audio 1 is the exact recording of her speech for this video: she says exactly those words with that voice, at exactly the same pace and timing as the recording, starting at '.$speakFrom.' seconds; do not slow it down, stretch it or add pauses. Her lip movements follow that recording word for word. '
             :($voiceReference?'Reference audio 1 is the spokesperson\'s voice: match its timbre, accent, pitch and delivery exactly. ':'')).
         'Preserve the vehicle paint, trim, wheels, lamps and body exactly; do not invent equipment, badges or license plates, and do not repair cosmetic imperfections. The vehicle is parked and stationary throughout. '.
-        'Setting: a bright, upscale modern showroom with polished floors, soft even lighting and tall windows, with open space all around the car, not a representation of Golden Auto’s actual building. '.
+        'Setting: a bright, upscale modern showroom with polished floors, soft even lighting and tall windows, with open space all around the car, not a representation of the dealership’s actual building. '.
         'Framing rules for every shot: the car is the main subject and in sharp focus, and the entire car is visible from bumper to bumper with space around it, never cropped. Use a wide lens with the camera about seven meters away at chest height. '.
         ($panShots?'In shots 1–4 the spokesperson':'The spokesperson').' ('.$presenter.') stands or walks right beside the car, about one step from its body, shown full length from head to shoes, roughly half the height of the frame. She is never closer to the camera than the car, never blocks the view of the car, and never stands behind it or on its far side. '.
         'Shot 1 (0–'.$t(.25).' s): wide front three-quarter view of the whole car; she stands beside the front fender, facing the camera, and begins speaking. '.
@@ -182,7 +189,7 @@ function prompt(array $v,string $spoken,string $style="dynamic",int $duration=15
         'The spokesperson ('.$presenter.') begins at the rear three-quarter corner of the car on the side nearest the camera and walks slowly forward along that side to the front three-quarter corner, presenting the car. Never behind the car, never on its far side, never hidden by it. '.
         'Throughout, the spokesperson is fully visible from head to at least the knees, faces the camera most of the time, and talks to the viewer continuously with natural mouth movement, warm expressions and open hand gestures toward the car. '.
         'The stabilized camera tracks alongside at walking pace, slightly ahead of the spokesperson, keeping the face clearly visible, evenly lit and reasonably large in frame while the car stays recognizable beside them. One smooth continuous move; no hard cuts, no racing or drone shots. '.
-        'Use a bright, modern illustrative showroom, not a representation of Golden Auto’s actual building. Leave space at the bottom of the frame for captions added in post-production. '.
+        'Use a bright, modern illustrative showroom, not a representation of the dealership’s actual building. Leave space at the bottom of the frame for captions added in post-production. '.
         'No on-screen text of any kind: no watermark, no website address, no logo, no signage text, no license-plate text.';
     return 'Create a polished 15-second vehicle advertisement with energetic Hyper Motion style choreography. '.
         'Reference image 1 is the vehicle asset sheet, the authoritative visual identity. Reference image 2 is the recurring spokesperson. '.
@@ -190,7 +197,7 @@ function prompt(array $v,string $spoken,string $style="dynamic",int $duration=15
         'Vehicle: '.title($v).'; trim: '.($v['Trim']??'').'; exterior: '.($v['ExteriorColor']??'').'. '.
         '0–4 seconds: stabilized ultra-low tracking shot of this vehicle rolling down a clean sunlit street. '.
         '4–9 seconds: smooth matched transition to a slow macro glide across its actual dashboard, steering wheel and center console. Use leather only if visible in the reference. '.
-        '9–15 seconds: fast drone dolly-out revealing this car at golden hour outside a modern illustrative showroom. Do not imply this fictional setting is Golden Auto’s actual building. '.
+        '9–15 seconds: fast drone dolly-out revealing this car at golden hour outside a modern illustrative showroom. Do not imply this fictional setting is the dealership’s actual building. '.
         'Continuous tracking within each scene; smooth transitions between scenes, no hard cuts. '.
         'Spokesperson appears in a lower-left inset, away from vehicle details, matching reference image 2 exactly: '.$presenter.', facing the camera and talking continuously with natural mouth movement and gestures. '.
         'Keep important content central and inset from frame edges. No on-screen text of any kind: no watermark, no website address, no logo; accurate captions are added in post-production.';

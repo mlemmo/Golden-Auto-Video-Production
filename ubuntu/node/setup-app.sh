@@ -2,7 +2,7 @@
 # One-time app setup for node.mygoldenauto.net, run as mark after setup-root.sh: bash ubuntu/node/setup-app.sh
 # Clones the nodejs branch to /srv/golden-auto-node, writes its config from production's (same API keys and password;
 # own data folder, public URL and environment "node", which shows a NODE TEST banner), copies production's data and
-# videos once, adds its caption worker to cron, installs Node.js (LTS) with nvm in mark's home, runs the Node tests
+# videos once, adds its caption and photo workers to cron, installs Node.js (LTS) with nvm in mark's home, runs the Node tests
 # and starts the Node service.
 # Production is only read, never changed. Safe to re-run: existing config/data are kept.
 set -euo pipefail
@@ -40,6 +40,13 @@ line="* * * * * /usr/bin/php $dir/private/caption_worker.php >> $dir/private/dat
 if ! crontab -l 2>/dev/null | grep -qF "$dir/private/caption_worker.php"; then
   (crontab -l 2>/dev/null; echo "$line") | crontab -
   echo "node test site caption worker added to cron"
+fi
+# Photo worker (free: public photo downloads and the local image model): copies and sorts photos of website-imported
+# client cars. Uses config photo_python when set; without the model it keeps every photo.
+line="* * * * * /usr/bin/php $dir/private/photo_worker.php >> $dir/private/data/photo-worker.log 2>&1"
+if [ -f "$dir/private/photo_worker.php" ] && ! crontab -l 2>/dev/null | grep -qF "$dir/private/photo_worker.php"; then
+  (crontab -l 2>/dev/null; echo "$line") | crontab -
+  echo "node test site photo worker added to cron"
 fi
 
 # nvm (latest release, from its GitHub repository) and the current Node LTS, for mark only. Upgrade later with

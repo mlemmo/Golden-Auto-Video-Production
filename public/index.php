@@ -27,42 +27,63 @@ if (!($_SESSION['auth']??false)) { ?>
 <!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title><?=$staging?$envLabel.' • ':''?>Golden Auto • Sign in</title><link rel="stylesheet" href="style.css"></head><body><main class="login"><span class="eyebrow">GOLDEN AUTO</span><h1>Video Studio</h1><p>Private inventory video dashboard.</p><form method="post"><input type="hidden" name="csrf" value="<?=esc($_SESSION['csrf'])?>"><label>Dashboard password<input type="password" name="password" required autocomplete="current-password"></label><button>Sign in</button><p><?=esc($loginError)?></p></form></main></body></html>
 <?php exit; }
 $db=db($cfg);
+// Current client (dealer): its inventory, voice previews and videos are what the dashboard shows.
+require_once $private.'/clients.php';
+$clients=clientsLoad($db);$client=(string)($_SESSION['client']??CLIENT_DEFAULT);
+if(!in_array($client,array_column($clients['items'],'id'),true))$client=CLIENT_DEFAULT;
+$invKey=clientInventoryKey($client);
+// Dealer named in scripts and speech for this client; its website is said as written in its details.
+$dealer=clientDetails(clientFind($db,$client));
+if($client!==CLIENT_DEFAULT)speechSites([$dealer['website']=>$dealer['website_spoken']]);
 if (isset($_GET['api'])) {
     header('Content-Type: application/json');
     try {
         if ($_SERVER['REQUEST_METHOD']!=='POST') throw new RuntimeException('POST required.');
         if (!hash_equals($_SESSION['csrf'],$_SERVER['HTTP_X_CSRF_TOKEN']??'')) {http_response_code(403);throw new RuntimeException('Invalid request.');}
         $action=$_GET['api'];
-        $in=in_array($action,['import','spokesperson_upload'],true)?$_POST:json_decode(file_get_contents('php://input'),true,512,JSON_THROW_ON_ERROR);
+        $in=in_array($action,['import','spokesperson_upload','footage_build'],true)?$_POST:json_decode(file_get_contents('php://input'),true,512,JSON_THROW_ON_ERROR);
         require_once $private.'/spokespersons.php';
+        if(is_array($in))$in['client']=$client;
+        if ($action==='clients') {echo json_encode(['items'=>array_map(fn($c)=>$c+['script_details'=>clientDetails($c)],$clients['items']),'current'=>$client],JSON_THROW_ON_ERROR);exit;}
+        if ($action==='client_details') {$c=clientSaveDetails($db,$client,$in);echo json_encode(['client'=>$c+['script_details'=>clientDetails($c)]],JSON_THROW_ON_ERROR);exit;}
+        if ($action==='client_select') {clientFind($db,(string)($in['id']??''));$_SESSION['client']=(string)$in['id'];echo json_encode(['message'=>'Client selected.']);exit;}
+        if ($action==='client_add') {$c=clientAdd($db,(string)($in['name']??''),(string)($in['website']??''));$_SESSION['client']=$c['id'];echo json_encode(['client'=>$c],JSON_THROW_ON_ERROR);exit;}
+        if ($action==='client_analyze') {echo json_encode(['client'=>clientReanalyze($db,(string)($in['id']??$client))],JSON_THROW_ON_ERROR);exit;}
         // Golden Auto narration-first add-on
         if(str_starts_with($action,'narration_')){require_once $private.'/narrations.php';echo json_encode(narrationApi($action,$in,$cfg,$db),JSON_THROW_ON_ERROR);exit;}
         if(str_starts_with($action,'spokesperson_')){echo json_encode(spokespersonApi($action,$in,$cfg,$db),JSON_THROW_ON_ERROR);exit;}
         if ($action==='import') {
             $file=$_FILES['media']??null;if(!$file||$file['error']!==UPLOAD_ERR_OK||!is_uploaded_file($file['tmp_name']))throw new RuntimeException('Upload failed. Check upload_max_filesize and post_max_size in PHP settings.');
-            $v=importMediaZip($file['tmp_name'],$in,$cfg);$a=state($db,'inventory')??['vehicles'=>[]];
-            $a['vehicles']=array_values(array_filter($a['vehicles'],fn($c)=>$c['StockNumber']!==$v['StockNumber']));$a['vehicles'][]=$v;save($db,'inventory',$a);save($db,'import:'.$v['StockNumber'],$v);
+            $v=importMediaZip($file['tmp_name'],$in,$cfg);$a=state($db,$invKey)??['vehicles'=>[]];
+            $a['vehicles']=array_values(array_filter($a['vehicles'],fn($c)=>$c['StockNumber']!==$v['StockNumber']));$a['vehicles'][]=$v;save($db,$invKey,$a);save($db,'import:'.$v['StockNumber'],$v);
             try{$sheet=assetSheet($v,$cfg);save($db,'sheet:'.$v['Vin'],$sheet);}catch(Throwable $e){$v['sheet_error']=$e->getMessage();}
             echo json_encode(['vehicles'=>$a['vehicles'],'imported'=>$v],JSON_THROW_ON_ERROR);exit;
         }
         if ($action==='logout') {$_SESSION=[];session_destroy();echo '{}';exit;}
-        if ($action==='inventory') {$a=state($db,'inventory')??['vehicles'=>[]];echo json_encode($a,JSON_THROW_ON_ERROR);exit;}
+        if ($action==='inventory') {$a=state($db,$invKey)??['vehicles'=>[]];echo json_encode($a,JSON_THROW_ON_ERROR);exit;}
         if ($action==='sync_log') {echo json_encode(state($db,'sync_log')??['entries'=>[]],JSON_THROW_ON_ERROR);exit;}
         if ($action==='sync') {
+            // The website reader is Golden Auto's (DealerCenter website); other clients import as their analysis recommends.
+            if($client!==CLIENT_DEFAULT){
+                $c=clientFind($db,$client);
+                if(($c['analysis']['platform']??'')!=='Dealer Car Search'||empty($c['analysis']['reachable']))throw new RuntimeException('Inventory import for this client is not set up yet. See its recommended import option above; until then, import cars with the form under Tools.');
+                require_once $private.'/importers.php';set_time_limit(170);
+                echo json_encode(clientImportDcs($db,$cfg,$c),JSON_THROW_ON_ERROR);exit;
+            }
             $list=inventory($cfg['source']);$old=state($db,'inventory')??[];$stocks=array_column($list,'StockNumber');foreach($old['vehicles']??[]as $v)if(($v['source']??'')==='zip'&&!in_array($v['StockNumber'],$stocks,true))$list[]=$v;save($db,'inventory',['vehicles'=>$list,'checked_at'=>gmdate('c')]);
             echo json_encode(['vehicles'=>$list,'checked_at'=>gmdate('c')],JSON_THROW_ON_ERROR);exit;
         }
         if ($action==='detail') {
-            $a=state($db,'inventory')??[];$found=false;
+            $a=state($db,$invKey)??[];$found=false;
             foreach ($a['vehicles']??[] as &$v) if ($v['StockNumber']===($in['stock']??'')) {$v=enrich($v);$out=$v;$found=true;break;}
             if (!$found) throw new RuntimeException('Vehicle not found. Refresh inventory first.');
-            save($db,'inventory',$a);$out['script']=script($out);$out['scripts']=['15'=>$out['script'],'30'=>script($out,30)];
+            save($db,$invKey,$a);$out['script']=script($out,15,$dealer);$out['scripts']=['15'=>$out['script'],'30'=>script($out,30,$dealer)];
             $existing=state($db,'sheet:'.$out['Vin']);
             if($existing && ($existing['gallery_hash']??'')===hash('sha256',json_encode($out['photos']))) $out['asset_sheet']=$existing;
             else try{$out['asset_sheet']=assetSheet($out,$cfg);save($db,'sheet:'.$out['Vin'],$out['asset_sheet']);}catch(Throwable $e){$out['sheet_error']=$e->getMessage();}echo json_encode($out,JSON_THROW_ON_ERROR);exit;
         }
         if ($action==='sheet') {
-            $a=state($db,'inventory')??[];$v=null;foreach($a['vehicles']??[] as $c)if($c['StockNumber']===($in['stock']??''))$v=$c;
+            $a=state($db,$invKey)??[];$v=null;foreach($a['vehicles']??[] as $c)if($c['StockNumber']===($in['stock']??''))$v=$c;
             if(!$v)throw new RuntimeException('Select a current vehicle first.');
             $v=enrich($v);$selected=$in['photos']??[];if(!is_array($selected))throw new RuntimeException('Invalid photo selection.');
             $sheet=assetSheet($v,$cfg,$selected);save($db,'sheet:'.$v['Vin'],$sheet);echo json_encode($sheet,JSON_THROW_ON_ERROR);exit;
@@ -90,8 +111,12 @@ if (isset($_GET['api'])) {
             uploadReference($sheet,$cfg);uploadReference($avatar,$cfg);
             echo json_encode(['message'=>'Both references uploaded successfully to Higgsfield. No video generation was submitted.']);exit;
         }
+        if ($action==='footage_build') {
+            require_once $private.'/footage.php';$job=goldenFootageBuild($db,$cfg,$in,$_FILES['footage']??null);
+            echo json_encode(['message'=>'Footage uploaded. The final video with your approved voice and captions is being built and appears under Videos in a few minutes. No paid generation was used.','job'=>$job],JSON_THROW_ON_ERROR);exit;
+        }
         if ($action==='job_delete') {require_once $private.'/jobs.php';echo json_encode(goldenJobDelete($db,$cfg,(string)($in['id']??'')),JSON_THROW_ON_ERROR);exit;}
-        if ($action==='jobs') {echo json_encode($db->query('SELECT payload FROM jobs ORDER BY rowid DESC LIMIT 30')->fetchAll(PDO::FETCH_COLUMN));exit;}
+        if ($action==='jobs') {$out=[];foreach($db->query('SELECT payload FROM jobs ORDER BY rowid DESC LIMIT 200')->fetchAll(PDO::FETCH_COLUMN) as $raw){if((json_decode($raw,true)['client']??CLIENT_DEFAULT)===$client)$out[]=$raw;if(count($out)>=30)break;}echo json_encode($out);exit;}
         if ($action==='poll') {
             $q=$db->prepare('SELECT payload FROM jobs WHERE id=?');$q->execute([$in['id']??'']);$raw=$q->fetchColumn();
             if (!$raw) throw new RuntimeException('Job not found.');$job=json_decode($raw,true);
@@ -106,11 +131,12 @@ if (isset($_GET['api'])) {
         if ($action==='generate') {
             if (empty($cfg['higgsfield_key'])) throw new RuntimeException('Add your Higgsfield API key to private/config.php first.');
             if (!($in['approve_spend']??false)) throw new RuntimeException('Confirm this paid generation.');
-            $a=state($db,'inventory')??[];$v=null;
+            $a=state($db,$invKey)??[];$v=null;
             foreach ($a['vehicles']??[] as $candidate) if ($candidate['StockNumber']===($in['stock']??'')) $v=$candidate;
             if (!$v) throw new RuntimeException('Select a current vehicle first.');
             if(($v['active']??true)===false) throw new RuntimeException('This vehicle is no longer in DealerCenter active inventory. Generation stopped.');
-            if(($v['source']??'')==='zip'){
+            // Imported cars (ZIP, client website import): availability and price are confirmed by the user, not re-read live.
+            if(in_array($v['source']??'',['zip','dcs'],true)){
                 if(!($in['confirm_current']??false))throw new RuntimeException('Confirm that imported availability and highest advertised price are still current.');$fresh=$v;
             }else{
                 $current=inventory($cfg['source']);$fresh=null;
@@ -129,7 +155,7 @@ if (isset($_GET['api'])) {
                 require_once $private.'/narrations.php';narrationTables($db);
                 $approvedVoice=narrationLoad($db,'narrations',(string)($in['narration_id']??''));
                 if(($approvedVoice['status']??'')!=='ready'||empty($approvedVoice['approved']))throw new RuntimeException('Choose an approved voice preview for this car (Narration panel: create, listen, approve).');
-                if(($approvedVoice['stock']??'')!==$v['StockNumber']||($approvedVoice['price']??null)===null||abs((float)$approvedVoice['price']-(float)$v['price'])>=0.005)throw new RuntimeException('The approved voice preview is for a different car or an old price. Make a new preview.');
+                if(($approvedVoice['stock']??'')!==$v['StockNumber']||!priceMatches($approvedVoice['price']??null,$v['price']??null))throw new RuntimeException('The approved voice preview is for a different car or an old price. Make a new preview.');
                 narrationCheckAudio($cfg,$approvedVoice);
                 $spoken=(string)$approvedVoice['caption_script'];
             }
@@ -159,7 +185,7 @@ if (isset($_GET['api'])) {
                 'native'=>promptNative($fresh,nativeSpeech($spoken),$duration,$presenter['description'],$voiceRef!=='',null,(array)($cfg['respell']??[])),
                 default=>prompt($fresh,$spoken,$style,$duration,$presenter['description'])};
             $fingerprint=hash('sha256',json_encode([$v['Vin'],$v['price'],$spoken,$sheet,$avatar,$presenter['description'],$format,$style,$duration,$voice,hash('sha256',$promptText),$voiceRef]));
-            $id=bin2hex(random_bytes(12));$job=['id'=>$id,'stock'=>$v['StockNumber'],'vehicle'=>title($v),'spokesperson_id'=>$presenter['id'],'spokesperson'=>$presenter['name'],'format'=>$format,'style'=>$style,'duration'=>$duration,'status'=>'preparing_references','created_at'=>gmdate('c'),'script'=>$spoken,'speech_script'=>$voice==='native'?nativeSpeech($spoken):speechScript($spoken),'price'=>$v['price'],'voice'=>$voice];
+            $id=bin2hex(random_bytes(12));$job=['id'=>$id,'client'=>$client,'stock'=>$v['StockNumber'],'vehicle'=>title($v),'spokesperson_id'=>$presenter['id'],'spokesperson'=>$presenter['name'],'format'=>$format,'style'=>$style,'duration'=>$duration,'status'=>'preparing_references','created_at'=>gmdate('c'),'script'=>$spoken,'speech_script'=>$voice==='native'?nativeSpeech($spoken):speechScript($spoken),'price'=>$v['price'],'voice'=>$voice];
             // Native voice: one approval builds the final video (captions timed from the video's own audio).
             if($voice!=='narration')$job['auto_build']=true;
             if($voice==='elevenlabs'){$job['narration_id']=$approvedVoice['id'];$job['speech_script']=(string)$approvedVoice['text'];}
@@ -186,13 +212,27 @@ if (isset($_GET['api'])) {
     } catch(Throwable $e) {if(http_response_code()===200)http_response_code(400);echo json_encode(['error'=>$e->getMessage()]);exit;}
 }
 ?>
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title><?=$staging?$envLabel.' • ':''?>Golden Auto • Video Studio</title><link rel="stylesheet" href="style.css?v=4"></head><body>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title><?=$staging?$envLabel.' • ':''?>Golden Auto • Video Studio</title><link rel="stylesheet" href="style.css?v=5"></head><body>
 <?php if($staging):?><div class="staging-banner"><?=$envLabel?> — test copy. Paid generations here cost real money; production is video.mygoldenauto.net.</div><?php endif;?><header><div><span class="eyebrow">GOLDEN AUTO / SAN RAMON</span><h1>Inventory → video</h1><p>Pick a car, approve the words, generate. The final captioned video is built for you.</p></div><button class="secondary" id="logout">Sign out</button></header>
 <nav class="steps" aria-label="Steps"><a href="#stepVehicle"><b>1</b> Vehicle</a><a href="#stepScript"><b>2</b> Script</a><a href="#stepVoice"><b>3</b> Voice</a><a href="#stepLook"><b>4</b> Look</a><a href="#stepGenerate"><b>5</b> Generate</a><a href="#videos"><b>✓</b> Videos</a></nav>
 <main>
 <div class="workspace">
 
 <section class="panel" id="stepVehicle">
+  <div class="client-bar"><label>Client<select id="client"><option>Loading clients…</option></select></label><button type="button" class="secondary small" id="addClientToggle">Add client</button></div>
+  <form id="clientForm" class="studio" hidden>
+    <div class="import-grid"><label>Client name<input name="name" required maxlength="80" placeholder="e.g. Bay Area Motors"></label><label>Website<input name="website" required maxlength="200" placeholder="www.example.com"></label></div>
+    <p class="hint">After adding, the studio looks at the website (a few free page requests) and recommends the best way to import its inventory.</p>
+    <button id="clientAdd">Add client and analyze website</button>
+  </form>
+  <details id="clientInfo" class="sub"><summary id="clientSummary">Inventory import</summary><div id="clientAnalysis"></div><button type="button" class="secondary small" id="clientAnalyze">Analyze website again</button></details>
+  <details id="dealerInfo" class="sub"><summary id="dealerSummary">Dealer details in scripts</summary>
+    <p class="hint" id="dealerFixed" hidden>Golden Auto’s scripts say “Golden Auto in San Ramon” and mygoldenauto.net.</p>
+    <form id="dealerForm"><div class="import-grid"><label>Dealer name in scripts<input name="name" maxlength="80" required></label><label>City<input name="city" maxlength="60"></label>
+      <label>Website as shown<input name="website" maxlength="100" required placeholder="example.com"></label><label>Website as spoken<input name="website_spoken" maxlength="120" placeholder="example dot com"></label></div>
+      <p class="hint">Scripts say “here at <i>name</i> in <i>city</i>” and “Book your test drive today at <i>website</i>”; the voice says the website as written in “as spoken”. Reopen a vehicle after saving to redraft its script.</p>
+      <button id="dealerSave" class="secondary">Save dealer details</button></form>
+  </details>
   <div class="step-head"><span class="step-num">1</span><div><h2>Choose a vehicle</h2><p id="syncTime">Loading your inventory…</p></div></div>
   <details id="syncLogPanel" class="sub"><summary id="syncLogSummary">Inventory changes — no DealerCenter sync yet</summary><div id="syncLog"></div></details>
   <p class="status" role="status" hidden></p>
@@ -235,13 +275,21 @@ if (isset($_GET['api'])) {
 
 <section class="panel" id="stepLook">
   <div class="step-head"><span class="step-num">4</span><div><h2>Look</h2><p>Spokesperson, style, format and the car photos the video is made from.</p></div></div>
+  <label>Video source<select id="source"><option value="ai">AI showroom video — Seedance films the car and the spokesperson</option><option value="footage">My footage — a video I filmed of this car (no spokesperson, no generation cost)</option></select></label>
+  <div id="footageBox" hidden>
+    <label>Car video — MP4 or MOV, up to 64 MB<input type="file" id="footage" accept="video/mp4,video/quicktime,.mp4,.mov,.m4v"></label>
+    <p class="hint">Hold the phone upright and walk slowly around the car for 30–45 seconds, in even light; film or export at 1080p so it stays under 64 MB. Its own sound is replaced by the approved voice from step 3, and it is cropped to the publish format and trimmed to the video length.</p>
+  </div>
+  <div id="aiLook">
   <label>Spokesperson<select id="spokesperson"><option value="">Loading spokespersons…</option></select></label>
   <div id="spokespersonPreview" class="spokesperson-preview"></div>
   <button type="button" class="secondary small" id="manageSpokespersons">Add or manage spokespersons</button>
   <label>Video style<select id="style"><option value="showroom">Showroom walkaround — spokesperson walks around the car</option><option value="dynamic">Dynamic product sequence — tracking / interior / drone (lip-sync method only)</option></select></label>
   <div class="beats" id="beats"></div>
+  </div>
   <label>Publish format<select id="format"><option value="instagram_reels">Instagram Reels — 9:16</option><option value="facebook_reels">Facebook Reels — 9:16</option><option value="facebook_feed">Facebook Feed — 4:5 (cropped after generation)</option><option value="square">Instagram / Facebook Square — 1:1</option></select></label>
   <p class="hint" id="formatHint">Vertical video. Check captions and face placement before posting.</p>
+  <div id="aiSheet">
   <span class="eyebrow">CAR PHOTOS SENT TO THE VIDEO MODEL</span>
   <div id="sheetPreview"></div>
   <details class="sub"><summary>Change which photos are used</summary>
@@ -251,15 +299,16 @@ if (isset($_GET['api'])) {
     <p class="status" role="status" hidden></p>
     <button id="rebuild" class="secondary" disabled>Rebuild asset sheet</button>
   </details>
+  </div>
 </section>
 
 <section class="panel" id="stepGenerate">
   <div class="step-head"><span class="step-num">5</span><div><h2>Generate</h2><p>One paid generation. The captioned final video is then built automatically and appears under Videos.</p></div></div>
   <ul class="summary" id="summary"></ul>
-  <label class="check"><input type="checkbox" id="approve">I reviewed the vehicle facts and script and approve one paid Higgsfield generation at my account’s current rate.</label>
+  <label class="check" id="approveLabel"><input type="checkbox" id="approve">I reviewed the vehicle facts and script and approve one paid Higgsfield generation at my account’s current rate.</label>
   <label class="check"><input type="checkbox" id="confirmCurrent">I confirm the vehicle is available and its advertised price is current.</label>
   <p class="status" role="status" hidden></p>
-  <div class="actions"><button id="generate" disabled>Generate video</button><button class="secondary" id="checkReferences">Check reference uploads</button><button class="secondary" id="brief" disabled>Download production brief</button></div>
+  <div class="actions"><button id="buildFootage" hidden disabled>Build video from my footage</button><button id="generate" disabled>Generate video</button><button class="secondary" id="checkReferences">Check reference uploads</button><button class="secondary" id="brief" disabled>Download production brief</button></div>
 </section>
 </div>
 </div>
@@ -299,4 +348,4 @@ if (isset($_GET['api'])) {
   <?php require $private.'/narration_panel.php'; ?>
 </section>
 </main>
-<script>window.CSRF=<?=json_encode($_SESSION['csrf'])?>;</script><script src="app.js?v=9"></script><script src="narration.js?v=6"></script></body></html>
+<script>window.CSRF=<?=json_encode($_SESSION['csrf'])?>;</script><script src="app.js?v=14"></script><script src="narration.js?v=6"></script></body></html>

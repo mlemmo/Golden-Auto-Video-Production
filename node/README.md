@@ -11,12 +11,13 @@ It runs on the test site https://node.mygoldenauto.net:4343 (setup and deploys: 
 
 | Area | PHP source | Node | Checked by |
 | --- | --- | --- | --- |
-| Speech text (prices, years, acronyms, website, respellings) | `private/captions.php`, `private/references.php` | `src/lib/speech.js` | ported tests + PHP parity |
-| Caption engine (cues, pause matching, whisper alignment, SRT) | `private/captions.php` | `src/lib/captions.js` | ported tests + PHP parity |
-| Price rule, ad price, title | `private/app.php` | `src/lib/price.js` | ported tests + PHP parity |
-| 15 s / 30 s scripts | `private/app.php` | `src/lib/scripts.js` | ported tests + PHP parity |
+| Speech text (prices, years, acronyms, shorthand like 4WD/4dr, websites incl. each client's, respellings) | `private/captions.php`, `private/references.php` | `src/lib/speech.js` | ported tests + PHP parity |
+| Caption engine (cues, pause matching, whisper alignment, Call For Price, SRT) | `private/captions.php` | `src/lib/captions.js` | ported tests + PHP parity |
+| Price rule, ad price, price match, title | `private/app.php` | `src/lib/price.js` | ported tests + PHP parity |
+| 15 s / 30 s scripts (per-client dealer name, city, website) | `private/app.php` | `src/lib/scripts.js` | ported tests + PHP parity |
+| Dealer details for scripts and speech | `private/clients.php` (`clientDetails`, `clientWebsiteSpoken`) | `src/lib/clients.js` | ported tests + PHP parity |
 | Service scaffold (health check) | — | `src/server.js` | `test/server.test.js` |
-| DealerCenter sync + photos, narrations, Seedance jobs, caption worker, dashboard pages | `private/*`, `public/*` | next | |
+| DealerCenter sync + photos, clients (storage, website analysis), Dealer Car Search import + photo worker, narrations, Seedance jobs, My footage, caption worker, dashboard pages | `private/*`, `public/*` | next | |
 
 ## Running
 
@@ -36,6 +37,13 @@ npm start         # http://127.0.0.1:4350/api/node/health (PORT=4351 on the test
 scripts with acronyms, odd spacing, non-breaking spaces, accented words, whisper-style heard words, audio spans) and
 requires identical results. It needs the `php` CLI and is skipped without it. It calls only pure functions: no network,
 database or paid API.
+
+Client websites: PHP keeps the current client's spoken websites in a per-request static (`speechSites`). A Node
+server runs many requests at once, so each request wraps its work in `withSpeechSites(sites, fn)`; the parity test
+does the same for every case.
+
+Keeping up with staging: merge `origin/staging` into `nodejs`, then `npm test`. A changed PHP helper shows up as
+parity mismatches or failing ported tests; port the change and add its new tests.
 
 Porting notes that the parity check caught:
 - PHP turns on Unicode mode for every `/u` pattern, so `\s`, `\w`, `\d` and `\b` there are Unicode (non-breaking

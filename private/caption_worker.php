@@ -23,7 +23,9 @@ if(!$job)exit;
 $work=$cfg['data_dir'].'/render-'.bin2hex(random_bytes(10));mkdir($work,0700);$output=null;
 try{
     $job['finish_status']='rendering';$job['finish_started_at']=gmdate('c');saveRenderJob($db,$job);
-    downloadMaster($job['video_url'],$work.'/master.mp4');
+    // Uploaded footage is already on this server; generated videos are downloaded.
+    if(($job['provider']??'')==='footage'){require_once __DIR__.'/footage.php';if(!copy(footageLocalPath($cfg,$job),$work.'/master.mp4'))throw new RuntimeException('Cannot read the uploaded footage.');}
+    else downloadMaster($job['video_url'],$work.'/master.mp4');
     $narration=null;
     // voice=elevenlabs keeps Seedance's own speech (its lips match it); the approved narration only guides the voice.
     // Swapping in the narration audio is kept for jobs that explicitly ask for it (audio_swap), e.g. later experiments.
@@ -51,6 +53,8 @@ try{
     $args=[(string)($cfg['ffmpeg_path']??'ffmpeg'),'-nostdin','-n','-hide_banner','-loglevel','error','-i','master.mp4'];
     // audio_swap jobs: the approved narration replaces the generated audio.
     if($narration)array_push($args,'-i',$narration,'-filter_complex','[1:a]adelay='.(int)round(NARRATION_OFFSET*1000).':all=1,apad[a]','-map','0:v','-map','[a]','-shortest');
+    // Footage is usually longer than the ad: trim it to the video length.
+    if(($job['provider']??'')==='footage')array_push($args,'-t',(string)(int)($job['duration']??30));
     array_push($args,'-vf',$filter,'-c:v','libx264','-preset','veryfast','-crf','20','-threads','1','-pix_fmt','yuv420p','-c:a','aac','-movflags','+faststart',$output);
     $p=proc_open($args,[0=>['file','/dev/null','r'],1=>['file',$work.'/ffmpeg.log','a'],2=>['file',$work.'/ffmpeg.log','a']],$pipes,$work);
     if(!is_resource($p))throw new RuntimeException('Cannot start FFmpeg. Check ffmpeg_path and PHP proc_open availability.');

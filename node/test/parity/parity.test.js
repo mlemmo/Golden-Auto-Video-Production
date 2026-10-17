@@ -9,8 +9,9 @@ import * as speech from '../../src/lib/speech.js';
 import * as captions from '../../src/lib/captions.js';
 import * as price from '../../src/lib/price.js';
 import * as scripts from '../../src/lib/scripts.js';
+import * as clients from '../../src/lib/clients.js';
 
-const fns = { ...speech, ...captions, ...price, ...scripts };
+const fns = { ...speech, ...captions, ...price, ...scripts, ...clients };
 const harness = fileURLToPath(new URL('./harness.php', import.meta.url));
 const hasPhp = spawnSync('php', ['-v']).status === 0;
 
@@ -20,7 +21,8 @@ function runPhp(cases) {
   return JSON.parse(res.stdout.toString());
 }
 function runNode(c) {
-  try { return { ok: fns[c.fn](...structuredClone(c.args)) }; } catch (e) { return { error: e.message }; }
+  // Per-case client websites, kept to this call the way a server request would (withSpeechSites).
+  try { return { ok: speech.withSpeechSites(c.sites ?? {}, () => fns[c.fn](...structuredClone(c.args))) }; } catch (e) { return { error: e.message }; }
 }
 // Floats must agree to 1e-9 s; everything else exactly. PHP's empty array and JSON null/undefined are normalised.
 function same(a, b) {

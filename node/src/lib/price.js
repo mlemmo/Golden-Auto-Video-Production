@@ -23,3 +23,9 @@ export function money(p) {
 export const adPrice = (p) => '$' + numberFormat(Math.floor(p));
 
 export const title = (v) => trim(str(v.Year ?? '') + ' ' + str(v.Make ?? '') + ' ' + str(v.Model ?? ''));
+
+/** Same advertised price: both "no price" (call for price), or within half a cent. */
+export function priceMatches(a, b) {
+  if (a === null || a === undefined || b === null || b === undefined) return (a === null || a === undefined) && (b === null || b === undefined);
+  return Math.abs(toFloat(a) - toFloat(b)) < 0.005;
+}

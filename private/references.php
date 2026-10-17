@@ -6,8 +6,25 @@ require_once __DIR__.'/captions.php';
  * (the spelled "N, E, T" form suits ElevenLabs and sounds wrong from Seedance). Place names stay as written and
  * get a pronunciation guide in the prompt (SPEECH_PRONUNCIATION).
  */
+/**
+ * Websites of the current client besides mygoldenauto.net, as [display => spoken] ("eleasereturns.com" => "e lease
+ * returns dot com"). Set once per request for the selected client (index.php); used by speechScript and nativeSpeech.
+ */
+function speechSites(?array $set=null):array{static $sites=[];if($set!==null)$sites=$set;return $sites;}
+function speechClientSites(string $s):string{
+    foreach(speechSites() as $display=>$spoken)if($display!==''&&$spoken!=='')
+        $s=preg_replace('~(?<![A-Za-z0-9])(?:https?://)?(?:www\.)?'.preg_quote($display,'~').'/?(?![A-Za-z0-9/])~i',$spoken,$s);
+    return $s;
+}
+/** Listing shorthand said as words (4WD → "four wheel drive", 4D / 4dr → "four door", ...). Captions keep the shorthand. */
+const SPEECH_SHORTHAND=['4WD'=>'four wheel drive','AWD'=>'all wheel drive','FWD'=>'front wheel drive','RWD'=>'rear wheel drive','4X4'=>'four by four'];
+function shorthandSpeech(string $s):string{
+    foreach(SPEECH_SHORTHAND as $code=>$words)$s=preg_replace('/(?<![A-Za-z0-9])'.preg_quote($code,'/').'(?![A-Za-z0-9])/i',$words,$s);
+    return preg_replace('/(?<![A-Za-z0-9])4[ -]?(?:d|dr|door)\.?(?![A-Za-z0-9])/i','four door',$s);
+}
 function nativeSpeech(string $s):string{
     $s=preg_replace('~(?<![A-Za-z0-9])(?:https?://)?(?:www\.)?mygoldenauto\.net/?(?![A-Za-z0-9/])~i','my golden auto dot net',$s);
+    $s=shorthandSpeech(speechClientSites($s));
     return acronymSpeech(numberSpeech(priceSpeech($s)));
 }
 /** Respellings written into the line Seedance speaks (it ignored the pronunciation note). Captions keep the real spelling. */
@@ -21,11 +38,12 @@ function seedanceRespell(string $s,array $extra=[]):string{
 const SPEECH_PRONUNCIATION=['San Ramon'=>'san rah-MOAN, written "San Rah-moan" above (stress on MOAN, said like the word "moan")','my golden auto dot net'=>'my GOLD-en AW-toh dot net, said as words, never spelled out letter by letter','Golden Auto'=>'GOLD-en AW-toh'];
 function speechScript(string $s,bool $numbers=true):string{
     $s=preg_replace('~(?<![A-Za-z0-9])(?:https?://)?(?:www\.)?mygoldenauto\.net/?(?![A-Za-z0-9/])~i','my golden auto dot N, E, T',$s);
+    $s=shorthandSpeech(speechClientSites($s));
     $s=priceSpeech($s);
     return acronymSpeech($numbers?numberSpeech($s):$s);
 }
 /** Acronyms that contain vowels but are still said letter by letter. */
-const SPEECH_SPELLED=['SUV','AWD','FWD','RWD','2WD','4WD','4X4','EX','EXL','LX','LE','SE','SEL','XLE','GT','GTI','AMG','STI','TDI','TSI','SRT','LED','USB','ABS','EV','ES','RS','SS','SV','SL','SR','SR5','LT','LS','LTZ','XLT','ST'];
+const SPEECH_SPELLED=['SUV','HSE','AWD','FWD','RWD','2WD','4WD','4X4','EX','EXL','LX','LE','SE','SEL','XLE','GT','GTI','AMG','STI','TDI','TSI','SRT','LED','USB','ABS','EV','ES','RS','SS','SV','SL','SR','SR5','LT','LS','LTZ','XLT','ST'];
 /** Between spelled letters. Commas made Bella pause too long; hyphens keep the letters quick. */
 const SPEECH_LETTER_SEPARATOR='-';
 /**

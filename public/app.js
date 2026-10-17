@@ -71,7 +71,7 @@ async function select(stock, button) {
     $('facts').textContent = `${chosen.Trim} · ${price(chosen)} · ${(chosen.Odometer == null ? 'Mileage not entered' : Number(chosen.Odometer).toLocaleString())} miles · #${chosen.StockNumber}`;
     $('description').textContent = chosen.description || 'No description found.';
     $('script').value = chosen.scripts?.[$('duration').value] || chosen.script;
-    $('generate').disabled = false; $('brief').disabled = false; $('approve').checked = false; $('confirmCurrent').checked = false;
+    $('generate').disabled = false; $('brief').disabled = false; $('buildFootage').disabled = false; $('approve').checked = false; $('confirmCurrent').checked = false;
     showPhotos(); words(); approvedVoices();
     if (typeof refreshNarrations === 'function') refreshNarrations().catch(e => fail(e.message, statusOf('voiceStudio')));
     message(chosen.sheet_error || `${chosen.Year} ${chosen.Make} ${chosen.Model} selected. Continue with the script in step 2.`);
@@ -82,9 +82,11 @@ $('sync').onclick = async () => {
   if (busy) return; busy = true; $('sync').disabled = true;
   message('Refreshing current inventory…');
   try {
-    const a = await api('sync'); render(a.vehicles); chosen = null; $('generate').disabled = true; $('brief').disabled = true;
-    $('syncTime').textContent = `${a.vehicles.length} vehicles · checked ${new Date(a.checked_at).toLocaleString()}`;
-    message('Inventory refreshed. Select a vehicle.'); summary();
+    const a = await api('sync'); render(a.vehicles); chosen = null; $('generate').disabled = true; $('brief').disabled = true; $('buildFootage').disabled = true;
+    const active = a.vehicles.filter(v => v.active !== false).length, r = a.report;
+    $('syncTime').textContent = `${active} vehicles · checked ${new Date(a.checked_at).toLocaleString()}`;
+    message(r ? `Imported from the website: ${r.added} new, ${r.updated} updated, ${r.gone} no longer listed${r.errors.length ? `, ${r.errors.length} page(s) could not be read` : ''}. Select a vehicle.`
+      : 'Inventory refreshed. Select a vehicle.', null, !!r?.errors.length); summary();
   } catch (e) { fail(e.message); } finally { busy = false; $('sync').disabled = false; }
 };
 const syncSections = [['added', 'Added'], ['removed', 'Removed — no longer in DealerCenter (hidden, videos kept)'], ['returned', 'Back in inventory'], ['price_changed', 'Price changed — review the script'], ['photos_updated', 'Photos updated — asset sheet rebuilt'], ['sheet_views', 'Asset sheet views changed'], ['waiting_photos', 'Waiting for photos'], ['updated', 'Details updated'], ['sheet_errors', 'Asset sheet problems']];
@@ -166,6 +168,19 @@ function recipe() {
 $('style').onchange = recipe; $('voice').onchange = recipe;
 
 // ---- Step 4: look -----------------------------------------------------------------------------
+// Video source: AI showroom video (Seedance), or the dealer's own footage + the approved voice (no generation).
+function footageMode() { return $('source').value === 'footage'; }
+function sourceMode() {
+  const f = footageMode();
+  $('footageBox').hidden = !f; $('aiLook').hidden = f; $('aiSheet').hidden = f; $('approveLabel').hidden = f;
+  for (const id of ['generate', 'checkReferences', 'brief']) $(id).hidden = f;
+  $('buildFootage').hidden = !f;
+  // Footage always uses the approved ElevenLabs voice from step 3.
+  if (f && $('voice').value !== 'elevenlabs') { $('voice').value = 'elevenlabs'; recipe(); }
+  $('voice').disabled = f;
+  summary();
+}
+$('source').onchange = sourceMode;
 $('format').onchange = () => {
   $('formatHint').textContent = $('format').value === 'facebook_feed' ? 'Seedance renders a 3:4 video; it is cropped to 4:5 when finished.' : 'Generated in this shape directly. Check captions and face placement before posting.';
   summary();
@@ -222,6 +237,11 @@ function showSheet(sheet) {
 function showPhotos() {
   const picker = $('photoPicker'); picker.replaceChildren(); $('sheetPreview').replaceChildren(); $('sheet').value = '';
   if (chosen.asset_sheet) showSheet(chosen.asset_sheet);
+  // Website-imported cars: photos are copied and sorted in the background (exterior shots only).
+  if (chosen.photos_pending) $('sheetPreview').append(el('p', chosen.photos.length
+    ? 'New photos are being imported and sorted; these are the previous ones. Reopen the car in a few minutes.'
+    : 'Photos are being imported and sorted (exterior shots only). Reopen the car in a few minutes.'));
+  else if (chosen.photo_labels) $('sheetPreview').append(el('small', `${chosen.photos.length} exterior photos kept of ${Object.values(chosen.photo_labels).reduce((a, b) => a + b, 0)} on the website`));
   const picked = chosen.asset_sheet?.photo_urls || [];
   for (const [i, url] of chosen.photos.entries()) {
     const label = el('label'), c = el('input'), img = el('img');
@@ -244,11 +264,12 @@ function summary() {
   const ul = $('summary'); if (!ul) return; ul.replaceChildren();
   const voiceText = {elevenlabs: 'approved ElevenLabs voice', native: 'Seedance voice', narration: 'silent video + ElevenLabs lip-sync'}[$('voice').value];
   const approved = $('voice').value !== 'elevenlabs' || $('approvedVoice').value;
+  const footage = footageMode();
   const rows = [
     ['Vehicle', chosen ? `${chosen.Year} ${chosen.Make} ${chosen.Model} · ${price(chosen)}` : 'not selected', !!chosen],
     ['Voice', voiceText + ($('voice').value === 'elevenlabs' ? (approved ? ' · preview chosen' : ' · no approved preview yet') : ''), !!approved],
-    ['Spokesperson', presenter()?.name || 'none', !!presenter()],
-    ['Video', `${$('duration').value} s · ${$('format').selectedOptions[0]?.text.split(' — ')[0]} · ${$('style').value === 'showroom' ? 'walkaround' : 'dynamic'}`, true],
+    footage ? ['Footage', $('footage').files[0]?.name || 'no video chosen yet', !!$('footage').files[0]] : ['Spokesperson', presenter()?.name || 'none', !!presenter()],
+    ['Video', `${$('duration').value} s · ${$('format').selectedOptions[0]?.text.split(' — ')[0]} · ${footage ? 'your footage' : $('style').value === 'showroom' ? 'walkaround' : 'dynamic'}`, true],
   ];
   for (const [k, v, ok] of rows) { const li = el('li'); li.className = ok ? 'ok' : 'todo'; li.append(el('b', k), el('span', v)); ul.append(li); }
 }
@@ -276,6 +297,25 @@ $('generate').onclick = async () => {
     message('Generation submitted. It takes a few minutes — follow it under Videos below.');
     await jobs(); $('videos').scrollIntoView({behavior: 'smooth'});
   } catch (e) { fail(e.message); } finally { busy = false; $('generate').disabled = !chosen; }
+};
+$('footage').onchange = summary;
+$('buildFootage').onclick = async () => {
+  if (busy || !chosen) return;
+  if (!$('approvedVoice').value) { fail('Choose an approved voice preview in step 3 first.'); return; }
+  const file = $('footage').files[0];
+  if (!file) { fail('Choose the car video in step 4 first.'); return; }
+  if (file.size > 64 * 1024 * 1024) { fail('That video is larger than 64 MB. Export or film it at 1080p.'); return; }
+  busy = true; $('buildFootage').disabled = true;
+  message('Uploading your footage… this can take a minute on a slow connection.');
+  try {
+    const form = new FormData();
+    form.append('stock', chosen.StockNumber); form.append('format', $('format').value); form.append('narration_id', $('approvedVoice').value);
+    if ($('confirmCurrent').checked) form.append('confirm_current', '1');
+    form.append('footage', file);
+    const r = await fetch('?api=footage_build', {method: 'POST', headers: {'X-CSRF-Token': window.CSRF}, body: form});
+    message((await responseJson(r)).message);
+    await jobs(); $('videos').scrollIntoView({behavior: 'smooth'});
+  } catch (e) { fail(e.message); } finally { busy = false; $('buildFootage').disabled = !chosen; }
 };
 $('checkReferences').onclick = async () => {
   if (busy) return; busy = true; $('checkReferences').disabled = true;
@@ -362,10 +402,79 @@ $('importForm').onsubmit = async event => {
 };
 $('logout').onclick = async () => { await api('logout'); location.reload(); };
 
+// ---- Clients ----------------------------------------------------------------------------------
+// Each client (dealer) has its own inventory, voice previews and videos. Golden Auto is the first one.
+let clientList = {items: [], current: null};
+const METHOD_TITLE = {feed: 'Daily inventory feed', website_dealercenter: 'Website reader', website_structured: 'Website import',
+  browser_snapshot: 'Browser snapshot', zip: 'Manual import', dealercenter_snapshot: 'DealerCenter website snapshot'};
+function showClient() {
+  const c = clientList.items.find(x => x.id === clientList.current); if (!c) return;
+  document.querySelector('header .eyebrow').textContent = c.name.toUpperCase();
+  const a = c.analysis || {}, box = $('clientAnalysis'); box.replaceChildren();
+  $('clientSummary').textContent = `${c.name} · ${c.website.replace('https://', '')} · import: ${METHOD_TITLE[a.best] || 'not checked yet'}`;
+  if (a.note) box.append(el('p', a.note));
+  if (a.platform) box.append(el('p', 'Website platform: ' + a.platform));
+  if (a.dealer) box.append(el('p', 'Dealer details found: ' + Object.values(a.dealer).join(', ')));
+  if (a.signals?.length) { const ul = el('ul'); for (const sig of a.signals) ul.append(el('li', sig)); box.append(el('b', 'What the website shows'), ul); }
+  if (a.options?.length) {
+    const ol = el('ol'); box.append(el('b', 'Import options, best first'));
+    for (const o of a.options) { const li = el('li'); li.append(el('strong', o.title), el('p', o.why), el('small', o.effort)); ol.append(li); }
+    box.append(ol);
+  }
+  if (a.checked_at) box.append(el('small', 'Checked ' + new Date(a.checked_at).toLocaleString()));
+  $('clientAnalyze').hidden = c.id === 'golden-auto';
+  // Dealer named in scripts: fixed for Golden Auto, editable for other clients.
+  const d = c.script_details || {}, fixed = c.id === 'golden-auto';
+  $('dealerFixed').hidden = !fixed; $('dealerForm').hidden = fixed;
+  $('dealerSummary').textContent = `Dealer details in scripts — ${d.name}${d.city ? ' in ' + d.city : ''} · ${d.website}`;
+  for (const k of ['name', 'city', 'website', 'website_spoken']) $('dealerForm').elements[k].value = d[k] || '';
+  // DealerCenter sync log and website refresh are Golden Auto's.
+  $('syncLogPanel').hidden = c.id !== 'golden-auto';
+  // Website refresh: Golden Auto's reader, or a client whose site the importer supports (Dealer Car Search).
+  $('sync').hidden = !(c.id === 'golden-auto' || (a.platform === 'Dealer Car Search' && a.reachable));
+  $('sync').textContent = c.id === 'golden-auto' ? 'Refresh inventory' : 'Import inventory from website';
+}
+async function loadClients() {
+  clientList = await api('clients');
+  const sel = $('client'); sel.replaceChildren();
+  for (const c of clientList.items) { const o = el('option', c.name); o.value = c.id; sel.append(o); }
+  sel.value = clientList.current; showClient();
+}
+$('client').onchange = async () => {
+  try { await api('client_select', {id: $('client').value}); location.reload(); } catch (e) { fail(e.message, statusOf('stepVehicle')); }
+};
+$('addClientToggle').onclick = () => { $('clientForm').hidden = !$('clientForm').hidden; };
+$('clientForm').onsubmit = async event => {
+  event.preventDefault(); if (busy) return; busy = true; $('clientAdd').disabled = true;
+  const f = new FormData($('clientForm'));
+  message('Adding the client and analyzing its website…', statusOf('stepVehicle'));
+  try { await api('client_add', {name: f.get('name'), website: f.get('website')}); location.reload(); }
+  catch (e) { fail(e.message, statusOf('stepVehicle')); } finally { busy = false; $('clientAdd').disabled = false; }
+};
+$('dealerForm').onsubmit = async event => {
+  event.preventDefault(); if (busy) return; busy = true; $('dealerSave').disabled = true;
+  const f = new FormData($('dealerForm'));
+  try {
+    const r = await api('client_details', Object.fromEntries(f.entries()));
+    clientList.items = clientList.items.map(c => c.id === r.client.id ? r.client : c); showClient();
+    message('Dealer details saved. Reopen a vehicle to redraft its script with them.', statusOf('stepVehicle'));
+  } catch (e) { fail(e.message, statusOf('stepVehicle')); } finally { busy = false; $('dealerSave').disabled = false; }
+};
+$('clientAnalyze').onclick = async () => {
+  if (busy) return; busy = true; $('clientAnalyze').disabled = true;
+  message('Analyzing the website…', statusOf('stepVehicle'));
+  try {
+    const r = await api('client_analyze', {id: clientList.current});
+    clientList.items = clientList.items.map(c => c.id === r.client.id ? r.client : c); showClient(); $('clientInfo').open = true;
+    message('Website analyzed.', statusOf('stepVehicle'));
+  } catch (e) { fail(e.message, statusOf('stepVehicle')); } finally { busy = false; $('clientAnalyze').disabled = false; }
+};
+
 // ---- Start --------------------------------------------------------------------------------------
 recipe();
 (async () => { try { renderSpokespersons(await api('spokesperson_list')); } catch (e) { fail(e.message, statusOf('stepLook')); } })();
 syncLog();
+loadClients().catch(e => fail(e.message, statusOf('stepVehicle')));
 (async () => {
   try {
     const a = await api('inventory'); render(a.vehicles || []);
