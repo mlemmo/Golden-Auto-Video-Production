@@ -83,8 +83,10 @@ $('sync').onclick = async () => {
   message('Refreshing current inventory…');
   try {
     const a = await api('sync'); render(a.vehicles); chosen = null; $('generate').disabled = true; $('brief').disabled = true; $('buildFootage').disabled = true;
-    $('syncTime').textContent = `${a.vehicles.length} vehicles · checked ${new Date(a.checked_at).toLocaleString()}`;
-    message('Inventory refreshed. Select a vehicle.'); summary();
+    const active = a.vehicles.filter(v => v.active !== false).length, r = a.report;
+    $('syncTime').textContent = `${active} vehicles · checked ${new Date(a.checked_at).toLocaleString()}`;
+    message(r ? `Imported from the website: ${r.added} new, ${r.updated} updated, ${r.gone} no longer listed${r.errors.length ? `, ${r.errors.length} page(s) could not be read` : ''}. Select a vehicle.`
+      : 'Inventory refreshed. Select a vehicle.', null, !!r?.errors.length); summary();
   } catch (e) { fail(e.message); } finally { busy = false; $('sync').disabled = false; }
 };
 const syncSections = [['added', 'Added'], ['removed', 'Removed — no longer in DealerCenter (hidden, videos kept)'], ['returned', 'Back in inventory'], ['price_changed', 'Price changed — review the script'], ['photos_updated', 'Photos updated — asset sheet rebuilt'], ['sheet_views', 'Asset sheet views changed'], ['waiting_photos', 'Waiting for photos'], ['updated', 'Details updated'], ['sheet_errors', 'Asset sheet problems']];
@@ -418,7 +420,9 @@ function showClient() {
   $('clientAnalyze').hidden = c.id === 'golden-auto';
   // DealerCenter sync log and website refresh are Golden Auto's.
   $('syncLogPanel').hidden = c.id !== 'golden-auto';
-  $('sync').hidden = c.id !== 'golden-auto';
+  // Website refresh: Golden Auto's reader, or a client whose site the importer supports (Dealer Car Search).
+  $('sync').hidden = !(c.id === 'golden-auto' || (a.platform === 'Dealer Car Search' && a.reachable));
+  $('sync').textContent = c.id === 'golden-auto' ? 'Refresh inventory' : 'Import inventory from website';
 }
 async function loadClients() {
   clientList = await api('clients');

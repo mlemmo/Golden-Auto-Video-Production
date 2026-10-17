@@ -59,7 +59,12 @@ if (isset($_GET['api'])) {
         if ($action==='sync_log') {echo json_encode(state($db,'sync_log')??['entries'=>[]],JSON_THROW_ON_ERROR);exit;}
         if ($action==='sync') {
             // The website reader is Golden Auto's (DealerCenter website); other clients import as their analysis recommends.
-            if($client!==CLIENT_DEFAULT)throw new RuntimeException('Inventory import for this client is not set up yet. See its recommended import option above; until then, import cars with the form under Tools.');
+            if($client!==CLIENT_DEFAULT){
+                $c=clientFind($db,$client);
+                if(($c['analysis']['platform']??'')!=='Dealer Car Search'||empty($c['analysis']['reachable']))throw new RuntimeException('Inventory import for this client is not set up yet. See its recommended import option above; until then, import cars with the form under Tools.');
+                require_once $private.'/importers.php';set_time_limit(170);
+                echo json_encode(clientImportDcs($db,$cfg,$c),JSON_THROW_ON_ERROR);exit;
+            }
             $list=inventory($cfg['source']);$old=state($db,'inventory')??[];$stocks=array_column($list,'StockNumber');foreach($old['vehicles']??[]as $v)if(($v['source']??'')==='zip'&&!in_array($v['StockNumber'],$stocks,true))$list[]=$v;save($db,'inventory',['vehicles'=>$list,'checked_at'=>gmdate('c')]);
             echo json_encode(['vehicles'=>$list,'checked_at'=>gmdate('c')],JSON_THROW_ON_ERROR);exit;
         }
@@ -125,7 +130,8 @@ if (isset($_GET['api'])) {
             foreach ($a['vehicles']??[] as $candidate) if ($candidate['StockNumber']===($in['stock']??'')) $v=$candidate;
             if (!$v) throw new RuntimeException('Select a current vehicle first.');
             if(($v['active']??true)===false) throw new RuntimeException('This vehicle is no longer in DealerCenter active inventory. Generation stopped.');
-            if(($v['source']??'')==='zip'){
+            // Imported cars (ZIP, client website import): availability and price are confirmed by the user, not re-read live.
+            if(in_array($v['source']??'',['zip','dcs'],true)){
                 if(!($in['confirm_current']??false))throw new RuntimeException('Confirm that imported availability and highest advertised price are still current.');$fresh=$v;
             }else{
                 $current=inventory($cfg['source']);$fresh=null;
@@ -330,4 +336,4 @@ if (isset($_GET['api'])) {
   <?php require $private.'/narration_panel.php'; ?>
 </section>
 </main>
-<script>window.CSRF=<?=json_encode($_SESSION['csrf'])?>;</script><script src="app.js?v=11"></script><script src="narration.js?v=6"></script></body></html>
+<script>window.CSRF=<?=json_encode($_SESSION['csrf'])?>;</script><script src="app.js?v=12"></script><script src="narration.js?v=6"></script></body></html>

@@ -66,7 +66,7 @@ function inventory(string $source): array {
     return $vehicles;
 }
 function enrich(array $v): array {
-    if(($v['source']??'')==='zip')return $v;
+    if(in_array($v['source']??'',['zip','dcs'],true))return $v;  // imported cars already carry their details
     $html=request($v['url']); $x=doc($html); $detail=[];
     // Price only from this vehicle's metadata and its own price widget: never related cars or loan calculators.
     foreach ($x->query('//meta[@name="description" or @property="og:description" or @property="product:price:amount"]') as $n) {

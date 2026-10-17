@@ -141,7 +141,7 @@ function clientAnalyze(string $website,?callable $fetch=null):array {
         'why'=>'The site runs on DealerCenter’s website platform, which the studio already reads.','effort'=>'Works now: set as the import method and refresh inventory.'];
     if($reachable&&($vehiclesLd||$vdp))$options[]=['method'=>'website_structured','title'=>'Website import from listing pages',
         'why'=>'The site publishes its vehicles'.($vdp?' in its sitemap ('.$vdp.' pages)':'').($vehiclesLd?' with structured listing data':'').', which can be read without dealer setup.',
-        'effort'=>'We build a reader for this site’s listing pages (free to run); breaks if the site layout changes.'];
+        'effort'=>$platform==='Dealer Car Search'?'Ready: use “Import inventory from website” in step 1 (free; reads each listing page and copies 8 photos per car).':'We build a reader for this site’s listing pages (free to run); breaks if the site layout changes.'];
     if($blocked||!$reachable)$options[]=['method'=>'browser_snapshot','title'=>'Browser snapshot (as Golden Auto today)',
         'why'=>'The site '.($blocked?'blocks':'does not answer').' this server, but it can be read in a normal browser and the snapshot fed in.','effort'=>'Manual or scheduled run in Chrome; photos are downloaded by the server.'];
     $options[]=['method'=>'zip','title'=>'Manual import (form + photo ZIP)','why'=>'Works for any dealer and for cars not online yet.','effort'=>'Per car, by hand. Fine for a few cars.'];
