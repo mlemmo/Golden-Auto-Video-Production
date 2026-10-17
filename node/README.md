@@ -16,6 +16,8 @@ It runs on the test site https://node.mygoldenauto.net:4343 (setup and deploys: 
 | Price rule, ad price, price match, title | `private/app.php` | `src/lib/price.js` | ported tests + PHP parity |
 | 15 s / 30 s scripts (per-client dealer name, city, website) | `private/app.php` | `src/lib/scripts.js` | ported tests + PHP parity |
 | Dealer details for scripts and speech | `private/clients.php` (`clientDetails`, `clientWebsiteSpoken`) | `src/lib/clients.js` | ported tests + PHP parity |
+| Data layer: shared `agent.sqlite` (`state`, `jobs`), rows written byte-for-byte as PHP's `json_encode` | `private/app.php` (`db`, `state`, `save`) | `src/lib/db.js`, `src/lib/phpjson.js` (built-in `node:sqlite`) | `test/db.test.js` + `test/parity/db.parity.test.js` (Node writes ↔ PHP reads, both ways) |
+| Configuration, read once from `private/config.php` via the PHP CLI (never copied) | `private/config.php` | `src/lib/config.js` | `test/config.test.js` |
 | Service scaffold (health check) | — | `src/server.js` | `test/server.test.js` |
 | DealerCenter sync + photos, clients (storage, website analysis), Dealer Car Search import + photo worker, narrations, Seedance jobs, My footage, caption worker, dashboard pages | `private/*`, `public/*` | next | |
 
