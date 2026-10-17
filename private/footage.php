@@ -34,7 +34,7 @@ function goldenFootageBuild(PDO $db,array $cfg,array $in,?array $file,?callable 
     $format=(string)($in['format']??'');if(!in_array($format,FOOTAGE_FORMATS,true))throw new RuntimeException('Choose a publish format.');
     $voice=narrationLoad($db,'narrations',(string)($in['narration_id']??''));
     if(($voice['status']??'')!=='ready'||empty($voice['approved']))throw new RuntimeException('Choose an approved voice preview for this car (step 3).');
-    if(($voice['stock']??'')!==$v['StockNumber']||($voice['price']??null)===null||abs((float)$voice['price']-(float)$v['price'])>=0.005)
+    if(($voice['stock']??'')!==$v['StockNumber']||!priceMatches($voice['price']??null,$v['price']??null))
         throw new RuntimeException('The approved voice preview is for a different car or an old price. Make a new preview.');
     narrationCheckAudio($cfg,$voice);
     $duration=(int)$voice['duration'];$speech=(float)($voice['audio_duration']??$duration);

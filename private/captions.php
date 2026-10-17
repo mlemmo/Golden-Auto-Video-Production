@@ -237,6 +237,14 @@ function captionVoicedTime(array $spans,float $voiced):float {
     foreach($spans as $sp){$len=$sp[1]-$sp[0];if($voiced<=$len+1e-9)return $sp[0]+max(0,$voiced);$voiced-=$len;}
     return (float)end($spans)[1];
 }
+/** Adds a "Call For Price" caption after the last spoken caption, until the end of the video ($videoEnd, cue time). */
+function captionCallForPrice(array $cues,float $videoEnd):array {
+    $last=$cues?(float)end($cues)['end']:0.0;
+    $start=min($last+0.3,max($last+0.05,$videoEnd-1.5));$end=$videoEnd-0.2;
+    if($end-$start<0.8&&$cues){$i=count($cues)-1;$cues[$i]['end']=min($cues[$i]['end'],max($cues[$i]['start']+0.4,$videoEnd-1.4));$start=$cues[$i]['end']+0.04;}
+    $cues[]=['text'=>'Call For Price','start'=>$start,'end'=>max($start+0.5,$end)];
+    return $cues;
+}
 function captionSrt(array $cues,float $offset=0):string {
     $out='';foreach($cues as $i=>$c)$out.=($i+1)."\n".srtTime($c['start']+$offset).' --> '.srtTime($c['end']+$offset)."\n".$c['text']."\n\n";
     return $out;

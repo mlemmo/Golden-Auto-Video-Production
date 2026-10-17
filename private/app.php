@@ -45,6 +45,11 @@ function highestPrice(array $vehicle, array $detail=[]): ?float {
         if (isset($v[$k]) && is_numeric($v[$k]) && (float)$v[$k]>0) $p[]=(float)$v[$k];
     return $p?max($p):null;
 }
+/** Same advertised price: both "no price" (call for price), or within half a cent. */
+function priceMatches(mixed $a,mixed $b): bool {
+    if($a===null||$b===null)return $a===null&&$b===null;
+    return abs((float)$a-(float)$b)<0.005;
+}
 function money(?float $p): string { return $p===null?'Call for price':'$'.number_format($p,fmod($p,1.0)==0.0?0:2); }
 /** Ad-copy price: whole dollars, cents dropped ($14,688.25 → "$14,688"). */
 function adPrice(float $p): string { return '$'.number_format(floor($p)); }

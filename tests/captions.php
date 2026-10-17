@@ -49,3 +49,13 @@ assertCaption(!str_contains($all,CAPTION_EXTRA)&&substr_count($all,'Just $14,688
 $at=[];foreach($cues as $c)$at[str_replace("\n",' ',$c['text'])]=$c;
 assertCaption(abs($at['It comes with all-wheel drive,']['start']-8.48)<0.15&&abs($at['and just over 60,000 miles.']['end']-14.95)<0.25,'mileage caption is gone before the price is said');
 assertCaption(abs($at['Book your test drive today']['start']-23.39)<0.15&&abs(end($cues)['end']-26.73)<0.25,'captions after the repeat are still on time');
+
+// --- No advertised price: no price in the scripts, "Call For Price" caption after the speech ---
+$noPrice=['Year'=>2016,'Make'=>'LAND ROVER','Model'=>'RANGE ROVER SPORT','Trim'=>'HSE','Drivetrain'=>'4WD','ExteriorColor'=>'LOIRE BLUE','Odometer'=>67351,'price'=>null];
+assertCaption(!str_contains(script($noPrice),'$')&&!str_contains(script($noPrice,30),'$')&&!str_contains(strtolower(script($noPrice,30)),'price'),'no price: scripts never mention a price');
+$cfp=captionCallForPrice([['text'=>'Book your test drive','start'=>20.0,'end'=>23.5]],29.5);
+assertCaption(end($cfp)['text']==='Call For Price'&&abs(end($cfp)['start']-23.8)<0.01&&abs(end($cfp)['end']-29.3)<0.01,'Call For Price shown after the speech until the end');
+$tight=captionCallForPrice([['text'=>'Book','start'=>20.0,'end'=>29.4]],29.5);
+assertCaption(end($tight)['text']==='Call For Price'&&$tight[0]['end']<=28.1&&end($tight)['start']>$tight[0]['end']&&validateSrt(captionSrt($tight,0.5),30)!=='','speech to the very end: last caption shortened to make room');
+assertCaption(priceMatches(null,null)&&!priceMatches(null,14688.0)&&priceMatches(14688.25,14688.25)&&!priceMatches(14688.0,14690.0),'no price matches no price only');
+

@@ -150,7 +150,7 @@ if (isset($_GET['api'])) {
                 require_once $private.'/narrations.php';narrationTables($db);
                 $approvedVoice=narrationLoad($db,'narrations',(string)($in['narration_id']??''));
                 if(($approvedVoice['status']??'')!=='ready'||empty($approvedVoice['approved']))throw new RuntimeException('Choose an approved voice preview for this car (Narration panel: create, listen, approve).');
-                if(($approvedVoice['stock']??'')!==$v['StockNumber']||($approvedVoice['price']??null)===null||abs((float)$approvedVoice['price']-(float)$v['price'])>=0.005)throw new RuntimeException('The approved voice preview is for a different car or an old price. Make a new preview.');
+                if(($approvedVoice['stock']??'')!==$v['StockNumber']||!priceMatches($approvedVoice['price']??null,$v['price']??null))throw new RuntimeException('The approved voice preview is for a different car or an old price. Make a new preview.');
                 narrationCheckAudio($cfg,$approvedVoice);
                 $spoken=(string)$approvedVoice['caption_script'];
             }

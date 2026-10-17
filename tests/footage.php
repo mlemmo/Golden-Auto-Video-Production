@@ -36,6 +36,11 @@ try{
     verify($short['duration']===27,'footage shorter than 30 s: video ends with the footage');
     $expectError(fn()=>footageLocalPath($cfg,['footage_file'=>'../x.mov']),'missing','path tricks rejected');
 
+    // A car with no advertised price ("Call For Price") works when its voice preview was also made without a price.
+    $inv=state($db,'inventory');$inv['vehicles'][]=['StockNumber'=>'0939','Year'=>2016,'Make'=>'LAND ROVER','Model'=>'RANGE ROVER SPORT','price'=>null,'Vin'=>'V2'];save($db,'inventory',$inv);
+    $q=$db->prepare('INSERT INTO narrations VALUES (?,?,?)');$q->execute(['N2',null,json_encode(['id'=>'N2','stock'=>'0939','price'=>null]+$voice)]);
+    $np=goldenFootageBuild($db,$cfg,['stock'=>'0939','narration_id'=>'N2']+$in,$file,$probe(40),$move);
+    verify($np['price']===null&&$np['stock']==='0939','no-price car: footage video can be built');
     goldenJobDelete($db,$cfg,$job['id']);
     verify(!is_file("$dir/assets/footage/".$job['footage_file']),'deleting the video removes its uploaded footage');
 }finally{
