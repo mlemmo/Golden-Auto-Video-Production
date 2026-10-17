@@ -18,8 +18,9 @@ It runs on the test site https://node.mygoldenauto.net:4343 (setup and deploys: 
 | Dealer details for scripts and speech | `private/clients.php` (`clientDetails`, `clientWebsiteSpoken`) | `src/lib/clients.js` | ported tests + PHP parity |
 | Data layer: shared `agent.sqlite` (`state`, `jobs`), rows written byte-for-byte as PHP's `json_encode` | `private/app.php` (`db`, `state`, `save`) | `src/lib/db.js`, `src/lib/phpjson.js` (built-in `node:sqlite`) | `test/db.test.js` + `test/parity/db.parity.test.js` (Node writes ↔ PHP reads, both ways) |
 | Configuration, read once from `private/config.php` via the PHP CLI (never copied) | `private/config.php` | `src/lib/config.js` | `test/config.test.js` |
-| Service scaffold (health check) | — | `src/server.js` | `test/server.test.js` |
-| DealerCenter sync + photos, clients (storage, website analysis), Dealer Car Search import + photo worker, narrations, Seedance jobs, My footage, caption worker, dashboard pages | `private/*`, `public/*` | next | |
+| Service: `POST /api/node/<action>` with the PHP dashboard's JSON; sign-in, CSRF and selected client checked by PHP (`public/node_auth.php`) until login moves; plain errors shown as messages like PHP | `public/index.php` (API part) | `src/server.js`, `src/lib/auth.js` | `test/server.test.js` |
+| Clients: storage, website check and analysis (platform, schema.org dealer data, sitemap, bot blocking), add/re-analyse, dealer details; actions `clients`, `client_add`, `client_analyze`, `client_details`, `inventory` (on the node site the dashboard calls these on Node; `client_select` stays PHP while PHP owns the session) | `private/clients.php`, `public/index.php` | `src/lib/clients.js`, `src/lib/html.js` (PHP's entity table), `src/routes/clients.js` | `test/clients.test.js` (port of tests/clients.php) + PHP parity incl. fake websites and an in-memory database |
+| DealerCenter sync + photos, Dealer Car Search import + photo worker, narrations, Seedance jobs, My footage, caption worker, dashboard pages | `private/*`, `public/*` | next | |
 
 ## Running
 

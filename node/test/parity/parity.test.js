@@ -10,8 +10,9 @@ import * as captions from '../../src/lib/captions.js';
 import * as price from '../../src/lib/price.js';
 import * as scripts from '../../src/lib/scripts.js';
 import * as clients from '../../src/lib/clients.js';
+import { wrappers } from './wrappers.js';
 
-const fns = { ...speech, ...captions, ...price, ...scripts, ...clients };
+const fns = { ...speech, ...captions, ...price, ...scripts, ...clients, ...wrappers };
 const harness = fileURLToPath(new URL('./harness.php', import.meta.url));
 const hasPhp = spawnSync('php', ['-v']).status === 0;
 
@@ -20,9 +21,9 @@ function runPhp(cases) {
   if (res.status !== 0) throw new Error('PHP harness failed: ' + res.stderr.toString());
   return JSON.parse(res.stdout.toString());
 }
-function runNode(c) {
+async function runNode(c) {
   // Per-case client websites, kept to this call the way a server request would (withSpeechSites).
-  try { return { ok: speech.withSpeechSites(c.sites ?? {}, () => fns[c.fn](...structuredClone(c.args))) }; } catch (e) { return { error: e.message }; }
+  try { return { ok: await speech.withSpeechSites(c.sites ?? {}, () => fns[c.fn](...structuredClone(c.args))) }; } catch (e) { return { error: e.message }; }
 }
 // Floats must agree to 1e-9 s; everything else exactly. PHP's empty array and JSON null/undefined are normalised.
 function same(a, b) {
@@ -35,17 +36,17 @@ function same(a, b) {
   return a === b;
 }
 
-test('Node helpers match PHP on generated inputs', { skip: !hasPhp && 'php CLI not installed' }, () => {
+test('Node helpers match PHP on generated inputs', { skip: !hasPhp && 'php CLI not installed' }, async () => {
   const seeds = (process.env.PARITY_SEEDS ?? '1,2,3').split(',').map(Number);
   let total = 0;
   for (const seed of seeds) {
     const cases = buildCases(seed, Number(process.env.PARITY_COUNT ?? 300));
     const php = runPhp(cases);
     const bad = [];
-    cases.forEach((c, i) => {
-      const node = JSON.parse(JSON.stringify(runNode(c)) ?? 'null');
+    for (const [i, c] of cases.entries()) {
+      const node = JSON.parse(JSON.stringify(await runNode(c)) ?? 'null');
       if (!same(node, php[i])) bad.push({ fn: c.fn, args: c.args, php: php[i], node });
-    });
+    }
     total += cases.length;
     assert.equal(bad.length, 0, `seed ${seed}: ${bad.length} mismatches, first:\n` + JSON.stringify(bad.slice(0, 3), null, 1));
   }

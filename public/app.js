@@ -32,8 +32,10 @@ async function responseJson(r) {
   if (!r.ok) throw Error(d.error || 'Request failed (HTTP ' + r.status + ')');
   return d;
 }
+// On the Node test site, actions already ported to Node (window.NODE_ACTIONS, set by index.php) go to /api/node/.
 async function api(action, data = {}) {
-  const r = await fetch('?api=' + action, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF}, body: JSON.stringify(data)});
+  const url = (window.NODE_ACTIONS || []).includes(action) ? '/api/node/' + action : '?api=' + action;
+  const r = await fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json', 'X-CSRF-Token': window.CSRF}, body: JSON.stringify(data)});
   return responseJson(r);
 }
 function el(tag, text) { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; return n; }
@@ -448,7 +450,12 @@ $('clientForm').onsubmit = async event => {
   event.preventDefault(); if (busy) return; busy = true; $('clientAdd').disabled = true;
   const f = new FormData($('clientForm'));
   message('Adding the client and analyzing its website…', statusOf('stepVehicle'));
-  try { await api('client_add', {name: f.get('name'), website: f.get('website')}); location.reload(); }
+  try {
+    const r = await api('client_add', {name: f.get('name'), website: f.get('website')});
+    // Node cannot change the PHP session yet: select the new client there (PHP's client_add does this itself).
+    if ((window.NODE_ACTIONS || []).includes('client_add')) await api('client_select', {id: r.client.id});
+    location.reload();
+  }
   catch (e) { fail(e.message, statusOf('stepVehicle')); } finally { busy = false; $('clientAdd').disabled = false; }
 };
 $('dealerForm').onsubmit = async event => {

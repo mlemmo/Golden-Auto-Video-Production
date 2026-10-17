@@ -134,6 +134,57 @@ export function buildCases(seed = 42, count = 400) {
     add('title', v);
     add('script', v);
     add('script30', v);
+    if (i % 3 === 0) clientCases(r, add, i);
   }
   return cases;
 }
+
+// ---- Clients: typed websites, entities, fake dealer websites for the analysis ----
+const TYPED_SITES = ['eleasereturns.com', 'https://www.eleasereturns.com/', 'http://Best-Auto.NET', 'ftp://x.com', 'https://user@x.com', 'https://u:p@x.com/a',
+  'https://x.com:8080', 'https://x.com:abc', 'https://x.com:99999', 'localhost', 'https://dealer.local', 'shop.internal', '  www.bay-motors.com  ', 'https://x',
+  'https://1.2.3.4', 'https://exa_mple.com', 'HTTPS://WWW.Example.COM/path?q=1#f', 'https://[::1]/', 'https://x.com.', 'https://xn--bcher-kva.example', '', ' ',
+  'https://a.b.co.uk', 'https://bay-motors.com/inventory/', 'https://www.mygoldenauto.net', 'http://', 'https://x.c0m', 'https://X.COM?#'];
+const ENT = ['&amp;', '&#39;', '&apos;', '&#X41;', '&#0000065;', '&#65', '&AMP;', '&nbsp;', '&#128;', '&#xD800;', '&#xFFFFFFFFF;', '&#;', '&Aacute;', '&eacute;',
+  '&quot;', '&lt;b&gt;', '&#x1F600;', '&hellip;', '&euro;', '&notanentity;', '&#9;', '&#x0A;', '&copy', '&#xfffe;'];
+const MARKS = ['', '', 'dealercenter', 'inv-scripts-v2', 'pictures.dealer.com', 'dealerinspire', 'DealerOn', 'dealercarsearch', 'frazerweb', 'overfuel', 'dealer.com/', 'wordpress'];
+const LD = [
+  '{"@type":"AutoDealer","name":"Bay Motors","telephone":"555-0100","address":{"addressLocality":"Oakland","addressRegion":"CA","streetAddress":"1 Main St"}}',
+  '{"@context":"https://schema.org","@graph":[{"@type":"Car","name":"2020 Kia"},{"@type":["AutomotiveBusiness","LocalBusiness"],"name":"Caf&eacute; Cars","address":{"addressLocality":"San Jos&eacute;"}}]}',
+  '[{"@type":"Vehicle"},{"@type":"Product"},{"@type":"Thing"}]', '{"@type":"LocalBusiness","name":42,"address":"Main St"}', '{"@type":"AutoDealer"}',
+  '{bad json', 'null', '"text"', '{"@graph":{"a":{"@type":"Car"},"b":{"@type":"AutoDealer","name":"Graph Map"}}}', '{"@type":"Car","@graph":5}',
+  '{"@type":"AutoDealer","name":"First"} ', '{"@type":"AutoDealer","name":"Second","telephone":null}', '{"@type":[1,true,"Car"]}'];
+function sitePages(r, website) {
+  const code = pick(r, [200, 200, 200, 200, 403, 503, 500, 0, 301]);
+  let body = '<html><head><title>' + pick(r, ['Used Cars', 'Just a moment...', 'Attention Required! | Cloudflare', 'Home']) + '</title>';
+  for (let k = 0, n = Math.floor(r() * 3); k < n; k++) body += '<script type="application/ld+json">' + pick(r, LD) + '</script>';
+  body += '<script src="/x.js"></script><div>' + pick(r, MARKS) + ' ' + pick(r, ENT) + (r() < 0.1 ? ' cf-chl' : '') + '</div></html>';
+  const headers = code === 503 && r() < 0.5 ? 'HTTP/1.1 503\r\nServer: cloudflare\r\n' : 'HTTP/1.1 ' + code + '\r\n';
+  const pages = { [website]: { code, body, headers } };
+  const sm = pick(r, [null, website + '/sitemap.xml', website + '/sitemap', 'https://elsewhere.com/sitemap.xml', website + '/sm.xml']);
+  if (r() < 0.8) pages[website + '/robots.txt'] = { code: 200, body: 'User-agent: *\n' + (sm ? pick(r, ['Sitemap: ', 'sitemap:', 'SITEMAP:\t', ' Sitemap: ']) + sm + '\n' : '') };
+  const locs = Array.from({ length: Math.floor(r() * 6) }, () => '<loc>' + website + pick(r, ['/inventory/x-1/', '/vdp/123/car', '/used/abc', '/details/9', '/vehicles/2', '/about', '/blog/inventory']) + '</loc>').join('');
+  if (r() < 0.8) pages[sm && sm.startsWith(website) ? sm : website + '/sitemap.xml'] = { code: pick(r, [200, 200, 404]), body: '<urlset>' + locs + '</urlset>' };
+  return pages;
+}
+function clientCases(r, add, i) {
+  const typed = pick(r, TYPED_SITES);
+  add('clientWebsite', typed);
+  add('parityParseUrl', /^[a-z]+:\/\//i.test(typed) ? typed : 'https://' + typed.trim());
+  add('clientInventoryKey', pick(r, ['golden-auto', '', 'bay-motors', 'Bay', '../x', 'a'.repeat(40), 'a'.repeat(41), 'x_y', 'elease-returns']));
+  add('html_entity_decode', Array.from({ length: 1 + Math.floor(r() * 4) }, () => pick(r, ENT) + pick(r, [' ', 'x', '', ';'])).join(''));
+  const website = 'https://' + pick(r, ['www.baymotors.com', 'eleasereturns.com', 'best-auto.net', 'x.com']);
+  add('parityClientAnalyze', website, sitePages(r, website));
+  const existing = r() < 0.3 ? [] : [{ id: 'golden-auto', name: 'Golden Auto', website: 'https://www.mygoldenauto.net' }, ...(r() < 0.5 ? [{ id: 'bay-motors', name: 'Bay Motors', website: 'https://www.baymotors.com' }] : [])];
+  const name = pick(r, ['Bay Motors', 'bay motors', 'eLease Returns', '  Best   Auto  ', '', 'A&B Motors!!', 'x'.repeat(81), '🚗 Cars', 'Golden Auto', 'Ünïcödé Autos', '---', 'BMW of Walnut Creek and Friends Dealership Group']);
+  const typed2 = pick(r, ['baymotors.com', 'https://www.baymotors.com', 'eleasereturns.com', 'https://mygoldenauto.net', 'localhost', 'https://new-dealer.com', 'new-dealer.com/x']);
+  const site2 = (() => { try { return clientWebsiteLike(typed2); } catch { return 'https://none.example'; } })();
+  add('parityClientAdd', existing, name, typed2, sitePages(r, site2));
+  add('paritySaveDetails', pick(r, ['x', 'x', 'golden-auto', 'missing']), {
+    name: pick(r, ['eLease Returns', '', '  Bay\tMotors ', 'A "quoted" name', 'x'.repeat(81), 'Café Cars']),
+    city: pick(r, ['San Ramon', '', 'Hay<ward', 'x'.repeat(61), ' Dublin  ']),
+    website: pick(r, ['eleasereturns.com', 'https://www.EleaseReturns.com/', 'http://best-auto.net//', 'not a site', '', 'a.b', 'x_y.com']),
+    website_spoken: pick(r, ['', 'e lease returns dot com', 'E LEASE DOT COM', 'bad<>chars', 'x'.repeat(121), "o'neil dot com"]),
+  });
+}
+// The address clientWebsite would make, used only to put the fake website at the right URL.
+function clientWebsiteLike(t) { t = t.trim(); if (!/^https?:\/\//i.test(t)) t = 'https://' + t; return 'https://' + new URL(t).hostname.toLowerCase(); }

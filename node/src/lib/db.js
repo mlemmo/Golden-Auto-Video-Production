@@ -21,6 +21,12 @@ export function openDb(cfg) {
   cache.set(file, db);
   return db;
 }
+/** A throw-away in-memory database with the same tables (tests and parity cases). */
+export function openMemoryDb() {
+  const db = new DatabaseSync(':memory:');
+  db.exec('CREATE TABLE state (id TEXT PRIMARY KEY, payload TEXT NOT NULL); CREATE TABLE jobs (id TEXT PRIMARY KEY, fingerprint TEXT UNIQUE, payload TEXT NOT NULL)');
+  return db;
+}
 export function closeDb(cfg) {
   const file = String(cfg.data_dir) + '/agent.sqlite';
   cache.get(file)?.close();

@@ -348,4 +348,4 @@ if (isset($_GET['api'])) {
   <?php require $private.'/narration_panel.php'; ?>
 </section>
 </main>
-<script>window.CSRF=<?=json_encode($_SESSION['csrf'])?>;</script><script src="app.js?v=14"></script><script src="narration.js?v=6"></script></body></html>
+<script>window.CSRF=<?=json_encode($_SESSION['csrf'])?>;<?php if($env==='node'):?>window.NODE_ACTIONS=<?=json_encode(['clients','client_add','client_analyze','client_details','inventory'])?>;<?php endif;?></script><script src="app.js?v=15"></script><script src="narration.js?v=6"></script></body></html>

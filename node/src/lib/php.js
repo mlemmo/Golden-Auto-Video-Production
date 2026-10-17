@@ -106,3 +106,38 @@ export const U_SPACE = '[\\t\\n\\v\\f\\r \\x85\\xa0\\u1680\\u180e\\u2000-\\u200a
 export const U_WORD_CHARS = '\\p{L}\\p{N}_';
 export const U_DIGIT_CHARS = '\\p{Nd}';
 export const U_BOUNDARY = `(?:(?<=[${U_WORD_CHARS}])(?![${U_WORD_CHARS}])|(?<![${U_WORD_CHARS}])(?=[${U_WORD_CHARS}]))`;
+
+/** gmdate('c'): "2026-10-17T18:01:27+00:00". */
+export function gmdateC(d = new Date()) { return d.toISOString().replace(/\.\d{3}Z$/, '+00:00'); }
+
+/**
+ * parse_url() for absolute addresses ("scheme://[user[:pass]@]host[:port]/…"): { scheme, user, pass, host, port }
+ * with absent parts undefined, following PHP 8: the last "@" ends the user part (its first ":" starts the password),
+ * the last ":" before the path starts the port (its leading digits; none → no port), and an empty host, a port
+ * without digits or one above 65535 make it fail (false). Addresses without "scheme://" have no host, as in PHP.
+ */
+export function parseUrl(url) {
+  const m = String(url).match(/^([A-Za-z][A-Za-z0-9+.-]*):\/\/([^/?#]*)/);
+  if (!m) return {};
+  const out = { scheme: m[1] };
+  let auth = m[2];
+  const at = auth.lastIndexOf('@');
+  if (at !== -1) {
+    const info = auth.slice(0, at), c = info.indexOf(':');
+    out.user = c === -1 ? info : info.slice(0, c);
+    if (c !== -1) out.pass = info.slice(c + 1);
+    auth = auth.slice(at + 1);
+  }
+  let host = auth, port;
+  const close = auth.startsWith('[') ? auth.indexOf(']') : -1;
+  const colon = close !== -1 ? (auth[close + 1] === ':' ? close + 1 : -1) : auth.lastIndexOf(':');
+  if (colon !== -1) { host = auth.slice(0, colon); port = auth.slice(colon + 1); }
+  if (host === '') return false;
+  out.host = host;
+  if (port !== undefined && port !== '') {
+    const d = port.match(/^\d+/);
+    if (!d || Number(d[0]) > 65535) return false;
+    out.port = Number(d[0]);
+  }
+  return out;
+}
