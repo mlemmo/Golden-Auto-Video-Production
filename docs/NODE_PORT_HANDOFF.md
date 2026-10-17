@@ -20,6 +20,20 @@ docs/NODE_TEST_SITE.md first; everything in CLAUDE.md still applies.
 - Deploy a change: `git -C /srv/golden-auto-node pull --ff-only origin nodejs && bash /srv/golden-auto-node/ubuntu/update.sh`
   (runs PHP checks, then `npm test` incl. parity, restarts the Node service only if they pass).
 
+## Progress (2026-10-17, later)
+
+Done on `nodejs` (each with ported PHP tests + parity): data layer (`src/lib/db.js`, PHP-identical JSON, shared
+agent.sqlite), config, sign-in for Node routes via `public/node_auth.php` (PHP session, CSRF, selected client),
+`POST /api/node/<action>` routes for `clients`, `client_add`, `client_analyze`, `client_details`, `inventory`, `sync`
+(Golden Auto website reader + Dealer Car Search import, `src/lib/dom.js` HTML parser). On the node site the dashboard
+sends those actions to Node (`window.NODE_ACTIONS` in index.php); `client_select` stays PHP while PHP owns the session.
+Deploys restart the Node service with `sudo systemctl restart golden-auto-node.service`, which needs a passwordless
+sudoers rule for that one command (`/etc/sudoers.d/golden-auto-node-restart`).
+
+Not yet: DealerCenter sync (`private/dealercenter_sync.php`) and the photo worker. Both depend on image work (photo
+ZIPs, GD re-encoding, the 2×2 asset sheet) that has no dependency-free Node equivalent; the approach (PHP bridge, an
+npm image library such as sharp, or FFmpeg) is the user's decision.
+
 ## How to port each area (the method so far)
 
 1. Port the pure logic first, into `node/src/lib/`, keeping PHP's names and behaviour.
