@@ -30,9 +30,15 @@ sends those actions to Node (`window.NODE_ACTIONS` in index.php); `client_select
 Deploys restart the Node service with `sudo systemctl restart golden-auto-node.service`, which needs a passwordless
 sudoers rule for that one command (`/etc/sudoers.d/golden-auto-node-restart`).
 
-Not yet: DealerCenter sync (`private/dealercenter_sync.php`) and the photo worker. Both depend on image work (photo
-ZIPs, GD re-encoding, the 2×2 asset sheet) that has no dependency-free Node equivalent; the approach (PHP bridge, an
-npm image library such as sharp, or FFmpeg) is the user's decision.
+Images use FFmpeg (user's choice): `src/lib/images.js` (ffprobe size check, JPEG re-encode on white, asset sheet
+with drawtext/overlay, EXIF rotation ignored like GD), `src/lib/zip.js` (zlib). Ported with parity: photo import
+(`src/lib/media.js`), asset sheet (same size/picks/hashes as PHP's), DealerCenter sync (`src/lib/dealercenter.js`, CLI
+`node src/cli/dealercenter-sync.js snapshot.json [zip-dir]`) and the photo worker (`src/lib/photos.js`, CLI
+`node src/cli/photo-worker.js`; the node site's cron runs it instead of private/photo_worker.php). Checked live in a
+throw-away database: eLease analysis, import of 25 cars and the Range Rover's photo sort (10 of 69 kept, as PHP).
+
+Next per the order below: narrations (4), jobs (5), the caption worker (6), dashboard pages (7). The dashboard's ZIP
+import action (`import`) and the vehicle `detail`/`sheet` actions can now use media.js.
 
 ## How to port each area (the method so far)
 
