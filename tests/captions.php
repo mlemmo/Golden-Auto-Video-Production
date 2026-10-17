@@ -59,3 +59,6 @@ $tight=captionCallForPrice([['text'=>'Book','start'=>20.0,'end'=>29.4]],29.5);
 assertCaption(end($tight)['text']==='Call For Price'&&$tight[0]['end']<=28.1&&end($tight)['start']>$tight[0]['end']&&validateSrt(captionSrt($tight,0.5),30)!=='','speech to the very end: last caption shortened to make room');
 assertCaption(priceMatches(null,null)&&!priceMatches(null,14688.0)&&priceMatches(14688.25,14688.25)&&!priceMatches(14688.0,14690.0),'no price matches no price only');
 
+// --- Listing shorthand in speech: 4WD → four wheel drive, 4D / 4dr → four door; captions keep the shorthand ---
+assertCaption(speechScript('2016 RANGE ROVER SPORT 4WD 4dr V6 HSE')==='twenty sixteen Range Rover Sport four wheel drive four door V 6 H-S-E'&&nativeSpeech('Sedan 4D with 4WD')==='Sedan four door with four wheel drive','4WD and 4D/4dr said as words');
+assertCaption(speechScript('Q4 4DRV')!==''&&!str_contains(speechScript('Q4 4DRV'),'four door')&&captionDisplayText('SPORT 4WD 4dr')==='Sport 4WD 4dr','other codes untouched; captions keep 4WD and 4dr');

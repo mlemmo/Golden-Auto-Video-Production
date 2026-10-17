@@ -16,9 +16,14 @@ function speechClientSites(string $s):string{
         $s=preg_replace('~(?<![A-Za-z0-9])(?:https?://)?(?:www\.)?'.preg_quote($display,'~').'/?(?![A-Za-z0-9/])~i',$spoken,$s);
     return $s;
 }
+/** Listing shorthand said as words: 4WD → "four wheel drive", 4D / 4dr → "four door". Captions keep the shorthand. */
+function shorthandSpeech(string $s):string{
+    $s=preg_replace('/(?<![A-Za-z0-9])4WD(?![A-Za-z0-9])/i','four wheel drive',$s);
+    return preg_replace('/(?<![A-Za-z0-9])4[ -]?(?:d|dr|door)\.?(?![A-Za-z0-9])/i','four door',$s);
+}
 function nativeSpeech(string $s):string{
     $s=preg_replace('~(?<![A-Za-z0-9])(?:https?://)?(?:www\.)?mygoldenauto\.net/?(?![A-Za-z0-9/])~i','my golden auto dot net',$s);
-    $s=speechClientSites($s);
+    $s=shorthandSpeech(speechClientSites($s));
     return acronymSpeech(numberSpeech(priceSpeech($s)));
 }
 /** Respellings written into the line Seedance speaks (it ignored the pronunciation note). Captions keep the real spelling. */
@@ -32,7 +37,7 @@ function seedanceRespell(string $s,array $extra=[]):string{
 const SPEECH_PRONUNCIATION=['San Ramon'=>'san rah-MOAN, written "San Rah-moan" above (stress on MOAN, said like the word "moan")','my golden auto dot net'=>'my GOLD-en AW-toh dot net, said as words, never spelled out letter by letter','Golden Auto'=>'GOLD-en AW-toh'];
 function speechScript(string $s,bool $numbers=true):string{
     $s=preg_replace('~(?<![A-Za-z0-9])(?:https?://)?(?:www\.)?mygoldenauto\.net/?(?![A-Za-z0-9/])~i','my golden auto dot N, E, T',$s);
-    $s=speechClientSites($s);
+    $s=shorthandSpeech(speechClientSites($s));
     $s=priceSpeech($s);
     return acronymSpeech($numbers?numberSpeech($s):$s);
 }
