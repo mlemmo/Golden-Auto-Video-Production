@@ -1,0 +1,13 @@
+{
+  "name": "golden-auto-node",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Node.js port of the Golden Auto AI car video dashboard (runs next to the PHP version until it replaces it).",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test \"test/**/*.test.js\"",
+    "parity": "node --test test/parity/parity.test.js"
+  }
+}
