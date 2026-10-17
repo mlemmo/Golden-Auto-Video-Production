@@ -14,6 +14,7 @@ can be checked without touching either.
 | Caption worker | its own cron line, every minute (PHP, until it is ported) |
 | PHP-FPM pool / socket | `goldenauto-node` / `golden-auto-node.sock` |
 | Node service | `golden-auto-node.service`, 127.0.0.1:4351; Nginx sends `/api/node/` to it |
+| Node.js | nvm in `/home/mark/.nvm`, default alias `lts/*` (no system package) |
 
 Same API keys as production, so paid generations cost the same; every paid call still needs approval in its
 dashboard. The inventory-ads timer stays production-only.
@@ -24,9 +25,9 @@ dashboard. The inventory-ads timer stays production-only.
    `video` and `staging` (Cloudflare's proxy does not carry port 4343).
 2. Get the setup scripts (production and staging are on other branches):
    `git clone --depth 1 --branch nodejs https://github.com/mlemmo/golden-auto-video-production ~/node-setup`
-3. `sudo bash ~/node-setup/ubuntu/node/setup-root.sh` (Node.js if needed, folder, PHP-FPM pool, certificate, nginx
-   site, Node service).
-4. `bash ~/node-setup/ubuntu/node/setup-app.sh` (clone, config, data copy, cron, tests, start the Node service).
+3. `sudo bash ~/node-setup/ubuntu/node/setup-root.sh` (folder, PHP-FPM pool, certificate, nginx site, Node service).
+4. `bash ~/node-setup/ubuntu/node/setup-app.sh` (clone, config, data copy, cron, nvm + Node LTS for mark, tests,
+   start the Node service).
 5. `rm -rf ~/node-setup`
 
 ## Deploying a change
@@ -35,3 +36,15 @@ dashboard. The inventory-ads timer stays production-only.
 
 `update.sh` runs the PHP checks, then the Node tests (including the PHP parity check) and restarts the Node service
 only if they pass. Logs: `journalctl -u golden-auto-node`, caption worker in `private/data/finishing-worker.log`.
+
+## Node.js versions (nvm)
+
+Node is installed with nvm for mark, not as a system package. The service, `update.sh` and the setup script load
+nvm's `default` Node through `ubuntu/node/nvm-env.sh`, so upgrading needs no change to any file:
+
+```bash
+nvm install --lts && nvm alias default 'lts/*'   # or a specific major, e.g. nvm install 24 && nvm alias default 24
+cd /srv/golden-auto-node/node && npm test         # check on the new version
+sudo systemctl restart golden-auto-node
+nvm uninstall <old version>                       # optional, once happy
+```

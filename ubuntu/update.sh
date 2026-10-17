@@ -12,6 +12,7 @@ for f in private/*.php public/*.php; do php -l "$f" >/dev/null; done
 python3 -I -m py_compile private/*.py
 php tests/captions.php >/dev/null && php tests/references.php >/dev/null
 if [ -f node/package.json ] && [ -f /etc/systemd/system/golden-auto-node.service ] && [ "$branch" = nodejs ]; then
+  . ubuntu/node/nvm-env.sh   # Node from mark's nvm
   (cd node && npm test >/dev/null) || { echo "Node tests failed; Node service not restarted." >&2; exit 1; }
   sudo systemctl restart golden-auto-node.service && echo "Node service restarted"
 fi

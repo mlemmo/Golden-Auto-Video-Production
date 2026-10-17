@@ -2,7 +2,8 @@
 # One-time app setup for node.mygoldenauto.net, run as mark after setup-root.sh: bash ubuntu/node/setup-app.sh
 # Clones the nodejs branch to /srv/golden-auto-node, writes its config from production's (same API keys and password;
 # own data folder, public URL and environment "node", which shows a NODE TEST banner), copies production's data and
-# videos once, adds its caption worker to cron, runs the Node tests and starts the Node service.
+# videos once, adds its caption worker to cron, installs Node.js (LTS) with nvm in mark's home, runs the Node tests
+# and starts the Node service.
 # Production is only read, never changed. Safe to re-run: existing config/data are kept.
 set -euo pipefail
 prod=/srv/golden-auto
@@ -40,6 +41,26 @@ if ! crontab -l 2>/dev/null | grep -qF "$dir/private/caption_worker.php"; then
   (crontab -l 2>/dev/null; echo "$line") | crontab -
   echo "node test site caption worker added to cron"
 fi
+
+# nvm (latest release, from its GitHub repository) and the current Node LTS, for mark only. Upgrade later with
+#   nvm install --lts && nvm alias default 'lts/*' && sudo systemctl restart golden-auto-node
+export NVM_DIR="$HOME/.nvm"
+if [ ! -s "$NVM_DIR/nvm.sh" ]; then
+  git clone --quiet https://github.com/nvm-sh/nvm.git "$NVM_DIR"
+  git -C "$NVM_DIR" -c advice.detachedHead=false checkout --quiet "$(git -C "$NVM_DIR" describe --abbrev=0 --tags --match 'v[0-9]*' "$(git -C "$NVM_DIR" rev-list --tags --max-count=1)")"
+  echo "nvm $(git -C "$NVM_DIR" describe --tags) installed in $NVM_DIR"
+fi
+if ! grep -qF 'NVM_DIR/nvm.sh' "$HOME/.bashrc" 2>/dev/null; then
+  printf '\n# nvm (Node version manager)\nexport NVM_DIR="$HOME/.nvm"\n[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"\n[ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"\n' >> "$HOME/.bashrc"
+fi
+set +u; . "$NVM_DIR/nvm.sh" --no-use
+if ! nvm version default >/dev/null 2>&1 || [ "$(nvm version default)" = N/A ]; then
+  nvm install --lts >/dev/null
+  nvm alias default 'lts/*' >/dev/null
+fi
+set -u
+. "$dir/ubuntu/node/nvm-env.sh"
+echo "Node $(node -v) from nvm"
 
 (cd "$dir/node" && npm test >/dev/null) && echo "Node tests passed (including the PHP parity check)"
 sudo systemctl restart golden-auto-node.service

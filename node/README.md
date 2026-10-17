@@ -20,7 +20,7 @@ It runs on the test site https://node.mygoldenauto.net:4343 (setup and deploys: 
 
 ## Running
 
-Node 20 or newer, no npm dependencies.
+Node 20 or newer, no npm dependencies. On the server Node comes from nvm (docs/NODE_TEST_SITE.md).
 
 ```bash
 cd node
