@@ -27,7 +27,7 @@ export async function dcsStorePhotos(cfg, urls, fetchFn = clientFetch) {
     try { jpg = toJpeg(body, { quality: 88 }); } catch { continue; }
     const name = createHash('sha1').update(jpg).digest('hex') + '.jpg';
     if (!existsSync(dir + '/' + name)) writeFileSync(dir + '/' + name, jpg, { mode: 0o644 });
-    out.delete(url); out.set(url, name);
+    out.set(url, name);  // a repeated URL keeps its first position, like a PHP array key
   }
   return [...out.entries()];
 }

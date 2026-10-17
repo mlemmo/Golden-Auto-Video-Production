@@ -7,12 +7,13 @@ require __DIR__.'/../../../private/app.php';
 require_once __DIR__.'/../../../private/clients.php';
 require_once __DIR__.'/../../../private/importers.php';
 require_once __DIR__.'/../../../private/dealercenter_sync.php';
+require_once __DIR__.'/../../../private/narrations.php';
 const ALLOWED=['integerWords','currencyWords','numberSpeech','priceSpeech','speechWordCount','speechScript','nativeSpeech',
  'seedanceRespell','acronymSpeech','captionDisplayText','captionSyllables','captionUnits','captionWrap','captionCues',
  'captionWordKey','captionWordsMatch','captionAlignWords','captionSpokenScript','captionStripExtra','captionSegments',
  'captionVoicedTime','captionSrt','captionDraft','validateSrt','srtTime','highestPrice','money','adPrice','title','script','script30',
  'speechClientSites','shorthandSpeech','captionCallForPrice','priceMatches','clientWebsiteSpoken','clientDetails',
- 'clientInventoryKey','clientWebsite','html_entity_decode','parityParseUrl','parityClientAnalyze','parityClientAdd','paritySaveDetails','dcsParseVdp','parityImportDcs','jsonp','parityGoldenInventory','parityImportMedia','strip_tags','strnatcasecmp','parityFilterInt','dcNormalize','dcCleanDescription','parityDcSync','parityPhotoWorker'];
+ 'clientInventoryKey','clientWebsite','html_entity_decode','parityParseUrl','parityClientAnalyze','parityClientAdd','paritySaveDetails','dcsParseVdp','parityImportDcs','jsonp','parityGoldenInventory','parityImportMedia','strip_tags','strnatcasecmp','parityFilterInt','dcNormalize','dcCleanDescription','parityDcSync','parityPhotoWorker','narrationTextDifferences','narrationVoiceSettings','parityNarrations'];
 // Fixture wrappers: the same inputs Node gets, with a fake website and an in-memory database (no network, no files).
 function parityDb():PDO{$db=new PDO('sqlite::memory:');$db->setAttribute(PDO::ATTR_ERRMODE,PDO::ERRMODE_EXCEPTION);
     $db->exec('CREATE TABLE state (id TEXT PRIMARY KEY, payload TEXT NOT NULL); CREATE TABLE jobs (id TEXT PRIMARY KEY, fingerprint TEXT UNIQUE, payload TEXT NOT NULL)');return $db;}
@@ -77,3 +78,28 @@ function parityPhotoWorker(array $cars,array $photos,array $labels,array $img,ar
         foreach($inv['vehicles'] as &$v){$v['photos']=count($v['photos']??[]);if(isset($v['photos_checked_at']))$v['photos_checked_at']='set';}unset($v);
         return ['log'=>$log,'inventory'=>$inv,'files'=>count(glob("$dir/assets/*.jpg"))];}
     finally{foreach(glob("$dir/assets/*")?:[] as $f)unlink($f);rmdir("$dir/assets");rmdir($dir);}}
+/** Placeholders for random ids (32 hex) in first-seen order and timestamps, so runs can be compared. */
+function parityStable(mixed $v):mixed{$ids=[];$j=json_encode($v);
+    $j=preg_replace_callback('/\b[a-f0-9]{32}\b/',function($m)use(&$ids){$ids[$m[0]]??='ID'.(count($ids)+1);return $ids[$m[0]];},$j);
+    $j=preg_replace('/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\+00:00/','T',$j);return json_decode($j,true);}
+/** A run of narration actions against a fake ElevenLabs/fal and Python helper (net), in-memory database. */
+function parityNarrations(array $setup,array $steps,array $net,array $cfgExtra):array{
+    $dir=sys_get_temp_dir().'/ga-pnr-'.bin2hex(random_bytes(4));mkdir("$dir/assets",0700,true);
+    $cfg=$cfgExtra+['asset_dir'=>"$dir/assets",'public_base_url'=>'https://node.example.com:4343','elevenlabs_key'=>'EL','fal_key'=>'FK'];$db=parityDb();
+    foreach($setup['state'] as $id=>$v)save($db,$id,$v);foreach($setup['jobs'] as $j)$db->prepare('INSERT INTO jobs VALUES (?,?,?)')->execute([$j['id'],null,json_encode($j)]);
+    narrationBridgeHook(function(array $in)use($net){return parityFakeBridge($in,$net);});$out=[];
+    try{foreach($steps as [$action,$input]){
+        // "@preview" / "@lipsync": the newest record of that kind (or a missing id).
+        narrationTables($db);foreach($input as $k=>$v)if($v==='@preview'||$v==='@lipsync'){$t=$v==='@preview'?'narrations':'narration_lipsync';$input[$k]=(string)($db->query("SELECT id FROM $t ORDER BY rowid DESC LIMIT 1")->fetchColumn()?:'missing');}
+        try{$out[]=['ok'=>narrationApi($action,$input,$cfg,$db)];}catch(Throwable $e){$out[]=['error'=>$e->getMessage()];}}
+        $dump=[];foreach(['narrations','narration_lipsync','jobs'] as $t)foreach($db->query("SELECT id,fingerprint IS NULL AS free,payload FROM $t ORDER BY rowid") as $r)$dump[$t][]=[$r['id'],(int)$r['free'],json_decode($r['payload'],true)];
+        $files=array_map('basename',glob("$dir/assets/narrations/*")?:[]);sort($files);
+        return parityStable(['steps'=>$out,'db'=>$dump,'files'=>count($files)]);}
+    finally{narrationBridgeHook(null,true);foreach(glob("$dir/assets/narrations/*")?:[] as $f)unlink($f);@rmdir("$dir/assets/narrations");rmdir("$dir/assets");rmdir($dir);}}
+function parityFakeBridge(array $in,array $net):array{
+    if($in['op']==='probe')return is_array($net['probe'])?$net['probe']:['duration'=>$net['probe']];
+    if($in['op']==='pad')return $net['pad']==='ok'?['audio_url'=>'data:audio/wav;base64,'.base64_encode('RIFF0000WAVEfmt data')]:($net['pad']==='bad'?['audio_url'=>'data:audio/mpeg;base64,AAAA']:['error'=>'Narration is longer than the video. Shorten it and make a new preview.']);
+    $u=$in['url'];$k=str_starts_with($u,'https://api.elevenlabs.io/v2/voices')?'voices':(str_contains($u,'text-to-speech')?'tts':($u==='https://queue.fal.run/fal-ai/sync-lipsync/v2'?'fal_submit':(str_contains($u,'/status')?'fal_status':'fal_result')));
+    if($k==='voices'){preg_match('/next_page_token=p(\d+)/',$u,$m);$r=$net['voices'][(int)($m[1]??0)]??['status'=>500];}else $r=$net[$k];
+    if(isset($r['error']))return ['error'=>$r['error']];
+    return ['status'=>$r['status'],'body'=>base64_encode(is_string($r['body']??'')?($r['body']??''):json_encode($r['body'])),'detail'=>$r['detail']??null]+($r['detail']??null?[]:[]);}

@@ -24,7 +24,8 @@ It runs on the test site https://node.mygoldenauto.net:4343 (setup and deploys: 
 | Images with FFmpeg instead of GD (size check, JPEG re-encode on white, asset sheet), ZIP reading with zlib, photo import (`importMediaZip`), asset sheet | `private/import.php`, `private/app.php` | `src/lib/images.js`, `src/lib/zip.js`, `src/lib/media.js` | `test/media.test.js` (sheet compared with PHP's: size, picks, gallery/content hash) + PHP parity of whole imports on generated ZIPs |
 | DealerCenter sync (CLI `node src/cli/dealercenter-sync.js snapshot.json [zip-dir]`) | `private/dealercenter_sync.php` | `src/lib/dealercenter.js` | PHP parity on generated multi-run scenarios (change logs, inventory, sheets, files) |
 | Photo worker for website-imported cars (CLI `node src/cli/photo-worker.js`, cron on the node site) | `private/importers.php` (`dcsStorePhotos`, `photoClassify`, `dcsProcessPhotos`), `private/photo_worker.php` | `src/lib/photos.js` (same Python image model) | PHP parity with fake downloads and model labels |
-| Narrations, Seedance jobs, My footage, caption worker, ZIP import page action, dashboard pages | `private/*`, `public/*` | next | |
+| Voice previews and lip-sync (`narration_*` actions): approvals, request fingerprints, uncertain/failed handling, caption/spoken text check, deletes; HTTP/probe/pad through the same Python helper (async) | `private/narrations.php` | `src/lib/narrations.js`, `src/routes/narrations.js` | `test/narrations.test.js` (incl. port of tests/narration_delete.php) + PHP parity on action runs with fake ElevenLabs/fal |
+| Seedance jobs, My footage, caption worker, ZIP import page action, dashboard pages | `private/*`, `public/*` | next | |
 
 ## Running
 

@@ -7,6 +7,7 @@ import { checkAuth, HttpError } from './lib/auth.js';
 import { loadConfig } from './lib/config.js';
 import { openDb } from './lib/db.js';
 import { clientRoutes } from './routes/clients.js';
+import { narrationRoutes } from './routes/narrations.js';
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const HOST = process.env.HOST ?? '127.0.0.1';
@@ -15,7 +16,7 @@ const MAX_BODY = 1 << 20;
 
 // action → handler(ctx), ctx = { cfg, db, client, body, req }. A plain Error is a user-facing message (HTTP 400,
 // like PHP's RuntimeException); HttpError carries its own status; anything else is a 500 that is logged, not shown.
-export const actions = { ...clientRoutes };
+export const actions = { ...clientRoutes, ...narrationRoutes };
 
 function send(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });

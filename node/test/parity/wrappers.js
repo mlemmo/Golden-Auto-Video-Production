@@ -8,6 +8,7 @@ import { jsonp, goldenInventory } from '../../src/lib/website.js';
 import { importMediaZip } from '../../src/lib/media.js';
 import { dcNormalize, dcCleanDescription, dcSync } from '../../src/lib/dealercenter.js';
 import { dcsProcessPhotos } from '../../src/lib/photos.js';
+import { narrationApi, narrationTables, narrationTextDifferences, narrationVoiceSettings } from '../../src/lib/narrations.js';
 import { readdirSync, mkdirSync } from 'node:fs';
 import { probeImage } from '../../src/lib/images.js';
 import { writeZip } from '../../src/lib/zip.js';
@@ -20,7 +21,51 @@ const fakeFetch = (pages) => async (url) => {
   const p = pages[url];
   return p ? { code: Number(p.code), body: String(p.body ?? ''), url, headers: String(p.headers ?? '') } : { code: 404, body: '', url, headers: '' };
 };
+function parityStable(v) {
+  const ids = new Map();
+  let j = JSON.stringify(v).replace(/\b[a-f0-9]{32}\b/g, (m) => { if (!ids.has(m)) ids.set(m, 'ID' + (ids.size + 1)); return ids.get(m); });
+  j = j.replace(/\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\+00:00/g, 'T');
+  return JSON.parse(j);
+}
+function fakeBridge(inp, net) {
+  if (inp.op === 'probe') return typeof net.probe === 'object' ? net.probe : { duration: net.probe };
+  if (inp.op === 'pad') return net.pad === 'ok' ? { audio_url: 'data:audio/wav;base64,' + Buffer.from('RIFF0000WAVEfmt data').toString('base64') }
+    : net.pad === 'bad' ? { audio_url: 'data:audio/mpeg;base64,AAAA' } : { error: 'Narration is longer than the video. Shorten it and make a new preview.' };
+  const u = inp.url;
+  const k = u.startsWith('https://api.elevenlabs.io/v2/voices') ? 'voices' : u.includes('text-to-speech') ? 'tts' : u === 'https://queue.fal.run/fal-ai/sync-lipsync/v2' ? 'fal_submit' : u.includes('/status') ? 'fal_status' : 'fal_result';
+  const r = k === 'voices' ? (net.voices[Number((u.match(/next_page_token=p(\d+)/) ?? [0, 0])[1])] ?? { status: 500 }) : net[k];
+  if (r.error !== undefined) return { error: r.error };
+  const body = typeof (r.body ?? '') === 'string' ? (r.body ?? '') : JSON.stringify(r.body);
+  return { status: r.status, body: Buffer.from(body).toString('base64'), detail: r.detail ?? null };
+}
 export const wrappers = {
+  narrationTextDifferences, narrationVoiceSettings,
+  async parityNarrations(setup, steps, net, cfgExtra) {
+    const dir = mkdtempSync(tmpdir() + '/ga-nnr-'); mkdirSync(dir + '/assets');
+    const cfg = { ...cfgExtra, asset_dir: dir + '/assets', public_base_url: 'https://node.example.com:4343', elevenlabs_key: 'EL', fal_key: 'FK' };
+    const db = openMemoryDb();
+    for (const [id, v] of Object.entries(setup.state)) save(db, id, v);
+    for (const j of setup.jobs) db.prepare('INSERT INTO jobs VALUES (?,?,?)').run(j.id, null, JSON.stringify(j));
+    const out = [];
+    try {
+      narrationTables(db);
+      for (const [action, input0] of steps) {
+        const input = { ...input0 };
+        for (const [k, v] of Object.entries(input)) if (v === '@preview' || v === '@lipsync') {
+          const row = db.prepare(`SELECT id FROM ${v === '@preview' ? 'narrations' : 'narration_lipsync'} ORDER BY rowid DESC LIMIT 1`).get();
+          input[k] = row ? row.id : 'missing';
+        }
+        try { out.push({ ok: await narrationApi(action, input, cfg, db, { bridge: (x) => fakeBridge(x, net) }) }); } catch (e) { out.push({ error: e.message }); }
+      }
+      const dump = {};
+      for (const t of ['narrations', 'narration_lipsync', 'jobs']) {
+        const rows = db.prepare(`SELECT id, fingerprint IS NULL AS free, payload FROM ${t} ORDER BY rowid`).all();
+        if (rows.length) dump[t] = rows.map((r) => [r.id, r.free, JSON.parse(r.payload)]);
+      }
+      let files = 0; try { files = readdirSync(dir + '/assets/narrations').length; } catch { /* none */ }
+      return parityStable({ steps: out, db: dump, files });
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  },
   dcNormalize, dcCleanDescription,
   async parityPhotoWorker(cars, photos, labels, img, other) {
     const dir = mkdtempSync(tmpdir() + '/ga-npw-'); mkdirSync(dir + '/assets');

@@ -2,7 +2,10 @@
 declare(strict_types=1);
 require_once __DIR__.'/clients.php';
 
+/** Tests only: replace the Python helper with a fake (no network, no audio files). Null restores the real one. */
+function narrationBridgeHook(?callable $set=null,bool $reset=false):?callable {static $hook=null;if($reset)$hook=null;elseif($set)$hook=$set;return $hook;}
 function narrationBridge(array $input):array {
+    if($hook=narrationBridgeHook()){$result=$hook($input);if(isset($result['error']))throw new RuntimeException($result['error']);return $result;}
     $p=proc_open(['/usr/bin/python3',__DIR__.'/narration_bridge.py'],
         [0=>['pipe','r'],1=>['pipe','w'],2=>['pipe','w']],$pipes);
     if(!is_resource($p))throw new RuntimeException('Cannot start the narration helper.');
@@ -261,13 +264,13 @@ function narrationApi(string $action,array $in,array $cfg,PDO $db):array {
         if(in_array($record['status'],['completed','failed'],true))return ['message'=>'Lip-sync is '.$record['status'].'.'];
         if(empty($record['request_id']))throw new RuntimeException('Submission is uncertain. Check fal request history before retrying.');
         $headers=['Authorization'=>'Key '.$key];
-        $r=narrationHttp(narrationSafeQueueUrl($record['status_url']),'GET',$headers);
+        $r=narrationHttp(narrationSafeQueueUrl((string)($record['status_url']??'')),'GET',$headers);
         if(!in_array((int)$r['status'],[200,202],true))throw new RuntimeException('Status check failed (HTTP '.$r['status'].'). No new request submitted.');
         $state=json_decode($r['body'],true,512,JSON_THROW_ON_ERROR);
         if(($state['status']??'')==='COMPLETED'){
             if(!empty($state['error'])){$record['status']='failed';$record['error']='Provider reported a failed lip-sync. Check fal history.';}
             else{
-                $r=narrationHttp(narrationSafeQueueUrl($record['response_url']),'GET',$headers);
+                $r=narrationHttp(narrationSafeQueueUrl((string)($record['response_url']??'')),'GET',$headers);
                 if((int)$r['status']===422){
                     $record['status']='failed';
                     $record['error']='fal rejected the generation input (HTTP 422). See fal request details.';

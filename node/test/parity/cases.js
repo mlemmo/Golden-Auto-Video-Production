@@ -141,6 +141,7 @@ export function buildCases(seed = 42, count = 400) {
     if (i % 6 === 1) mediaCases(r, add);
     if (i % 10 === 3) dealercenterCases(r, add);
     if (i % 8 === 5) photoWorkerCases(r, add);
+    if (i % 5 === 4) narrationCases(r, add);
   }
   return cases;
 }
@@ -327,4 +328,37 @@ function photoWorkerCases(r, add) {
   }
   const labels = r() < 0.15 ? [] : Array.from({ length: 1 + Math.floor(r() * 4) }, () => pick(r, ['exterior', 'exterior', 'interior', 'open', 'text', 'detail']));
   add('parityPhotoWorker', cars, photos, labels, { big: JPEG_1800x900, other: JPEG_1800x900_B, tiny: JPEG_40x30 }, r() < 0.3 ? { note: 'keeps nothing' } : {});
+}
+
+
+// ---- Narrations: preview/approve/lip-sync/poll/delete runs against fake ElevenLabs, fal and audio helper ----
+function narrationCases(r, add) {
+  // Each input valid most of the time, so the deeper steps (approve, lip-sync, status, deletes) are compared too.
+  const f = (good, bad) => (r() < 0.9 ? pick(r, good) : pick(r, bad));
+  const price = pick(r, [14688.25, 9000, null]);
+  const setup = { state: { inventory: { vehicles: [{ StockNumber: '870288', Year: 2013, Make: 'SUBARU', Model: 'XV CROSSTREK', price, active: f([true], [false]) }] } },
+    jobs: [{ id: 'V1', stock: '870288', price, vehicle: '2013 SUBARU XV CROSSTREK', status: f(['completed'], ['in_progress']), video_url: f(['https://cdn.example.com/v.mp4'], ['http://x/v.mp4']), duration: f([30], [15]), format: 'instagram_reels' }] };
+  const net = {
+    voices: [{ status: 200, body: { voices: [{ voice_id: 'v1', name: 'Bella', labels: { accent: 'american' } }], has_more: r() < 0.5, next_page_token: 'p1' } }, { status: f([200], [500]), body: { voices: [{ voice_id: 'v2', name: 'Adam' }] } }],
+    tts: f([{ status: 200, body: 'ID3-fake-mp3-' + Math.floor(r() * 1000) }], [{ status: 401, body: '' }, { status: 500, body: '' }, { error: 'Transport or audio processing failed; check dependencies. A submitted paid request may be uncertain.' }]),
+    probe: f([24.3, 22.0, 14.2], [31.5, { error: 'Invalid audio duration.' }]),
+    pad: f(['ok'], ['bad', 'long']),
+    fal_submit: f([{ status: 200, body: { request_id: 'R1', status_url: 'https://queue.fal.run/fal-ai/sync-lipsync/requests/R1/status', response_url: 'https://queue.fal.run/fal-ai/sync-lipsync/requests/R1' } }],
+      [{ status: 200, body: { request_id: 'R1', status_url: 'https://evil.example/x', response_url: 'https://queue.fal.run/fal-ai/sync-lipsync/requests/R1' } }, { status: 200, body: {} }, { status: 422, detail: 'audio_url invalid' }, { status: 503 }]),
+    fal_status: pick(r, [{ status: 200, body: { status: 'COMPLETED' } }, { status: 200, body: { status: 'COMPLETED' } }, { status: 202, body: { status: 'IN_PROGRESS' } }, { status: 200, body: { status: 'IN_QUEUE' } }, { status: 200, body: { status: 'COMPLETED', error: 'x' } }, { status: 500 }]),
+    fal_result: f([{ status: 200, body: { video: { url: 'https://v3.fal.media/out.mp4' } } }], [{ status: 422 }, { status: 500 }, { status: 200, body: { video: { url: 'http://bad/x.mp4' } } }]),
+  };
+  const preview = { stock: '870288', voice_id: f(['v1'], ['bad voice!']), text: f(['Take a look at this twenty thirteen Subaru X-V Crosstrek, here at Golden Auto in San Rah-moan.'], ['short']),
+    caption_script: pick(r, ['Take a look at this 2013 SUBARU XV CROSSTREK, here at Golden Auto in San Ramon.', 'Take a look at this 2013 Subaru Outback at Golden Auto.']),
+    duration: f([30], [15, 20]), approve_spend: f([true], [false]), new_take: r() < 0.2 };
+  // "@preview" / "@lipsync" are replaced by the newest record of that kind before each step.
+  const steps = [['narration_voices', {}], ['narration_preview', preview]];
+  if (r() < 0.3) steps.push(['narration_preview', preview]);
+  steps.push(['narration_list', {}], ['narration_approve', { id: '@preview', reviewed: f([true], [false]) }],
+    ['narration_lipsync', { narration_id: '@preview', video_id: 'V1', approve_spend: f([true], [false]), confirm_current: true, auto_build: r() < 0.5 }],
+    ['narration_poll', { id: '@lipsync' }], ['narration_poll', { id: '@lipsync' }], ['narration_list', {}]);
+  if (r() < 0.4) steps.push(['narration_delete', { id: '@preview' }], ['narration_lipsync_delete', { id: '@lipsync' }], ['narration_delete', { id: '@preview' }]);
+  add('parityNarrations', setup, steps, net, r() < 0.3 ? { narration_speed: pick(r, [1.5, 0.5, '0.85', 1.0]) } : {});
+  add('narrationTextDifferences', pick(r, [preview.text, 'and just over sixty thousand miles', 'San Ruh-mone']), pick(r, [preview.caption_script, 'with just over 60,000 miles', 'San Ramon']), r() < 0.3 ? { 'San Ramon': 'San Ruh-mone' } : {});
+  add('narrationVoiceSettings', r() < 0.5 ? {} : { narration_speed: pick(r, [1.5, 0.5, '0.85', 'x', 1.0]) }, pick(r, [15, 30, 20]));
 }
