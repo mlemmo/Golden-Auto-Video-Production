@@ -237,6 +237,11 @@ function showSheet(sheet) {
 function showPhotos() {
   const picker = $('photoPicker'); picker.replaceChildren(); $('sheetPreview').replaceChildren(); $('sheet').value = '';
   if (chosen.asset_sheet) showSheet(chosen.asset_sheet);
+  // Website-imported cars: photos are copied and sorted in the background (exterior shots only).
+  if (chosen.photos_pending) $('sheetPreview').append(el('p', chosen.photos.length
+    ? 'New photos are being imported and sorted; these are the previous ones. Reopen the car in a few minutes.'
+    : 'Photos are being imported and sorted (exterior shots only). Reopen the car in a few minutes.'));
+  else if (chosen.photo_labels) $('sheetPreview').append(el('small', `${chosen.photos.length} exterior photos kept of ${Object.values(chosen.photo_labels).reduce((a, b) => a + b, 0)} on the website`));
   const picked = chosen.asset_sheet?.photo_urls || [];
   for (const [i, url] of chosen.photos.entries()) {
     const label = el('label'), c = el('input'), img = el('img');

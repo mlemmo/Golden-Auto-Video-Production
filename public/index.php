@@ -347,4 +347,4 @@ if (isset($_GET['api'])) {
   <?php require $private.'/narration_panel.php'; ?>
 </section>
 </main>
-<script>window.CSRF=<?=json_encode($_SESSION['csrf'])?>;</script><script src="app.js?v=13"></script><script src="narration.js?v=6"></script></body></html>
+<script>window.CSRF=<?=json_encode($_SESSION['csrf'])?>;</script><script src="app.js?v=14"></script><script src="narration.js?v=6"></script></body></html>

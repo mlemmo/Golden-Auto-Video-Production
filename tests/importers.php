@@ -22,7 +22,7 @@ $site=['https://lr.com/sitemap'=>'<loc>https://lr.com/vdp/1/Used-2026-Porsche-91
     'https://lr.com/vdp/2/Used-2023-Audi-Q5'=>$page('2','2023','Audi','Q5','31995.00','0944','18,250')];
 $fetch=function(string $url)use(&$site,&$fetches,$jpeg){$fetches[]=$url;
     if(isset($site[$url]))return ['code'=>200,'body'=>$site[$url],'url'=>$url,'headers'=>''];
-    if(preg_match('~/p(\d+)\.jpg$~',$url,$m))return ['code'=>200,'body'=>$jpeg(20*(int)$m[1]),'url'=>$url,'headers'=>''];
+    if(preg_match('~/p(\d+)\.jpg$~',$url,$m))return ['code'=>200,'body'=>$jpeg(crc32($url)%250),'url'=>$url,'headers'=>''];
     return ['code'=>404,'body'=>'','url'=>$url,'headers'=>''];};
 try{
     $v=dcsParseVdp($site['https://lr.com/vdp/1/Used-2026-Porsche-911'],'https://lr.com/vdp/1/x');
@@ -34,8 +34,14 @@ try{
     $db->exec("INSERT INTO state VALUES ('clients','".json_encode(['items'=>[['id'=>'golden-auto','name'=>'Golden Auto','website'=>'https://www.mygoldenauto.net'],['id'=>'lr','name'=>'LR','website'=>'https://lr.com','analysis'=>['sitemap'=>'https://lr.com/sitemap']]]])."')");
     $r=clientImportDcs($db,$cfg,clientFind($db,'lr'),$fetch);
     verify($r['report']['added']===2&&count($r['vehicles'])===2&&!$r['report']['errors'],'both cars imported; blog pages ignored');
+    verify(!array_filter($fetches,fn($u)=>str_ends_with($u,'.jpg'))&&clientInventory($db,'lr')['vehicles'][0]['photos_pending']===true,'import is quick: photos are left to the photo worker');
+    // Photo worker: every photo is downloaded and sorted; only whole-car exterior shots are kept, in website order.
+    $classify=fn(array $paths)=>array_combine($paths,array_map(fn($i)=>in_array($i,[0,1,8],true)?'exterior':($i===2?'open':'interior'),array_keys($paths)));
+    $log=dcsProcessPhotos($db,$cfg,50,$fetch,$classify);
     $p=clientInventory($db,'lr')['vehicles'][0];
-    verify(count($p['photos'])===DCS_PHOTOS&&preg_match('~^https://example\.com:4343/assets/[a-f0-9]{40}\.jpg$~',$p['photos'][0])===1&&is_file("$dir/assets/".basename($p['photos'][0])),'first 8 photos copied to this server as local JPEGs');
+    verify(count($log)===2&&count($p['photos'])===3&&$p['photos_pending']===false&&$p['photo_labels']===['exterior'=>3,'open'=>1,'interior'=>6],'all 10 photos sorted; the 3 exterior shots kept, open-door and interior dropped');
+    verify(preg_match('~^https://example\.com:4343/assets/[a-f0-9]{40}\.jpg$~',$p['photos'][0])===1&&is_file("$dir/assets/".basename($p['photos'][0]))&&count(glob("$dir/assets/*.jpg"))===3+2,'kept photos are local JPEGs; dropped copies deleted');
+    verify(dcsProcessPhotos($db,$cfg,50,$fetch,$classify)===[],'nothing left to do on the next run');
     verify(state($db,'inventory')===null,'Golden Auto inventory untouched');
     verify((clientFind($db,'lr')['dealer']['name']??'')==='eLeaseReturns','dealer details saved on the client');
 
@@ -43,8 +49,23 @@ try{
     $r=clientImportDcs($db,$cfg,clientFind($db,'lr'),$fetch);
     $inv=array_column(clientInventory($db,'lr')['vehicles'],null,'StockNumber');
     verify($r['report']['updated']===1&&$r['report']['gone']===1&&$inv['0944']['active']===false&&$inv['0931']['active']===true,'a car that left the website stays listed as inactive');
-    verify(!array_filter($fetches,fn($u)=>str_ends_with($u,'.jpg')),'unchanged photos are not downloaded again');
+    verify(!array_filter($fetches,fn($u)=>str_ends_with($u,'.jpg'))&&$inv['0931']['photos_pending']===false&&count($inv['0931']['photos'])===3,'unchanged photos are not downloaded or sorted again');
+    // New photo set → sorted again; a model that is missing keeps every photo; a model that finds no exterior keeps all.
+    $site['https://lr.com/sitemap']='<loc>https://lr.com/vdp/1/Used-2026-Porsche-911</loc>';$site['https://lr.com/vdp/1/Used-2026-Porsche-911']=$page('1','2026','Porsche','911','177995.00','0931','2,599',4);
+    clientImportDcs($db,$cfg,clientFind($db,'lr'),$fetch);
+    dcsProcessPhotos($db,$cfg,50,$fetch,fn($paths)=>null);
+    verify(count(array_column(clientInventory($db,'lr')['vehicles'],null,'StockNumber')['0931']['photos'])===4,'no image model: every photo kept');
+    $site['https://lr.com/vdp/1/Used-2026-Porsche-911']=$page('1','2026','Porsche','911','177995.00','0931','2,599',5);
+    clientImportDcs($db,$cfg,clientFind($db,'lr'),$fetch);
+    dcsProcessPhotos($db,$cfg,50,$fetch,fn($paths)=>array_fill_keys($paths,'interior'));
+    verify(count(array_column(clientInventory($db,'lr')['vehicles'],null,'StockNumber')['0931']['photos'])===5,'no exterior found: every photo kept rather than none');
+    $site['https://lr.com/sitemap']='<loc>https://lr.com/vdp/1/Used-2026-Porsche-911</loc>';
     $site['https://lr.com/sitemap']='<loc>https://lr.com/about</loc>';
+    // A photo file that another saved car still uses is never deleted when this car drops it.
+    $inv=clientInventory($db,'lr');$shared=basename($inv['vehicles'][0]['photos'][0]);
+    $inv['vehicles'][]=['StockNumber'=>'X1','source'=>'dcs','photos_pending'=>true,'photo_sources'=>[$inv['vehicles'][0]['photo_sources'][0]]];save($db,clientInventoryKey('lr'),$inv);
+    dcsProcessPhotos($db,$cfg,50,$fetch,fn($paths)=>array_fill_keys($paths,'interior'));
+    verify(is_file("$dir/assets/$shared"),'a photo another car still uses is kept on disk');
     try{clientImportDcs($db,$cfg,clientFind($db,'lr'),$fetch);verify(false,'empty sitemap rejected');}catch(RuntimeException $e){verify(str_contains($e->getMessage(),'no vehicle pages'),'empty sitemap rejected');}
 }finally{
     foreach([...glob("$dir/assets/*"),...glob("$dir/data/*")] as $f)unlink($f);rmdir("$dir/assets");rmdir("$dir/data");rmdir($dir);
