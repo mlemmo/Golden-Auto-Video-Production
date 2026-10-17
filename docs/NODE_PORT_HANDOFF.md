@@ -37,7 +37,12 @@ with drawtext/overlay, EXIF rotation ignored like GD), `src/lib/zip.js` (zlib). 
 `node src/cli/photo-worker.js`; the node site's cron runs it instead of private/photo_worker.php). Checked live in a
 throw-away database: eLease analysis, import of 25 cars and the Range Rover's photo sort (10 of 69 kept, as PHP).
 
-Next per the order below: narrations (4), jobs (5), the caption worker (6), dashboard pages (7). The dashboard's ZIP
+Narrations (4) done: `src/lib/narrations.js` + `src/routes/narrations.js` (all narration_* actions on Node on the node
+site), same Python helper (async), parity on generated action runs with fake ElevenLabs/fal. PHP's narrationBridge
+has an optional test hook (`narrationBridgeHook`). Checked on the node site: real helper probe, narration_list, and a
+preview request without approval refused before any API call.
+
+Next per the order below: jobs (5), the caption worker (6), dashboard pages (7). The dashboard's ZIP
 import action (`import`) and the vehicle `detail`/`sheet` actions can now use media.js.
 
 ## How to port each area (the method so far)
