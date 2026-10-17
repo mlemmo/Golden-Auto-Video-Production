@@ -53,3 +53,4 @@ a.button{display:inline-block;background:var(--gold);color:#151a23;border-radius
 
 [hidden]{display:none!important}
 .mismatch{color:#ff9b8f;font-weight:600}
+.staging-banner{background:#7a3d00;color:#ffe2bf;font-weight:700;text-align:center;padding:8px 12px;border-radius:8px;margin-bottom:12px}
