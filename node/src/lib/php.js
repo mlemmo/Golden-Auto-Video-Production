@@ -156,7 +156,7 @@ export function filterValidateInt(v) {
 
 /** strnatcasecmp(): natural-order, case-insensitive (ASCII) comparison; <0, 0, >0 like PHP 8 (returns -1/0/1). */
 export function strnatcasecmp(a, b) {
-  a = lower(a); b = lower(b);
+  a = upper(a); b = upper(b);  // PHP folds case to upper (so "_" sorts after letters)
   let ai = 0, bi = 0;
   const isDigit = (c) => c >= '0' && c <= '9';
   const isSpace = (c) => c === ' ' || (c >= '\t' && c <= '\r');

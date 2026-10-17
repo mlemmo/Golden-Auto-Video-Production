@@ -1,3 +1,4 @@
+import { JPEG_40x30, PNG_20x20_TRANSPARENT, JPEG_1800x900 } from '../fixtures/images.js';
 // Seeded generator of realistic and awkward inputs for the parity check.
 export function rng(seed) {
   let s = seed >>> 0;
@@ -137,6 +138,7 @@ export function buildCases(seed = 42, count = 400) {
     if (i % 3 === 0) clientCases(r, add, i);
     if (i % 4 === 0) importerCases(r, add, i);
     if (i % 4 === 2) goldenCases(r, add);
+    if (i % 6 === 1) mediaCases(r, add);
   }
   return cases;
 }
@@ -254,4 +256,29 @@ function goldenCases(r, add) {
   if (script) pages[src + script] = body;
   add('parityGoldenInventory', src, pages);
   add('jsonp', body);
+}
+
+
+// ---- Photo import (DealerCenter media ZIPs): listing fields, entry names, natural order, image checks ----
+const IMG = { jpg: JPEG_40x30, png: PNG_20x20_TRANSPARENT, big: JPEG_1800x900 };
+const ZIP_NAMES = ['photo_1.jpg', 'photo_10.jpg', 'photo_2.JPG', 'Photo_003.jpeg', 'img 2.png', 'b.webp', 'notes.txt', 'dir/photo_5.jpg', '__MACOSX/x.jpg', 'folder/', 'a01.jpg', 'a1.jpg'];
+function mediaCases(r, add) {
+  const files = {};
+  for (let k = 0, n = Math.floor(r() * 5); k < n; k++) files[pick(r, ZIP_NAMES)] = pick(r, ['jpg', 'jpg', 'png', 'big', 'bad']);
+  if (r() < 0.05) files['../evil.jpg'] = 'jpg';
+  // Each field is valid most of the time, so whole imports (images, order, sizes) are compared too.
+  const f = (good, bad) => (r() < 0.88 ? pick(r, good) : pick(r, bad));
+  const fields = {
+    stock: f(['870288', 'A13806', ' 0939 '], ['bad stock!', '', 'x'.repeat(41)]),
+    year: f(['2013', 2013, ' 2016 ', '+2016'], ['1899', '2099', 'x', '', '2016.0']),
+    make: f(['Subaru', ' Land Rover '], ['', 'x'.repeat(61)]), model: f(['XV Crosstrek', '911'], ['']),
+    trim: pick(r, ['', ' Premium ']), vin: f(['', 'jf2gpawc5d2870288'], ['JF2GPAWC5D287028O', 'SHORT']),
+    prices: f(['', '14688.25', '$14,550; 14688.25', ' ; 9000 ;'], ['0', 'abc', '-5']), mileage: f(['', '60123', ' 60123 '], ['12,500', '2000001', '-1']),
+    description: f(['', 'Clean <b>Carfax</b>', 'a < b', ' spaced '], ['x'.repeat(20001)]), drivetrain: pick(r, ['', ' AWD ']),
+  };
+  if (!Object.keys(files).length || r() < 0.7) files[pick(r, ['photo_1.jpg', 'photo_10.jpg', 'Photo_003.jpeg', 'img 2.png'])] = pick(r, ['jpg', 'png', 'big']);
+  add('parityImportMedia', fields, files, IMG);
+  add('strip_tags', pick(r, ['Clean <b>Carfax</b>', 'a < b > c', '<p>x</p>y', 'tail<', '<!-- n -->t', 'Café <i>crème</i>']));
+  add('strnatcasecmp', pick(r, ZIP_NAMES), pick(r, ZIP_NAMES));
+  add('parityFilterInt', pick(r, ['0', '05', '+5', ' 7 ', '5.0', '1e3', '', 'x', 5, 5.5, -3, true, null, '2016']));
 }

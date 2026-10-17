@@ -5,6 +5,12 @@ import { clientAnalyze, clientAdd, clientsLoad, clientSaveDetails, clientInvento
 import { openMemoryDb, save, state } from '../../src/lib/db.js';
 import { dcsParseVdp, clientImportDcs } from '../../src/lib/importers.js';
 import { jsonp, goldenInventory } from '../../src/lib/website.js';
+import { importMediaZip } from '../../src/lib/media.js';
+import { probeImage } from '../../src/lib/images.js';
+import { writeZip } from '../../src/lib/zip.js';
+import { stripTags, strnatcasecmp, filterValidateInt } from '../../src/lib/php.js';
+import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { clientFind } from '../../src/lib/clients.js';
 
 const fakeFetch = (pages) => async (url) => {
@@ -12,6 +18,21 @@ const fakeFetch = (pages) => async (url) => {
   return p ? { code: Number(p.code), body: String(p.body ?? ''), url, headers: String(p.headers ?? '') } : { code: 404, body: '', url, headers: '' };
 };
 export const wrappers = {
+  strip_tags: stripTags,
+  strnatcasecmp: (a, b) => Math.sign(strnatcasecmp(a, b)),
+  parityFilterInt: (v) => filterValidateInt(v),
+  parityImportMedia(fields, files, img) {
+    const dir = mkdtempSync(tmpdir() + '/ga-nim-');
+    const zip = dir + '/m.zip';
+    writeFileSync(zip, writeZip(Object.entries(files).map(([n, k]) => [n, k === 'bad' ? Buffer.from('not an image') : Buffer.from(img[k], 'base64')])));
+    const cfg = { asset_dir: dir + '/assets', public_base_url: 'https://node.example.com:4343' };
+    try {
+      const v = importMediaZip(zip, fields, cfg);
+      v.photos = v.photos.map((u) => { const s = probeImage(readFileSync(cfg.asset_dir + '/' + u.split('/').pop())); return [s.width, s.height, 'image/jpeg']; });
+      delete v.imported_at; delete v.detail_checked_at;
+      return v;
+    } finally { rmSync(dir, { recursive: true, force: true }); }
+  },
   dcsParseVdp,
   jsonp,
   parityGoldenInventory(source, pages) {

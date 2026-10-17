@@ -11,7 +11,7 @@ const ALLOWED=['integerWords','currencyWords','numberSpeech','priceSpeech','spee
  'captionWordKey','captionWordsMatch','captionAlignWords','captionSpokenScript','captionStripExtra','captionSegments',
  'captionVoicedTime','captionSrt','captionDraft','validateSrt','srtTime','highestPrice','money','adPrice','title','script','script30',
  'speechClientSites','shorthandSpeech','captionCallForPrice','priceMatches','clientWebsiteSpoken','clientDetails',
- 'clientInventoryKey','clientWebsite','html_entity_decode','parityParseUrl','parityClientAnalyze','parityClientAdd','paritySaveDetails','dcsParseVdp','parityImportDcs','jsonp','parityGoldenInventory'];
+ 'clientInventoryKey','clientWebsite','html_entity_decode','parityParseUrl','parityClientAnalyze','parityClientAdd','paritySaveDetails','dcsParseVdp','parityImportDcs','jsonp','parityGoldenInventory','parityImportMedia','strip_tags','strnatcasecmp','parityFilterInt'];
 // Fixture wrappers: the same inputs Node gets, with a fake website and an in-memory database (no network, no files).
 function parityDb():PDO{$db=new PDO('sqlite::memory:');$db->setAttribute(PDO::ATTR_ERRMODE,PDO::ERRMODE_EXCEPTION);
     $db->exec('CREATE TABLE state (id TEXT PRIMARY KEY, payload TEXT NOT NULL); CREATE TABLE jobs (id TEXT PRIMARY KEY, fingerprint TEXT UNIQUE, payload TEXT NOT NULL)');return $db;}
@@ -39,3 +39,12 @@ function parityImportDcs(array $client,array $first,array $second,array $prior):
     return ['reports'=>$out,'inventory'=>$inv,'dealer'=>clientFind($db,$client['id'])['dealer']??null];}
 function parityGoldenInventory(string $source,array $pages):array{return inventory($source,function(string $u)use($pages){
     if(!isset($pages[$u]))throw new RuntimeException('Remote request failed (HTTP 404).');return (string)$pages[$u];});}
+/** importMediaZip() on a ZIP of the given entries (name => 'jpg'|'png'|'big'|'bad', images passed as base64). */
+function parityImportMedia(array $fields,array $files,array $img):array{
+    $dir=sys_get_temp_dir().'/ga-pim-'.bin2hex(random_bytes(4));mkdir($dir);$zip=$dir.'/m.zip';$z=new ZipArchive;$z->open($zip,ZipArchive::CREATE);
+    foreach($files as $name=>$kind)$z->addFromString((string)$name,$kind==='bad'?'not an image':base64_decode($img[$kind]));$z->close();
+    $cfg=['asset_dir'=>$dir.'/assets','public_base_url'=>'https://node.example.com:4343'];
+    try{$v=importMediaZip($zip,$fields,$cfg);$sizes=[];foreach($v['photos'] as $u){$s=getimagesize($cfg['asset_dir'].'/'.basename($u));$sizes[]=[$s[0],$s[1],$s['mime']];}
+        $v['photos']=$sizes;unset($v['imported_at'],$v['detail_checked_at']);return $v;}
+    finally{foreach(glob($dir.'/assets/*')?:[] as $f)unlink($f);@rmdir($dir.'/assets');unlink($zip);rmdir($dir);}}
+function parityFilterInt(mixed $v):mixed{return filter_var($v,FILTER_VALIDATE_INT);}
