@@ -16,9 +16,10 @@ function speechClientSites(string $s):string{
         $s=preg_replace('~(?<![A-Za-z0-9])(?:https?://)?(?:www\.)?'.preg_quote($display,'~').'/?(?![A-Za-z0-9/])~i',$spoken,$s);
     return $s;
 }
-/** Listing shorthand said as words: 4WD → "four wheel drive", 4D / 4dr → "four door". Captions keep the shorthand. */
+/** Listing shorthand said as words (4WD → "four wheel drive", 4D / 4dr → "four door", ...). Captions keep the shorthand. */
+const SPEECH_SHORTHAND=['4WD'=>'four wheel drive','AWD'=>'all wheel drive','FWD'=>'front wheel drive','RWD'=>'rear wheel drive','4X4'=>'four by four'];
 function shorthandSpeech(string $s):string{
-    $s=preg_replace('/(?<![A-Za-z0-9])4WD(?![A-Za-z0-9])/i','four wheel drive',$s);
+    foreach(SPEECH_SHORTHAND as $code=>$words)$s=preg_replace('/(?<![A-Za-z0-9])'.preg_quote($code,'/').'(?![A-Za-z0-9])/i',$words,$s);
     return preg_replace('/(?<![A-Za-z0-9])4[ -]?(?:d|dr|door)\.?(?![A-Za-z0-9])/i','four door',$s);
 }
 function nativeSpeech(string $s):string{

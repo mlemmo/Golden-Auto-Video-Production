@@ -62,3 +62,4 @@ assertCaption(priceMatches(null,null)&&!priceMatches(null,14688.0)&&priceMatches
 // --- Listing shorthand in speech: 4WD → four wheel drive, 4D / 4dr → four door; captions keep the shorthand ---
 assertCaption(speechScript('2016 RANGE ROVER SPORT 4WD 4dr V6 HSE')==='twenty sixteen Range Rover Sport four wheel drive four door V 6 H-S-E'&&nativeSpeech('Sedan 4D with 4WD')==='Sedan four door with four wheel drive','4WD and 4D/4dr said as words');
 assertCaption(speechScript('Q4 4DRV')!==''&&!str_contains(speechScript('Q4 4DRV'),'four door')&&captionDisplayText('SPORT 4WD 4dr')==='Sport 4WD 4dr','other codes untouched; captions keep 4WD and 4dr');
+assertCaption(speechScript('XT6 AWD, FWD sedan, RWD coupe, a 4x4 truck')==='X-T 6 all wheel drive, front wheel drive sedan, rear wheel drive coupe, a four by four truck'&&captionDisplayText('AWD FWD RWD 4x4')==='AWD FWD RWD 4x4','AWD, FWD, RWD and 4x4 said as words; captions keep them');
