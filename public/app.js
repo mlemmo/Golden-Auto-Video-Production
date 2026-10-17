@@ -71,7 +71,7 @@ async function select(stock, button) {
     $('facts').textContent = `${chosen.Trim} · ${price(chosen)} · ${(chosen.Odometer == null ? 'Mileage not entered' : Number(chosen.Odometer).toLocaleString())} miles · #${chosen.StockNumber}`;
     $('description').textContent = chosen.description || 'No description found.';
     $('script').value = chosen.scripts?.[$('duration').value] || chosen.script;
-    $('generate').disabled = false; $('brief').disabled = false; $('approve').checked = false; $('confirmCurrent').checked = false;
+    $('generate').disabled = false; $('brief').disabled = false; $('buildFootage').disabled = false; $('approve').checked = false; $('confirmCurrent').checked = false;
     showPhotos(); words(); approvedVoices();
     if (typeof refreshNarrations === 'function') refreshNarrations().catch(e => fail(e.message, statusOf('voiceStudio')));
     message(chosen.sheet_error || `${chosen.Year} ${chosen.Make} ${chosen.Model} selected. Continue with the script in step 2.`);
@@ -82,7 +82,7 @@ $('sync').onclick = async () => {
   if (busy) return; busy = true; $('sync').disabled = true;
   message('Refreshing current inventory…');
   try {
-    const a = await api('sync'); render(a.vehicles); chosen = null; $('generate').disabled = true; $('brief').disabled = true;
+    const a = await api('sync'); render(a.vehicles); chosen = null; $('generate').disabled = true; $('brief').disabled = true; $('buildFootage').disabled = true;
     $('syncTime').textContent = `${a.vehicles.length} vehicles · checked ${new Date(a.checked_at).toLocaleString()}`;
     message('Inventory refreshed. Select a vehicle.'); summary();
   } catch (e) { fail(e.message); } finally { busy = false; $('sync').disabled = false; }
@@ -166,6 +166,19 @@ function recipe() {
 $('style').onchange = recipe; $('voice').onchange = recipe;
 
 // ---- Step 4: look -----------------------------------------------------------------------------
+// Video source: AI showroom video (Seedance), or the dealer's own footage + the approved voice (no generation).
+function footageMode() { return $('source').value === 'footage'; }
+function sourceMode() {
+  const f = footageMode();
+  $('footageBox').hidden = !f; $('aiLook').hidden = f; $('aiSheet').hidden = f; $('approveLabel').hidden = f;
+  for (const id of ['generate', 'checkReferences', 'brief']) $(id).hidden = f;
+  $('buildFootage').hidden = !f;
+  // Footage always uses the approved ElevenLabs voice from step 3.
+  if (f && $('voice').value !== 'elevenlabs') { $('voice').value = 'elevenlabs'; recipe(); }
+  $('voice').disabled = f;
+  summary();
+}
+$('source').onchange = sourceMode;
 $('format').onchange = () => {
   $('formatHint').textContent = $('format').value === 'facebook_feed' ? 'Seedance renders a 3:4 video; it is cropped to 4:5 when finished.' : 'Generated in this shape directly. Check captions and face placement before posting.';
   summary();
@@ -244,11 +257,12 @@ function summary() {
   const ul = $('summary'); if (!ul) return; ul.replaceChildren();
   const voiceText = {elevenlabs: 'approved ElevenLabs voice', native: 'Seedance voice', narration: 'silent video + ElevenLabs lip-sync'}[$('voice').value];
   const approved = $('voice').value !== 'elevenlabs' || $('approvedVoice').value;
+  const footage = footageMode();
   const rows = [
     ['Vehicle', chosen ? `${chosen.Year} ${chosen.Make} ${chosen.Model} · ${price(chosen)}` : 'not selected', !!chosen],
     ['Voice', voiceText + ($('voice').value === 'elevenlabs' ? (approved ? ' · preview chosen' : ' · no approved preview yet') : ''), !!approved],
-    ['Spokesperson', presenter()?.name || 'none', !!presenter()],
-    ['Video', `${$('duration').value} s · ${$('format').selectedOptions[0]?.text.split(' — ')[0]} · ${$('style').value === 'showroom' ? 'walkaround' : 'dynamic'}`, true],
+    footage ? ['Footage', $('footage').files[0]?.name || 'no video chosen yet', !!$('footage').files[0]] : ['Spokesperson', presenter()?.name || 'none', !!presenter()],
+    ['Video', `${$('duration').value} s · ${$('format').selectedOptions[0]?.text.split(' — ')[0]} · ${footage ? 'your footage' : $('style').value === 'showroom' ? 'walkaround' : 'dynamic'}`, true],
   ];
   for (const [k, v, ok] of rows) { const li = el('li'); li.className = ok ? 'ok' : 'todo'; li.append(el('b', k), el('span', v)); ul.append(li); }
 }
@@ -276,6 +290,25 @@ $('generate').onclick = async () => {
     message('Generation submitted. It takes a few minutes — follow it under Videos below.');
     await jobs(); $('videos').scrollIntoView({behavior: 'smooth'});
   } catch (e) { fail(e.message); } finally { busy = false; $('generate').disabled = !chosen; }
+};
+$('footage').onchange = summary;
+$('buildFootage').onclick = async () => {
+  if (busy || !chosen) return;
+  if (!$('approvedVoice').value) { fail('Choose an approved voice preview in step 3 first.'); return; }
+  const file = $('footage').files[0];
+  if (!file) { fail('Choose the car video in step 4 first.'); return; }
+  if (file.size > 64 * 1024 * 1024) { fail('That video is larger than 64 MB. Export or film it at 1080p.'); return; }
+  busy = true; $('buildFootage').disabled = true;
+  message('Uploading your footage… this can take a minute on a slow connection.');
+  try {
+    const form = new FormData();
+    form.append('stock', chosen.StockNumber); form.append('format', $('format').value); form.append('narration_id', $('approvedVoice').value);
+    if ($('confirmCurrent').checked) form.append('confirm_current', '1');
+    form.append('footage', file);
+    const r = await fetch('?api=footage_build', {method: 'POST', headers: {'X-CSRF-Token': window.CSRF}, body: form});
+    message((await responseJson(r)).message);
+    await jobs(); $('videos').scrollIntoView({behavior: 'smooth'});
+  } catch (e) { fail(e.message); } finally { busy = false; $('buildFootage').disabled = !chosen; }
 };
 $('checkReferences').onclick = async () => {
   if (busy) return; busy = true; $('checkReferences').disabled = true;

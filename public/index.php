@@ -32,7 +32,7 @@ if (isset($_GET['api'])) {
         if ($_SERVER['REQUEST_METHOD']!=='POST') throw new RuntimeException('POST required.');
         if (!hash_equals($_SESSION['csrf'],$_SERVER['HTTP_X_CSRF_TOKEN']??'')) {http_response_code(403);throw new RuntimeException('Invalid request.');}
         $action=$_GET['api'];
-        $in=in_array($action,['import','spokesperson_upload'],true)?$_POST:json_decode(file_get_contents('php://input'),true,512,JSON_THROW_ON_ERROR);
+        $in=in_array($action,['import','spokesperson_upload','footage_build'],true)?$_POST:json_decode(file_get_contents('php://input'),true,512,JSON_THROW_ON_ERROR);
         require_once $private.'/spokespersons.php';
         // Golden Auto narration-first add-on
         if(str_starts_with($action,'narration_')){require_once $private.'/narrations.php';echo json_encode(narrationApi($action,$in,$cfg,$db),JSON_THROW_ON_ERROR);exit;}
@@ -88,6 +88,10 @@ if (isset($_GET['api'])) {
             $sheet=referenceImageUrl(trim((string)($in['sheet']??'')),$cfg);$avatar=referenceImageUrl(spokespersonFind($db,$cfg,(string)($in['spokesperson']??''))['url'],$cfg);
             uploadReference($sheet,$cfg);uploadReference($avatar,$cfg);
             echo json_encode(['message'=>'Both references uploaded successfully to Higgsfield. No video generation was submitted.']);exit;
+        }
+        if ($action==='footage_build') {
+            require_once $private.'/footage.php';$job=goldenFootageBuild($db,$cfg,$in,$_FILES['footage']??null);
+            echo json_encode(['message'=>'Footage uploaded. The final video with your approved voice and captions is being built and appears under Videos in a few minutes. No paid generation was used.','job'=>$job],JSON_THROW_ON_ERROR);exit;
         }
         if ($action==='job_delete') {require_once $private.'/jobs.php';echo json_encode(goldenJobDelete($db,$cfg,(string)($in['id']??'')),JSON_THROW_ON_ERROR);exit;}
         if ($action==='jobs') {echo json_encode($db->query('SELECT payload FROM jobs ORDER BY rowid DESC LIMIT 30')->fetchAll(PDO::FETCH_COLUMN));exit;}
@@ -234,13 +238,21 @@ if (isset($_GET['api'])) {
 
 <section class="panel" id="stepLook">
   <div class="step-head"><span class="step-num">4</span><div><h2>Look</h2><p>Spokesperson, style, format and the car photos the video is made from.</p></div></div>
+  <label>Video source<select id="source"><option value="ai">AI showroom video — Seedance films the car and the spokesperson</option><option value="footage">My footage — a video I filmed of this car (no spokesperson, no generation cost)</option></select></label>
+  <div id="footageBox" hidden>
+    <label>Car video — MP4 or MOV, up to 64 MB<input type="file" id="footage" accept="video/mp4,video/quicktime,.mp4,.mov,.m4v"></label>
+    <p class="hint">Hold the phone upright and walk slowly around the car for 30–45 seconds, in even light; film or export at 1080p so it stays under 64 MB. Its own sound is replaced by the approved voice from step 3, and it is cropped to the publish format and trimmed to the video length.</p>
+  </div>
+  <div id="aiLook">
   <label>Spokesperson<select id="spokesperson"><option value="">Loading spokespersons…</option></select></label>
   <div id="spokespersonPreview" class="spokesperson-preview"></div>
   <button type="button" class="secondary small" id="manageSpokespersons">Add or manage spokespersons</button>
   <label>Video style<select id="style"><option value="showroom">Showroom walkaround — spokesperson walks around the car</option><option value="dynamic">Dynamic product sequence — tracking / interior / drone (lip-sync method only)</option></select></label>
   <div class="beats" id="beats"></div>
+  </div>
   <label>Publish format<select id="format"><option value="instagram_reels">Instagram Reels — 9:16</option><option value="facebook_reels">Facebook Reels — 9:16</option><option value="facebook_feed">Facebook Feed — 4:5 (cropped after generation)</option><option value="square">Instagram / Facebook Square — 1:1</option></select></label>
   <p class="hint" id="formatHint">Vertical video. Check captions and face placement before posting.</p>
+  <div id="aiSheet">
   <span class="eyebrow">CAR PHOTOS SENT TO THE VIDEO MODEL</span>
   <div id="sheetPreview"></div>
   <details class="sub"><summary>Change which photos are used</summary>
@@ -250,15 +262,16 @@ if (isset($_GET['api'])) {
     <p class="status" role="status" hidden></p>
     <button id="rebuild" class="secondary" disabled>Rebuild asset sheet</button>
   </details>
+  </div>
 </section>
 
 <section class="panel" id="stepGenerate">
   <div class="step-head"><span class="step-num">5</span><div><h2>Generate</h2><p>One paid generation. The captioned final video is then built automatically and appears under Videos.</p></div></div>
   <ul class="summary" id="summary"></ul>
-  <label class="check"><input type="checkbox" id="approve">I reviewed the vehicle facts and script and approve one paid Higgsfield generation at my account’s current rate.</label>
+  <label class="check" id="approveLabel"><input type="checkbox" id="approve">I reviewed the vehicle facts and script and approve one paid Higgsfield generation at my account’s current rate.</label>
   <label class="check"><input type="checkbox" id="confirmCurrent">I confirm the vehicle is available and its advertised price is current.</label>
   <p class="status" role="status" hidden></p>
-  <div class="actions"><button id="generate" disabled>Generate video</button><button class="secondary" id="checkReferences">Check reference uploads</button><button class="secondary" id="brief" disabled>Download production brief</button></div>
+  <div class="actions"><button id="buildFootage" hidden disabled>Build video from my footage</button><button id="generate" disabled>Generate video</button><button class="secondary" id="checkReferences">Check reference uploads</button><button class="secondary" id="brief" disabled>Download production brief</button></div>
 </section>
 </div>
 </div>
@@ -298,4 +311,4 @@ if (isset($_GET['api'])) {
   <?php require $private.'/narration_panel.php'; ?>
 </section>
 </main>
-<script>window.CSRF=<?=json_encode($_SESSION['csrf'])?>;</script><script src="app.js?v=9"></script><script src="narration.js?v=6"></script></body></html>
+<script>window.CSRF=<?=json_encode($_SESSION['csrf'])?>;</script><script src="app.js?v=10"></script><script src="narration.js?v=6"></script></body></html>
