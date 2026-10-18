@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Caption worker (cron, every minute): auto build, then one queued final render (src/lib/worker.js). Node version of
-// private/caption_worker.php. One run at a time: a lock folder in data_dir, taken over when older than 20 minutes
-// (a run that died; PHP marks a render stuck after 15).
+// One run at a time: a lock folder in data_dir, taken over when older than 20 minutes
+// (a run that died; a render is marked stuck after 15).
 import { mkdirSync, rmSync, statSync } from 'node:fs';
 import { loadConfig } from '../lib/config.js';
 import { openDb } from '../lib/db.js';

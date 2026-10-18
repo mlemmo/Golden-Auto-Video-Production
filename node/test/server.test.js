@@ -123,7 +123,8 @@ test('sign-in, the React dashboard page, static files, sign-out', async () => {
     assert.ok(html.includes('<title>STAGING • Golden Auto • Video Studio</title>') && html.includes('<div id="root">'), 'the React page');
     b.csrf = csrf;
     assert.equal((await (await b.post('clients', {})).json()).current, 'golden-auto');
-    assert.equal((await b.go('/?api=inventory', { method: 'POST', headers: { 'x-csrf-token': csrf } })).status, 200, 'older ?api= address works too');
+    assert.equal((await b.go('/?api=inventory', { method: 'POST', headers: { 'x-csrf-token': csrf } })).status, 303, 'a POST to / is not an action (it redirects to the dashboard)');
+    assert.equal((await b.go('/index.php')).status, 404, 'no old index.php address');
     // Static files.
     r = await b.go('/app/static/index-abc.js');
     assert.equal(r.status, 200); assert.match(r.headers.get('cache-control'), /immutable/); assert.match(r.headers.get('content-type'), /javascript/);

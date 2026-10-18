@@ -1,9 +1,9 @@
-// Caption engine. Port of private/captions.php (captionDisplayText … validateSrt). Output must match PHP exactly:
-// widths are counted in bytes (PHP strlen) and whitespace is ASCII-only, as in PHP's PCRE.
+// Caption engine (captionDisplayText … validateSrt). Line widths are counted in UTF-8 bytes (strlen) and whitespace
+// in plain patterns is ASCII-only.
 import { integerWords, speechScript } from './speech.js';
-import { levenshtein, lower, quote, round, rtrim, strlen, trim, ucfirst, U_BOUNDARY, U_DIGIT_CHARS, U_SPACE, U_WORD_CHARS } from './php.js';
+import { levenshtein, lower, quote, round, rtrim, strlen, trim, ucfirst, U_BOUNDARY, U_DIGIT_CHARS, U_SPACE, U_WORD_CHARS } from './text.js';
 
-// PHP whitespace: ASCII in plain patterns, Unicode in /u patterns (see php.js).
+// Whitespace: ASCII in plain patterns, Unicode spaces in the U_SPACE set (see text.js).
 const WS = '[\\t\\n\\v\\f\\r ]';
 const US = U_SPACE;
 

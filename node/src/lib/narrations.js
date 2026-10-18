@@ -1,18 +1,18 @@
-// Voice previews (ElevenLabs) and lip-sync (fal) for the dashboard's Voice step. Port of private/narrations.php.
-// Paid calls keep PHP's rules: each needs its approval checkbox, every request is reserved first under a unique
+// Voice previews (ElevenLabs) and lip-sync (fal) for the dashboard's Voice step.
+// Paid-call rules: each needs its approval checkbox, every request is reserved first under a unique
 // fingerprint (a repeat is refused instead of paid twice), a provider rejection releases it, an unclear outcome is
-// kept as "submission_uncertain". HTTP, audio length and padding go through the same Python helper as PHP
+// kept as "submission_uncertain". HTTP, audio length and padding go through a Python helper
 // (private/narration_bridge.py: no redirects, allowed hosts only, error details stripped of keys and URLs).
 import { spawn } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync, chmodSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { lower, trim, strlen, levenshtein, toFloat, toInt, gmdateC, parseUrl, str } from './php.js';
+import { lower, trim, strlen, levenshtein, toFloat, toInt, gmdateC, parseUrl, str } from './text.js';
 import { speechScript, SEEDANCE_RESPELL } from './speech.js';
 import { captionWordsMatch } from './captions.js';
 import { CLIENT_DEFAULT, clientInventory } from './clients.js';
 import { title } from './price.js';
-import { phpJsonEncode } from './phpjson.js';
+import { jsonEncode } from './storedjson.js';
 import { validateAppBase, publicImage } from './media.js';
 import { rawurlencode } from './website.js';
 
@@ -33,12 +33,12 @@ export function narrationBridge(input) {
       if (r.error !== undefined) return reject(new Error(String(r.error)));
       resolve(r);
     });
-    p.stdin.end(phpJsonEncode(input));
+    p.stdin.end(jsonEncode(input));
   });
 }
 /** narrationHttp(): { status, body: Buffer, detail? } through the helper. */
 export async function narrationHttp(bridge, url, method, headers, body = null) {
-  const r = await bridge({ op: 'http', url, method, headers, body: Buffer.from(body === null ? '' : phpJsonEncode(body)).toString('base64') });
+  const r = await bridge({ op: 'http', url, method, headers, body: Buffer.from(body === null ? '' : jsonEncode(body)).toString('base64') });
   const raw = String(r.body ?? '');
   if (!/^[A-Za-z0-9+/]*={0,2}$/.test(raw)) throw new Error('Invalid API response encoding.');
   return { ...r, body: Buffer.from(raw, 'base64') };
@@ -118,11 +118,11 @@ export function narrationLoad(db, table, id) {
 }
 export function narrationSave(db, table, record, release = false) {
   if (!TABLES.includes(table)) throw new Error('Invalid table.');
-  db.prepare(`UPDATE ${table} SET payload=?${release ? ',fingerprint=NULL' : ''} WHERE id=?`).run(phpJsonEncode(record), record.id);
+  db.prepare(`UPDATE ${table} SET payload=?${release ? ',fingerprint=NULL' : ''} WHERE id=?`).run(jsonEncode(record), record.id);
 }
 export function narrationReserve(db, table, record, fingerprint) {
   if (!TABLES.includes(table)) throw new Error('Invalid table.');
-  try { db.prepare(`INSERT INTO ${table} VALUES (?,?,?)`).run(record.id, fingerprint, phpJsonEncode(record)); }
+  try { db.prepare(`INSERT INTO ${table} VALUES (?,?,?)`).run(record.id, fingerprint, jsonEncode(record)); }
   catch (e) { if (String(e.message).includes('UNIQUE')) throw new Error('This request already exists. Refresh saved previews or lip-sync jobs; do not resubmit an uncertain request.'); throw e; }
 }
 export const narrationRejected = (code) => [400, 401, 402, 403, 404, 405, 413, 415, 422, 429].includes(code);
@@ -211,7 +211,7 @@ export async function narrationApi(action, inp, cfg, db, { bridge: helper = narr
     const duration = toInt(inp.duration ?? 15);
     if (![15, 30].includes(duration)) throw new Error('Choose 15 or 30 seconds.');
     const settings = narrationVoiceSettings(cfg, duration);
-    let fingerprint = createHash('sha256').update(phpJsonEncode([v.StockNumber, v.price, voice, text, captions, duration, settings])).digest('hex');
+    let fingerprint = createHash('sha256').update(jsonEncode([v.StockNumber, v.price, voice, text, captions, duration, settings])).digest('hex');
     if (inp.new_take) fingerprint = createHash('sha256').update(Buffer.concat([Buffer.from(fingerprint), random(16)])).digest('hex');
     const record = { id: random(16).toString('hex'), stock: v.StockNumber, vehicle: title(v), price: v.price, client: clientOf(inp), voice_id: voice, text,
       caption_script: captions, duration, speed: settings.speed ?? 1.0, status: 'submitting', created_at: gmdateC() };
@@ -315,7 +315,7 @@ export async function narrationApi(action, inp, cfg, db, { bridge: helper = narr
         const job = { id: record.id, stock: source.stock, vehicle: source.vehicle, price: source.price, format: source.format, style: source.style ?? 'showroom',
           duration: source.duration ?? 15, status: 'completed', video_url: url, script: audio.caption_script, speech_script: audio.text, created_at: gmdateC(),
           provider: 'fal_lipsync', client: audio.client ?? CLIENT_DEFAULT, narration_id: audio.id, source_video_id: source.id, auto_build: !!record.auto_build };
-        db.prepare('INSERT OR IGNORE INTO jobs (id,fingerprint,payload) VALUES (?,NULL,?)').run(job.id, phpJsonEncode(job));
+        db.prepare('INSERT OR IGNORE INTO jobs (id,fingerprint,payload) VALUES (?,NULL,?)').run(job.id, jsonEncode(job));
         record.status = 'completed'; record.video_url = url; record.completed_at = gmdateC();
       }
     } else record.status = { IN_QUEUE: 'queued', IN_PROGRESS: 'in_progress' }[st.status ?? ''] ?? 'unknown';

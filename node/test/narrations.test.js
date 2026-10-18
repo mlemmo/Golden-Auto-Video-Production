@@ -1,11 +1,10 @@
 // Voice previews and lip-sync. No paid API calls: the Python helper is replaced by a fake that records requests.
-// Includes the port of tests/narration_delete.php.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { openMemoryDb, save } from '../src/lib/db.js';
-import { phpJsonEncode } from '../src/lib/phpjson.js';
+import { jsonEncode } from '../src/lib/storedjson.js';
 import { narrationApi, narrationTables, narrationTextDifferences, narrationVoiceSettings } from '../src/lib/narrations.js';
 
 function setup() {
@@ -15,7 +14,7 @@ function setup() {
   save(db, 'inventory', { vehicles: [{ StockNumber: '870288', Year: 2013, Make: 'SUBARU', Model: 'XV CROSSTREK', price: 14688.25 }] });
   return { dir, cfg, db };
 }
-const put = (db, table, r) => db.prepare(`INSERT INTO ${table} VALUES (?,?,?)`).run(r.id, null, phpJsonEncode(r));
+const put = (db, table, r) => db.prepare(`INSERT INTO ${table} VALUES (?,?,?)`).run(r.id, null, jsonEncode(r));
 
 test('no paid request without its approval; a repeat is refused, not paid twice', async () => {
   const { dir, cfg, db } = setup();
@@ -44,7 +43,7 @@ test('no paid request without its approval; a repeat is refused, not paid twice'
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('deleting previews and lip-sync jobs (port of tests/narration_delete.php)', async () => {
+test('deleting previews and lip-sync jobs', async () => {
   const { dir, cfg, db } = setup();
   const mp3 = (id) => { const f = `${dir}/assets/narrations/${id}.mp3`; writeFileSync(f, 'x'); return f; };
   const api = (a, i) => narrationApi(a, i, cfg, db, { bridge: () => { throw new Error('no helper calls expected'); } });
@@ -59,7 +58,7 @@ test('deleting previews and lip-sync jobs (port of tests/narration_delete.php)',
     put(db, 'narration_lipsync', { id: 'L1', narration_id: used, status: 'queued', audio_file: wav });
     await assert.rejects(api('narration_delete', { id: used }), /Delete that lip-sync job first/);
     await assert.rejects(api('narration_lipsync_delete', { id: 'L1' }), /still running/);
-    db.prepare('UPDATE narration_lipsync SET payload=? WHERE id=?').run(phpJsonEncode({ id: 'L1', narration_id: used, status: 'completed', audio_file: wav }), 'L1');
+    db.prepare('UPDATE narration_lipsync SET payload=? WHERE id=?').run(jsonEncode({ id: 'L1', narration_id: used, status: 'completed', audio_file: wav }), 'L1');
     put(db, 'jobs', { id: 'L1', narration_id: used, status: 'completed', provider: 'fal_lipsync' });
     const r = await api('narration_lipsync_delete', { id: 'L1' });
     assert.ok(r.message.includes('stays in Video jobs') && !existsSync(`${dir}/assets/narrations/${wav}`), 'finished lip-sync job and padded audio deleted');

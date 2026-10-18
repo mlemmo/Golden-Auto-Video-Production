@@ -1,6 +1,6 @@
-// Review captions (caption_draft) and queue the final render (finish): same JSON in and out as public/index.php.
-import { str, toFloat, truthy } from '../lib/php.js';
-import { phpJsonEncode } from '../lib/phpjson.js';
+// Review captions (caption_draft) and queue the final render (finish).
+import { str, toFloat, truthy } from '../lib/text.js';
+import { jsonEncode } from '../lib/storedjson.js';
 import { captionDraft, validateSrt } from '../lib/captions.js';
 import { finishDraft } from '../lib/finishing.js';
 
@@ -22,7 +22,7 @@ async function captionAction(action, { cfg, db, body }) {
   if (busy) throw new Error('This video is already queued for finishing.');
   job.captions_srt = validateSrt(str(body.srt ?? ''), toFloat(job.duration ?? 15));
   job.finish_status = 'queued'; job.render_backend = cfg.render_backend ?? 'linux'; job.finish_error = ''; job.captioned_url = null;
-  db.prepare('UPDATE jobs SET payload=? WHERE id=?').run(phpJsonEncode(job), job.id);
+  db.prepare('UPDATE jobs SET payload=? WHERE id=?').run(jsonEncode(job), job.id);
   return { message: 'Caption render queued. The configured rendering worker will process it. Refresh video jobs to check progress.' };
 }
 

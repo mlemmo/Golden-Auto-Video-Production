@@ -1,6 +1,6 @@
 // The sign-in page (src/templates/login.html), the dashboard page (the React build, web/ → public/app/index.html,
-// with this browser's session values put in) and the password check (bcrypt, the hash format the PHP dashboard
-// made, so the password stays the same).
+// with this browser's session values put in) and the password check (bcrypt; existing "$2y$" hashes work, so
+// the password stays the same).
 import { readFileSync } from 'node:fs';
 import bcrypt from 'bcryptjs';
 import { ROOT } from './config.js';
@@ -40,7 +40,7 @@ export function dashboardPage(cfg, csrf, root = ROOT) {
   return html.replace('<!--GA_BOOT-->', script).replace(/<title>([^<]*)<\/title>/, (_, t) => '<title>' + esc(prefix) + t + '</title>');
 }
 
-/** The dashboard password against its bcrypt hash ("$2y$…" from PHP's password_hash works as is). */
+/** The dashboard password against its bcrypt hash ("$2y$…" hashes work as is). */
 export async function passwordVerify(password, hash) {
   try { return await bcrypt.compare(String(password), String(hash)); } catch { return false; }
 }

@@ -1,7 +1,7 @@
-// Ad scripts built only from inventory facts. Port of script and script30 (private/app.php).
+// Ad scripts built only from inventory facts (15- and 30-second versions).
 import { adPrice, title } from './price.js';
 import { speechWordCount } from './speech.js';
-import { intdiv, lower, numberFormat, str, toFloat, toInt, trim, truthy, upper } from './php.js';
+import { intdiv, lower, numberFormat, str, toFloat, toInt, trim, truthy, upper } from './text.js';
 
 const hasPrice = (v) => v.price !== undefined && v.price !== null;
 

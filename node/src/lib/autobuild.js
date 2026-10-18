@@ -1,16 +1,16 @@
-// One-approval build, run by the caption worker every minute before rendering. Port of private/auto_build.php:
+// One-approval build, run by the caption worker every minute before rendering:
 // 1. auto-build lip-sync jobs still at fal are checked (free status checks; nothing is resubmitted);
 // 2. a finished lip-synced video gets its captions timed from the approved narration audio and is queued;
 // 3. native-voice Seedance jobs are followed on Higgsfield (free status checks) and queued with captions_from_audio.
-import { str, toFloat, gmdateC, truthy } from './php.js';
-import { phpJsonEncode } from './phpjson.js';
+import { str, toFloat, gmdateC, truthy } from './text.js';
+import { jsonEncode } from './storedjson.js';
 import { validateSrt } from './captions.js';
 import { narrationTables, narrationApi, narrationLoad, narrationSave } from './narrations.js';
 import { higgsfieldRequest, jobError } from './jobs.js';
 import { rawurlencode } from './website.js';
 import { finishDraft } from './finishing.js';
 
-const saveJob = (db, job) => db.prepare('UPDATE jobs SET payload=? WHERE id=?').run(phpJsonEncode(job), job.id);
+const saveJob = (db, job) => db.prepare('UPDATE jobs SET payload=? WHERE id=?').run(jsonEncode(job), job.id);
 const jobRows = (db) => db.prepare('SELECT payload FROM jobs ORDER BY rowid').all().map((r) => JSON.parse(r.payload));
 
 export async function higgsfieldStatus(cfg, requestId) {

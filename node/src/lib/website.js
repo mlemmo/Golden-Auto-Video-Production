@@ -1,14 +1,13 @@
 // Golden Auto's website reader (DealerCenter website, mygoldenauto.net) and the "Refresh inventory" action for every
-// client. Port of private/app.php (request, jsonp, inventory) and the sync action in public/index.php. Note: the
-// website blocks this server via Cloudflare today, so Golden Auto's refresh reports that error, exactly as in PHP;
+// client. Note: the website blocks this server via Cloudflare today, so Golden Auto's refresh reports that error;
 // its inventory comes from the DealerCenter snapshot sync instead.
 import { parseHtml } from './dom.js';
-import { lower, str } from './php.js';
+import { lower, str } from './text.js';
 import { highestPrice } from './price.js';
 import { CLIENT_DEFAULT, clientFind, clientInventoryKey } from './clients.js';
 import { clientImportDcs } from './importers.js';
 import { state, save } from './db.js';
-import { gmdateC } from './php.js';
+import { gmdateC } from './text.js';
 
 /** request($url) for plain GETs: https only, no redirects, 45 s, 8 MB; any non-2xx status is an error. */
 export async function requestText(url) {
@@ -22,7 +21,7 @@ export async function requestText(url) {
   return body;
 }
 
-/** jsonp(): a JSONP or JSON response as an array/object; anything else is an error, as in PHP. */
+/** jsonp(): a JSONP or JSON response as an array/object; anything else is an error. */
 export function jsonp(s) {
   s = s.replace(/^[ \t\n\r\0\x0B]+|[ \t\n\r\0\x0B]+$/g, '');
   const m = s.match(/^[a-zA-Z_$][A-Za-z0-9_$]*[\t\n\v\f\r ]*\(([\s\S]*)\)[\t\n\v\f\r ]*;?$/);
@@ -35,7 +34,7 @@ export function jsonp(s) {
 
 /** rawurlencode(): like encodeURIComponent, but also ! ' ( ) * are encoded (and ~ is not). */
 export const rawurlencode = (s) => encodeURIComponent(s).replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
-const phpString = (v) => (Array.isArray(v) || (v && typeof v === 'object') ? 'Array' : str(v));
+const jsonString = (v) => (Array.isArray(v) || (v && typeof v === 'object') ? 'Array' : str(v));
 
 /** inventory($source): Golden Auto's vehicle list from its DealerCenter website. getText(url) is replaceable in tests. */
 export async function goldenInventory(source, getText = requestText) {
@@ -54,7 +53,7 @@ export async function goldenInventory(source, getText = requestText) {
   if (Number(total) > list.length) throw new Error('Inventory exceeds this page; add pagination before syncing.');
   const out = list.map((v) => {
     v = v && typeof v === 'object' && !Array.isArray(v) ? v : {};
-    const parts = [v.Make, v.Model, v.StockNumber].map((s) => rawurlencode(lower(phpString(s).replaceAll(' ', '-'))));
+    const parts = [v.Make, v.Model, v.StockNumber].map((s) => rawurlencode(lower(jsonString(s).replaceAll(' ', '-'))));
     return { ...v, url: source + '/inventory/' + parts.join('/') + '/', price: highestPrice(v), description: '', photos: [] };
   });
   return Array.isArray(vehicles) ? out : Object.fromEntries(Object.keys(vehicles).map((k, i) => [k, out[i]]));

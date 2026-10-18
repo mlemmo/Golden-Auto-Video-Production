@@ -1,19 +1,17 @@
 // Video jobs: Higgsfield reference uploads, the paid Seedance generation, status polls, the jobs list, deleting a
-// job, "My footage" jobs, and reading a car's detail page (enrich). Port of private/references.php (referenceFile,
-// uploadHttp, uploadReference, jobError), private/jobs.php, private/footage.php, enrich/galleryPhotos/
-// referenceImageUrl/request in private/app.php, and the generate/poll/jobs actions in public/index.php.
+// job, "My footage" jobs, and reading a car's detail page (enrich).
 // Paid-call rules kept exactly: generate needs its approval checkbox, the request is reserved first under a fingerprint
 // that includes the exact prompt (a repeat is refused unless the earlier one failed or was canceled), a failed
 // reference upload releases it, and a submission whose outcome is unclear is kept as "submission_uncertain" and never
-// retried automatically. Authenticated Higgsfield POSTs and storage PUTs go through the same Python helper as PHP
+// retried automatically. Authenticated Higgsfield POSTs and storage PUTs go through a Python helper
 // (private/reference_http.py: https only, no redirects).
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, realpathSync, statSync, mkdirSync, copyFileSync, unlinkSync, chmodSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { trim, str, toInt, toFloat, truthy, isNumeric, lower, gmdateC, parseUrl, U_SPACE } from './php.js';
-import { phpJsonEncode } from './phpjson.js';
+import { trim, str, toInt, toFloat, truthy, isNumeric, lower, gmdateC, parseUrl, U_SPACE } from './text.js';
+import { jsonEncode } from './storedjson.js';
 import { parseHtml, hasClassToken } from './dom.js';
 import { highestPrice, priceMatches, title } from './price.js';
 import { probeImage } from './images.js';
@@ -42,7 +40,7 @@ export function uploadHttp(method, url, headers, body) {
     if (i < 0) throw new Error('Invalid upload header.');
     mapped[trim(header.slice(0, i))] = trim(header.slice(i + 1));
   }
-  const payload = phpJsonEncode({ method, url, headers: mapped, body: Buffer.from(body).toString('base64') });
+  const payload = jsonEncode({ method, url, headers: mapped, body: Buffer.from(body).toString('base64') });
   return new Promise((resolve, reject) => {
     const p = spawn('/usr/bin/python3', [UPLOADER], { stdio: ['pipe', 'pipe', 'ignore'] });
     const out = []; let failed = false;
@@ -66,7 +64,7 @@ export function uploadHttp(method, url, headers, body) {
 /** request($url, $payload, $key) for Higgsfield: POSTs through the uploader, GETs (status polls) directly. */
 export async function higgsfieldRequest(url, payload, key, transport = uploadHttp) {
   if (payload !== null && key !== '' && parseUrl(url)?.host === 'api.higgsfield.ai') {
-    try { return (await transport('POST', url, ['Authorization: Key ' + key, 'Content-Type: application/json', 'Accept: application/json'], Buffer.from(phpJsonEncode(payload)))).toString(); }
+    try { return (await transport('POST', url, ['Authorization: Key ' + key, 'Content-Type: application/json', 'Accept: application/json'], Buffer.from(jsonEncode(payload)))).toString(); }
     catch { throw new Error('Higgsfield API POST failed. Submission was not confirmed.'); }
   }
   if (!url.startsWith('https://')) throw new Error('HTTPS is required.');
@@ -114,7 +112,7 @@ export async function uploadReference(url, cfg, transport = uploadHttp) {
   const file = referenceFile(url, cfg);
   const key = str(cfg.higgsfield_key ?? '');
   if (!key) throw new Error('Configure your Higgsfield API key first.');
-  const raw = (await transport('POST', 'https://api.higgsfield.ai/files/generate-upload-url', ['Authorization: Key ' + key, 'Content-Type: application/json'], Buffer.from(phpJsonEncode({ content_type: file.mime })))).toString();
+  const raw = (await transport('POST', 'https://api.higgsfield.ai/files/generate-upload-url', ['Authorization: Key ' + key, 'Content-Type: application/json'], Buffer.from(jsonEncode({ content_type: file.mime })))).toString();
   let data;
   try { data = JSON.parse(raw); } catch { throw new Error('Syntax error'); }
   const isMap = (x) => x !== null && typeof x === 'object';
@@ -136,7 +134,7 @@ export async function uploadReference(url, cfg, transport = uploadHttp) {
 /** jobError(): a provider error for display, links removed, at most 2000 bytes. */
 export function jobError(error) {
   if (error === null || error === undefined) return '';
-  if (typeof error !== 'string') error = phpJsonEncode(error);
+  if (typeof error !== 'string') error = jsonEncode(error);
   const s = Buffer.from(str(error).replace(/https?:\/\/[^\s"<>]+/g, '[URL omitted]'));
   return s.length <= 2000 ? s.toString() : s.subarray(0, 2000).toString();
 }
@@ -185,7 +183,7 @@ export const FORMATS = { instagram_reels: '9:16', facebook_reels: '9:16', facebo
 
 /** The duplicate-request fingerprint: the exact prompt is part of it, so a prompt improvement is a new request. */
 export function jobFingerprint(v, spoken, sheet, avatar, description, format, style, duration, voice, promptText, voiceRef) {
-  return sha256(phpJsonEncode([v.Vin ?? null, v.price ?? null, spoken, sheet, avatar, description, format, style, duration, voice, sha256(promptText), voiceRef]));
+  return sha256(jsonEncode([v.Vin ?? null, v.price ?? null, spoken, sheet, avatar, description, format, style, duration, voice, sha256(promptText), voiceRef]));
 }
 
 /**
@@ -236,7 +234,7 @@ export async function generateJob(db, cfg, client, inp, { transport = uploadHttp
   let sheetUrl = trim(str(inp.sheet ?? ''));
   const savedSheet = state(db, 'sheet:' + (v.Vin ?? ''));
   if (savedSheet && (!truthy(sheetUrl) || sheetUrl === savedSheet.url)) {
-    if (savedSheet.gallery_hash !== sha256(phpJsonEncode(fresh.photos ?? null))) throw new Error('Vehicle photos changed. Reopen the vehicle to rebuild its asset sheet.');
+    if (savedSheet.gallery_hash !== sha256(jsonEncode(fresh.photos ?? null))) throw new Error('Vehicle photos changed. Reopen the vehicle to rebuild its asset sheet.');
     sheetUrl = savedSheet.url;
   }
   const presenter = spokespersonFind(db, cfg, str(inp.spokesperson ?? ''));
@@ -263,7 +261,7 @@ export async function generateJob(db, cfg, client, inp, { transport = uploadHttp
   // Native voice: one approval builds the final video (captions timed from the video's own audio).
   if (voice !== 'narration') job.auto_build = true;
   if (voice === 'elevenlabs') { job.narration_id = approvedVoice.id; job.speech_script = str(approvedVoice.text); }
-  const update = (fp) => db.prepare(fp ? 'UPDATE jobs SET fingerprint=NULL,payload=? WHERE id=?' : 'UPDATE jobs SET payload=? WHERE id=?').run(phpJsonEncode(job), id);
+  const update = (fp) => db.prepare(fp ? 'UPDATE jobs SET fingerprint=NULL,payload=? WHERE id=?' : 'UPDATE jobs SET payload=? WHERE id=?').run(jsonEncode(job), id);
   db.exec('BEGIN IMMEDIATE');
   try {
     const previous = db.prepare('SELECT id,payload FROM jobs WHERE fingerprint=?').get(fingerprint);
@@ -272,7 +270,7 @@ export async function generateJob(db, cfg, client, inp, { transport = uploadHttp
       if (!['failed', 'canceled'].includes(prior.status ?? '')) throw new Error('This exact request already exists. Check its status before generating again.');
       db.prepare('UPDATE jobs SET fingerprint=NULL WHERE id=?').run(previous.id);
     }
-    db.prepare('INSERT INTO jobs VALUES (?,?,?)').run(id, fingerprint, phpJsonEncode(job));
+    db.prepare('INSERT INTO jobs VALUES (?,?,?)').run(id, fingerprint, jsonEncode(job));
     db.exec('COMMIT');
   } catch (e) { try { db.exec('ROLLBACK'); } catch { /* not in a transaction */ } throw e; }
 
@@ -305,7 +303,7 @@ export async function pollJob(db, cfg, id, get = higgsfieldRequest) {
     try { result = JSON.parse(await get('https://api.higgsfield.ai/requests/' + rawurlencode(str(job.request_id)) + '/status', null, str(cfg.higgsfield_key ?? ''))); }
     catch (e) { if (e instanceof SyntaxError) throw new Error('Syntax error'); throw e; }
     job.status = result?.status ?? 'unknown'; job.video_url = result?.video?.url ?? null; job.error = jobError(result?.error ?? result?.detail ?? null);
-    db.prepare('UPDATE jobs SET payload=? WHERE id=?').run(phpJsonEncode(job), job.id);
+    db.prepare('UPDATE jobs SET payload=? WHERE id=?').run(jsonEncode(job), job.id);
   }
   return job;
 }
@@ -409,7 +407,7 @@ export function goldenFootageBuild(db, cfg, inp, file, { probe = (p) => footageP
     narration_id: voice.id, audio_swap: true, captions_from_audio: true, footage_file: name,
     video_url: str(cfg.public_base_url).replace(/\/+$/, '') + '/assets/footage/' + name,
     finish_status: 'queued', render_backend: 'linux', finish_error: '', captioned_url: null, auto_queued_at: gmdateC() };
-  db.prepare('INSERT INTO jobs VALUES (?,?,?)').run(id, null, phpJsonEncode(job));
+  db.prepare('INSERT INTO jobs VALUES (?,?,?)').run(id, null, jsonEncode(job));
   return job;
 }
 

@@ -1,5 +1,5 @@
-// Prices and vehicle names. Port of highestPrice, money, adPrice, title (private/app.php).
-import { isNumeric, numberFormat, str, toFloat, trim } from './php.js';
+// Prices and vehicle names: highest advertised price, money formats, ad price and titles.
+import { isNumeric, numberFormat, str, toFloat, trim } from './text.js';
 
 const PRICE_FIELDS = ['VehiclePrice', 'TotalPrice', 'TotalAskingPrice', 'TotalAdvertisingPrice'];
 

@@ -1,6 +1,5 @@
 // Caption worker and auto build. No paid API calls and no network: status checks are fakes, the "download" copies a
-// video FFmpeg makes here; captions and the render use the real finishing helper and FFmpeg. Includes the port of
-// tests/auto_build.php.
+// video FFmpeg makes here; captions and the render use the real finishing helper and FFmpeg.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -8,7 +7,7 @@ import { createHash } from 'node:crypto';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, copyFileSync, existsSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { openMemoryDb, save } from '../src/lib/db.js';
-import { phpJsonEncode } from '../src/lib/phpjson.js';
+import { jsonEncode } from '../src/lib/storedjson.js';
 import { narrationTables, narrationLoad } from '../src/lib/narrations.js';
 import { autoBuild } from '../src/lib/autobuild.js';
 import { captionWorkerRun, renderArgs, downloadMaster } from '../src/lib/worker.js';
@@ -18,7 +17,7 @@ import { JPEG_40x30 } from './fixtures/images.js';
 
 const hasFfmpeg = spawnSync('ffmpeg', ['-version']).status === 0;
 const sha = (b) => createHash('sha256').update(b).digest('hex');
-const put = (db, table, r) => db.prepare(`INSERT INTO ${table} VALUES (?,?,?)`).run(r.id, null, phpJsonEncode(r));
+const put = (db, table, r) => db.prepare(`INSERT INTO ${table} VALUES (?,?,?)`).run(r.id, null, jsonEncode(r));
 const getJob = (db, id) => JSON.parse(db.prepare('SELECT payload FROM jobs WHERE id=?').get(id).payload);
 
 function setup() {
@@ -30,7 +29,7 @@ function setup() {
   return { dir, cfg, db };
 }
 
-test('auto build (port of tests/auto_build.php)', { skip: !hasFfmpeg && 'ffmpeg missing' }, async () => {
+test('auto build', { skip: !hasFfmpeg && 'ffmpeg missing' }, async () => {
   const { dir, cfg, db } = setup();
   try {
     put(db, 'narration_lipsync', { id: 'L1', auto_build: true, request_id: 'r1', status: 'queued' });
@@ -97,7 +96,7 @@ test('worker: native video captioned from its own speech and rendered; stuck ren
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('render arguments match the PHP worker', () => {
+test('render arguments for the final video', () => {
   const cfg = { ffmpeg_path: '/usr/bin/ffmpeg' };
   const a = renderArgs(cfg, { format: 'facebook_feed', voice: 'native' }, null, '/x/out.mp4');
   assert.equal(a.join(' '), "/usr/bin/ffmpeg -nostdin -n -hide_banner -loglevel error -i master.mp4 -vf scale=1080:1350:force_original_aspect_ratio=increase,crop=1080:1350,setsar=1,subtitles=captions.srt:force_style='FontName=DejaVu Sans,Bold=1,FontSize=11,PrimaryColour=&H00FFFFFF,BackColour=&H80000000,BorderStyle=1,Outline=0,Shadow=1.5,Alignment=2,MarginV=28' -c:v libx264 -preset veryfast -crf 20 -threads 1 -pix_fmt yuv420p -c:a aac -movflags +faststart /x/out.mp4");

@@ -1,12 +1,12 @@
 // Video jobs, references, spokespersons, footage. No paid API calls: Higgsfield is a fake transport that records
-// requests. Includes ports of tests/references.php, tests/spokespersons.php, tests/job_delete.php, tests/footage.php.
+// requests. Covers reference uploads, spokespersons, deleting jobs and "My footage".
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { openMemoryDb, save, state } from '../src/lib/db.js';
-import { phpJsonEncode } from '../src/lib/phpjson.js';
+import { jsonEncode } from '../src/lib/storedjson.js';
 import { narrationTables } from '../src/lib/narrations.js';
 import { promptNative, prompt, SPOKESPERSON_DEFAULT_DESCRIPTION } from '../src/lib/prompts.js';
 import { speechScript } from '../src/lib/speech.js';
@@ -19,10 +19,10 @@ const PNG_1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0l
 const JPEG = Buffer.from(JPEG_1800x900, 'base64');
 const sha = (b) => createHash('sha256').update(b).digest('hex');
 const tmp = (p) => mkdtempSync(tmpdir() + '/' + p);
-const put = (db, table, r) => db.prepare(`INSERT INTO ${table} VALUES (?,?,?)`).run(r.id, null, phpJsonEncode(r));
+const put = (db, table, r) => db.prepare(`INSERT INTO ${table} VALUES (?,?,?)`).run(r.id, null, jsonEncode(r));
 const count = (db) => db.prepare('SELECT COUNT(*) AS n FROM jobs').get().n;
 
-test('reference uploads (port of tests/references.php)', async () => {
+test('reference uploads', async () => {
   const dir = tmp('ga-ref-'); writeFileSync(dir + '/avatar.png', PNG_1x1);
   const cfg = { asset_dir: dir, public_base_url: 'https://example.com/studio', higgsfield_key: 'test-placeholder' };
   const calls = [];
@@ -36,7 +36,7 @@ test('reference uploads (port of tests/references.php)', async () => {
     assert.equal(speechScript('Visit Golden Auto in San Ramon.'), 'Visit Golden Auto in San Ramon.');
     const walk = prompt({ Year: 2013, Make: 'SUBARU', Model: 'XV CROSSTREK' }, 'Visit San Ramon. A great SUV.', 'showroom', 30);
     assert.ok(!walk.includes('Visit San Ramon') && walk.includes('walks slowly forward') && walk.includes('side nearest the camera') && walk.includes('no watermark'));
-    assert.throws(() => referenceFile('https://example.com/studio/assets/../config.php', cfg), /filename/, 'path traversal rejected');
+    assert.throws(() => referenceFile('https://example.com/studio/assets/../config.json', cfg), /filename/, 'path traversal rejected');
     const fail = async (m, u, h, b) => { if (m === 'PUT') throw new Error('PUT rejected'); return mock(m, u, h, b); };
     await assert.rejects(uploadReference('https://example.com/studio/assets/avatar.png', cfg, fail), /^Error: PUT rejected$/);
     const unsafe = async () => Buffer.from(JSON.stringify({ upload_url: 'https://s.example.com/x', public_url: 'https://c.example.com/x', upload_headers: { Authorization: 'Key leak' } }));
@@ -45,7 +45,7 @@ test('reference uploads (port of tests/references.php)', async () => {
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('spokesperson library (port of tests/spokespersons.php) and uploads', () => {
+test('spokesperson library and uploads', () => {
   const dir = tmp('ga-spokes-'); mkdirSync(dir + '/assets'); writeFileSync(dir + '/assets/spokesperson.png', PNG_1x1);
   const cfg = { asset_dir: dir + '/assets', public_base_url: 'https://example.com:4343' };
   const db = openMemoryDb();
@@ -83,7 +83,7 @@ test('spokesperson library (port of tests/spokespersons.php) and uploads', () =>
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('deleting video jobs (port of tests/job_delete.php)', () => {
+test('deleting video jobs', () => {
   const dir = tmp('ga-jdel-'); mkdirSync(dir + '/assets');
   const cfg = { asset_dir: dir + '/assets', public_base_url: 'https://example.com:4343' };
   const db = openMemoryDb(); narrationTables(db);
@@ -105,7 +105,7 @@ test('deleting video jobs (port of tests/job_delete.php)', () => {
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('"My footage" jobs (port of tests/footage.php)', () => {
+test('"My footage" jobs', () => {
   const dir = tmp('ga-foot-'); mkdirSync(dir + '/assets/narrations', { recursive: true });
   const cfg = { asset_dir: dir + '/assets', public_base_url: 'https://example.com:4343' };
   const db = openMemoryDb(); narrationTables(db);
@@ -151,7 +151,7 @@ function generateSetup() {
   const car = { StockNumber: '870288', Vin: 'V1', Year: 2013, Make: 'SUBARU', Model: 'XV CROSSTREK', price: 14688.25, source: 'dcs', photos };
   save(db, 'inventory', { vehicles: [car] });
   writeFileSync(dir + '/assets/sheet-v1.jpg', JPEG); writeFileSync(dir + '/assets/spokesperson.png', JPEG);
-  save(db, 'sheet:V1', { url: cfg.public_base_url + '/assets/sheet-v1.jpg', gallery_hash: sha(phpJsonEncode(photos)) });
+  save(db, 'sheet:V1', { url: cfg.public_base_url + '/assets/sheet-v1.jpg', gallery_hash: sha(jsonEncode(photos)) });
   const mp3 = 'b'.repeat(32) + '.mp3'; writeFileSync(`${dir}/assets/narrations/${mp3}`, 'voice');
   put(db, 'narrations', { id: 'N1', stock: '870288', price: 14688.25, status: 'ready', approved: true, duration: 30, audio_duration: 24.3, audio_name: mp3, audio_hash: sha('voice'), text: 'Take a look at this twenty thirteen Subaru.', caption_script: 'Take a look at this 2013 Subaru.' });
   const spokes = spokespersonApi('spokesperson_list', {}, cfg, db).items[0].id;
@@ -192,7 +192,7 @@ test('generate: approval, exact prompt, one paid request per fingerprint, no aut
     assert.equal(submits(), 1, 'the identical request was not paid twice');
 
     // Provider marks it failed → the same request may be made again on purpose.
-    db.prepare('UPDATE jobs SET payload=? WHERE id=?').run(phpJsonEncode({ ...job, status: 'failed' }), job.id);
+    db.prepare('UPDATE jobs SET payload=? WHERE id=?').run(jsonEncode({ ...job, status: 'failed' }), job.id);
     setSeedance(() => { throw new Error('network'); });
     await assert.rejects(gen(inp), /could not be confirmed/);
     assert.equal(submits(), 2);

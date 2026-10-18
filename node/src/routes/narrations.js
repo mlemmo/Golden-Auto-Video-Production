@@ -1,5 +1,4 @@
-// Voice previews and lip-sync actions (narration_*), same JSON in and out as the PHP dashboard. The selected client
-// comes from the PHP session (ctx.client), exactly as public/index.php passes it to narrationApi.
+// Voice previews and lip-sync actions (narration_*) for the session's selected client (ctx.client).
 import { narrationApi } from '../lib/narrations.js';
 
 const ACTIONS = ['narration_voices', 'narration_list', 'narration_preview', 'narration_approve', 'narration_lipsync', 'narration_poll', 'narration_delete', 'narration_lipsync_delete'];

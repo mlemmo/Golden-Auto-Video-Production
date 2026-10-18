@@ -1,4 +1,4 @@
-// Port of tests/clients.php (storage, website analysis, adding clients, dealer details). No network: websites are faked.
+// Clients (storage, website analysis, adding clients, dealer details). No network: websites are faked.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openMemoryDb } from '../src/lib/db.js';

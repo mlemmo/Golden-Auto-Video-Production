@@ -1,10 +1,10 @@
-// Small helpers that reproduce PHP behaviour the ported code depends on, so Node gives byte-for-byte the same
-// captions, speech text and prices as the PHP version.
+// Small text and number helpers with exact, documented behaviour (byte lengths, ASCII-only case folding, rounding
+// half away from zero, …) that the captions, speech text, prices and stored data depend on.
 
 /** strlen(): length in bytes (UTF-8), not UTF-16 code units. */
 export const strlen = (s) => Buffer.byteLength(s, 'utf8');
 
-/** trim() with PHP's default character list, or a custom list of single characters. */
+/** trim() with the default character list (space, tab, newlines, NUL, vertical tab), or a custom list of single characters. */
 export function trim(s, chars = ' \t\n\r\0\x0B') {
   let a = 0, b = s.length;
   while (a < b && chars.includes(s[a])) a++;
@@ -21,24 +21,24 @@ export function rtrim(s, chars = ' \t\n\r\0\x0B') {
 // Dashes are left alone: these patterns use the "u" flag, where "\-" outside a class is a syntax error.
 export const quote = (s) => s.replace(/[.*+?^${}()|[\]\\\/]/g, '\\$&');
 
-/** strtolower() / strtoupper(): ASCII only, like PHP 8.2+. */
+/** lower() / upper(): ASCII letters only; other characters unchanged. */
 export const lower = (s) => s.replace(/[A-Z]+/g, (m) => m.toLowerCase());
 export const upper = (s) => s.replace(/[a-z]+/g, (m) => m.toUpperCase());
 
 export const ucfirst = (s) => (s === '' ? s : upper(s[0]) + s.slice(1));
 
-/** is_numeric(): numbers and numeric strings (leading/trailing whitespace allowed, as in PHP 8). */
+/** is_numeric(): numbers and numeric strings (leading/trailing whitespace allowed). */
 export function isNumeric(v) {
   if (typeof v === 'number') return Number.isFinite(v);
   if (typeof v !== 'string') return false;
   return /^[ \t\n\r\v\f]*[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?[ \t\n\r\v\f]*$/.test(v);
 }
 
-/** round() half away from zero, like PHP (not JS Math.round, which rounds -0.5 up). */
+/** round() half away from zero (not JS Math.round, which rounds -0.5 up). */
 export function round(n, precision = 0) {
   const f = 10 ** precision;
   const x = Math.abs(n) * f;
-  // PHP pre-rounds to 15 significant digits so 1.005 * 100 = 100.49999… still rounds to 101.
+  // Pre-rounds to 15 significant digits so 1.005 * 100 = 100.49999… still rounds to 101.
   const pre = Number(x.toPrecision(15));
   return (Math.sign(n) * Math.round(pre)) / f;
 }
@@ -68,14 +68,14 @@ export function levenshtein(a, b) {
   return prev[n];
 }
 
-/** PHP string conversion for values coming from inventory JSON ("2013", 2013, 2013.0 all become "2013"). */
+/** String form of values coming from inventory JSON ("2013", 2013, 2013.0 all become "2013"). */
 export function str(v) {
   if (v === null || v === undefined || v === false) return '';
   if (v === true) return '1';
   return String(v);
 }
 
-/** (int) cast: numbers truncate; numeric strings convert (PHP 8 honours exponents); leading-numeric prefixes count. */
+/** (int) cast: numbers truncate; numeric strings convert (exponents honoured); leading-numeric prefixes count. */
 export function toInt(v) {
   if (typeof v === 'number') return Number.isFinite(v) ? Math.trunc(v) : 0;
   if (typeof v === 'boolean') return v ? 1 : 0;
@@ -93,15 +93,15 @@ export function toFloat(v) {
   return m ? Number(m[0]) : 0;
 }
 
-/** PHP truthiness: '', '0', 0, null, false and empty arrays are false. */
+/** truthy(): '', '0', 0, null, false and empty arrays are false. */
 export function truthy(v) {
   if (v === null || v === undefined || v === false || v === 0 || v === '' || v === '0') return false;
   if (Array.isArray(v)) return v.length > 0;
   return true;
 }
 
-// PHP adds Unicode mode (PCRE2_UCP) to every /u pattern, which changes \s, \w, \d and \b. These are the PCRE2 10.42
-// sets, for porting /u patterns. Patterns without /u use plain ASCII whitespace: '[\t\n\v\f\r ]'.
+// Unicode character sets for patterns that treat all Unicode spaces, letters and digits alike (PCRE2 10.42's \s, \w,
+// \d and \b in Unicode mode). Patterns without them use plain ASCII whitespace: '[\t\n\v\f\r ]'.
 export const U_SPACE = '[\\t\\n\\v\\f\\r \\x85\\xa0\\u1680\\u180e\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000]';
 export const U_WORD_CHARS = '\\p{L}\\p{N}_';
 export const U_DIGIT_CHARS = '\\p{Nd}';
@@ -112,9 +112,9 @@ export function gmdateC(d = new Date()) { return d.toISOString().replace(/\.\d{3
 
 /**
  * parse_url() for absolute addresses ("scheme://[user[:pass]@]host[:port]/…"): { scheme, user, pass, host, port }
- * with absent parts undefined, following PHP 8: the last "@" ends the user part (its first ":" starts the password),
+ * with absent parts undefined: the last "@" ends the user part (its first ":" starts the password),
  * the last ":" before the path starts the port (its leading digits; none → no port), and an empty host, a port
- * without digits or one above 65535 make it fail (false). Addresses without "scheme://" have no host, as in PHP.
+ * without digits or one above 65535 make it fail (false). Addresses without "scheme://" have no host.
  */
 export function parseUrl(url) {
   const m = String(url).match(/^([A-Za-z][A-Za-z0-9+.-]*):\/\/([^/?#]*)/);
@@ -154,13 +154,13 @@ export function filterValidateInt(v) {
   return Number.isSafeInteger(n) && Math.abs(n) <= 9223372036854775807 ? (n === 0 ? 0 : n) : false;
 }
 
-/** strnatcasecmp(): natural-order, case-insensitive (ASCII) comparison; <0, 0, >0 like PHP 8 (returns -1/0/1). */
+/** strnatcasecmp(): natural-order, case-insensitive (ASCII) comparison; returns -1, 0 or 1. */
 export function strnatcasecmp(a, b) {
-  a = upper(a); b = upper(b);  // PHP folds case to upper (so "_" sorts after letters)
+  a = upper(a); b = upper(b);  // case folded to upper (so "_" sorts after letters)
   let ai = 0, bi = 0;
   const isDigit = (c) => c >= '0' && c <= '9';
   const isSpace = (c) => c === ' ' || (c >= '\t' && c <= '\r');
-  // PHP skips leading whitespace and leading zeros of the whole string first.
+  // Leading whitespace and leading zeros of the whole string are skipped first.
   while (isSpace(a[ai] ?? '')) ai++;
   while (isSpace(b[bi] ?? '')) bi++;
   while (a[ai] === '0' && isDigit(a[ai + 1] ?? '')) ai++;
@@ -204,8 +204,7 @@ export function strnatcasecmp(a, b) {
   }
 }
 
-/** strip_tags($s) with no allowed tags: PHP's state machine for tags, quotes inside tags, comments and <? ?>.
- *  Checked against PHP on text, tags, comments (also inside an unclosed tag), quotes and stray < >. */
+/** strip_tags(s): removes tags, comments and <? ?> blocks, minding quotes inside tags; stray < > are handled too. */
 export function stripTags(s) {
   let out = '', state = 0, depth = 0, quote = '', i = 0;
   const n = s.length;
@@ -222,7 +221,7 @@ export function stripTags(s) {
       }
       out += c;
     } else if (state === 1) {
-      // PHP: a ">" first closes a nested "<" even inside quotes; quotes only hide the final ">".
+      // A ">" first closes a nested "<" even inside quotes; quotes only hide the final ">".
       if (c === '>' && depth) { depth--; continue; }
       if (quote) { if (c === quote) quote = ''; continue; }
       if (c === '"' || c === "'") { quote = c; continue; }

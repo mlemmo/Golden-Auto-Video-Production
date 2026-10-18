@@ -1,6 +1,6 @@
-// Photo worker for website-imported client cars (Dealer Car Search). Port of dcsStorePhotos, photoClassify and
-// dcsProcessPhotos (private/importers.php). Every photo is downloaded, re-encoded as JPEG with FFmpeg (PHP: GD,
-// quality 88) and named by its content hash, sorted by the free local image model (private/photo_classify.py, run
+// Photo worker for website-imported client cars (Dealer Car Search). (dcsStorePhotos, photoClassify,
+// dcsProcessPhotos.) Every photo is downloaded, re-encoded as JPEG with FFmpeg
+// (quality 88) and named by its content hash, sorted by the free local image model (private/photo_classify.py, run
 // with the ML environment's Python), and only whole-car exterior shots (doors closed) are kept, in website order.
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -10,8 +10,8 @@ import { clientFetch } from './clients.js';
 import { DCS_PHOTO_LIMIT } from './importers.js';
 import { state, save, stateIds, stateMentions } from './db.js';
 import { toJpeg } from './images.js';
-import { phpJsonEncode } from './phpjson.js';
-import { gmdateC } from './php.js';
+import { jsonEncode } from './storedjson.js';
+import { gmdateC } from './text.js';
 
 const CLASSIFIER = fileURLToPath(new URL('../../../private/photo_classify.py', import.meta.url));
 
@@ -27,7 +27,7 @@ export async function dcsStorePhotos(cfg, urls, fetchFn = clientFetch) {
     try { jpg = toJpeg(body, { quality: 88 }); } catch { continue; }
     const name = createHash('sha1').update(jpg).digest('hex') + '.jpg';
     if (!existsSync(dir + '/' + name)) writeFileSync(dir + '/' + name, jpg, { mode: 0o644 });
-    out.set(url, name);  // a repeated URL keeps its first position, like a PHP array key
+    out.set(url, name);  // a repeated URL keeps its first position
   }
   return [...out.entries()];
 }
@@ -49,7 +49,7 @@ export function photoClassify(cfg, paths) {
 /**
  * One worker run: for clients' website-imported cars whose photo set is new or changed, download every photo, sort
  * them and keep the whole-car exterior shots. Dropped copies are deleted unless a saved record uses the file. Stops
- * after `budget` seconds; the next run continues. Returns log lines (same text as PHP).
+ * after `budget` seconds; the next run continues. Returns log lines.
  */
 export async function dcsProcessPhotos(db, cfg, budget = 50, fetchFn = clientFetch, classify = (paths) => photoClassify(cfg, paths)) {
   const start = Date.now(), log = [], dir = String(cfg.asset_dir), base = String(cfg.public_base_url).replace(/\/+$/, '') + '/assets/';
@@ -71,13 +71,13 @@ export async function dcsProcessPhotos(db, cfg, budget = 50, fetchFn = clientFet
       // Save only this car, on the latest copy of the inventory (an import may have run meanwhile).
       const inv = state(db, key) ?? { vehicles: [] };
       for (const v of inv.vehicles) {
-        if (v.StockNumber === car.StockNumber && phpJsonEncode(v.photo_sources ?? []) === phpJsonEncode(car.photo_sources ?? [])) {
+        if (v.StockNumber === car.StockNumber && jsonEncode(v.photo_sources ?? []) === jsonEncode(car.photo_sources ?? [])) {
           v.photos = keep.map((n) => base + n); v.photo_labels = counts; v.photos_pending = false;
           v.photo_sources_done = car.photo_sources; v.photos_checked_at = gmdateC(); delete v.sheet_photos;
         }
       }
       save(db, key, inv);
-      log.push(`${key} ${car.StockNumber}: ${map.length} photos, kept ${keep.length} exterior (${phpJsonEncode(counts)})`);
+      log.push(`${key} ${car.StockNumber}: ${map.length} photos, kept ${keep.length} exterior (${jsonEncode(counts)})`);
     }
   }
   return log;

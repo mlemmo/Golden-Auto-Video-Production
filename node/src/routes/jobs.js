@@ -1,10 +1,10 @@
-// Vehicle detail, asset sheets, ZIP import, spokespersons and video jobs: same JSON in and out as the PHP dashboard
-// (public/index.php). import, spokesperson_upload and footage_build are multipart uploads (ctx.files, like $_FILES).
+// Vehicle detail, asset sheets, ZIP import, spokespersons and video jobs. import, spokesperson_upload and
+// footage_build are multipart uploads (ctx.files).
 import { createHash } from 'node:crypto';
 import { state, save } from '../lib/db.js';
 import { clientInventoryKey } from '../lib/clients.js';
-import { trim, str } from '../lib/php.js';
-import { phpJsonEncode } from '../lib/phpjson.js';
+import { trim, str } from '../lib/text.js';
+import { jsonEncode } from '../lib/storedjson.js';
 import { script } from '../lib/scripts.js';
 import { speechScript, speechWordCount } from '../lib/speech.js';
 import { assetSheet, importMediaZip } from '../lib/media.js';
@@ -27,7 +27,7 @@ export const jobRoutes = {
     save(db, key, a);
     out.script = script(out, 15, dealer); out.scripts = { 15: out.script, 30: script(out, 30, dealer) };
     const existing = state(db, 'sheet:' + (out.Vin ?? ''));
-    if (existing && (existing.gallery_hash ?? '') === sha256(phpJsonEncode(out.photos ?? null))) out.asset_sheet = existing;
+    if (existing && (existing.gallery_hash ?? '') === sha256(jsonEncode(out.photos ?? null))) out.asset_sheet = existing;
     else try { out.asset_sheet = await assetSheet(out, cfg); save(db, 'sheet:' + (out.Vin ?? ''), out.asset_sheet); } catch (e) { out.sheet_error = e.message; }
     return out;
   },
@@ -47,7 +47,7 @@ export const jobRoutes = {
   sync_log: ({ db }) => state(db, 'sync_log') ?? { entries: [] },
   import: async ({ cfg, db, client, body, files }) => {
     const file = files.media ?? null;
-    if (!file || file.error !== 0) throw new Error('Upload failed. Check upload_max_filesize and post_max_size in PHP settings.');
+    if (!file || file.error !== 0) throw new Error('Upload failed. The file may be too large or the upload was interrupted.');
     const v = importMediaZip(file.tmp_name, body, cfg), key = clientInventoryKey(client);
     const a = state(db, key) ?? { vehicles: [] };
     a.vehicles = (a.vehicles ?? []).filter((c) => c.StockNumber !== v.StockNumber); a.vehicles.push(v);

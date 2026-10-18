@@ -1,4 +1,4 @@
-// Port of tests/captions.php (plus the speech, price and script checks in tests/run.php, references.php, native_voice.php).
+// Captions, plus the speech, price and script checks.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -84,7 +84,7 @@ test('captions show exactly the approved caption text, timed by what she actuall
   assert.ok(Math.abs(at['Book your test drive today'].start - 23.39) < 0.15 && Math.abs(cues.at(-1).end - 26.73) < 0.25, 'captions after the repeat are still on time');
 });
 
-test('prices, scripts and acronym speech (tests/run.php)', () => {
+test('prices, scripts and acronym speech', () => {
   assert.equal(highestPrice({ VehiclePrice: 8688, TotalAskingPrice: 8826.25, TotalAdvertisingPrice: 0 }, [{ VehiclePrice: 9000 }]), 9000, 'highest price across same vehicle sources');
   assert.equal(highestPrice({ VehiclePrice: 0, TotalPrice: -1 }), null, 'call-for-price stays unknown');
   const v = { Year: 2011, Make: 'HONDA', Model: 'CR-V', Drivetrain: '4WD', price: 8826.25 };
@@ -103,14 +103,14 @@ test('prices, scripts and acronym speech (tests/run.php)', () => {
   assert.ok(adPrice(14688.25) === '$14,688' && adPrice(14688.0) === '$14,688' && adPrice(999.99) === '$999', 'ad price drops cents');
 });
 
-test('native voice speech (tests/native_voice.php)', () => {
+test('native voice speech', () => {
   assert.ok(!speechScript('This 2013 SUBARU has 60,000 miles. Just $14,688.').includes('2013') && speechScript('Just $14,688.').includes('fourteen thousand six hundred eighty-eight dollars'));
   const speech = nativeSpeech('Take a look at this 2013 SUBARU XV CROSSTREK here at Golden Auto in San Ramon. Just $14,688. Book your test drive at mygoldenauto.net.');
   assert.ok(speech.includes('my golden auto dot net') && !speech.includes('N, E, T'), 'native voice says "dot net"');
   assert.ok(seedanceRespell(speech).includes('San Rah-moan') && seedanceRespell(speech, { 'San Ramon': 'San Ra-MOAN' }).includes('San Ra-MOAN'), 'respelling default and config override');
 });
 
-test('no advertised price: no price in scripts, "Call For Price" caption (tests/captions.php)', () => {
+test('no advertised price: no price in scripts, "Call For Price" caption', () => {
   const noPrice = { Year: 2016, Make: 'LAND ROVER', Model: 'RANGE ROVER SPORT', Trim: 'HSE', Drivetrain: '4WD', ExteriorColor: 'LOIRE BLUE', Odometer: 67351, price: null };
   assert.ok(!script(noPrice).includes('$') && !script(noPrice, 30).includes('$') && !script(noPrice, 30).toLowerCase().includes('price'), 'no price: scripts never mention a price');
   const cfp = captionCallForPrice([{ text: 'Book your test drive', start: 20.0, end: 23.5 }], 29.5);
@@ -120,7 +120,7 @@ test('no advertised price: no price in scripts, "Call For Price" caption (tests/
   assert.ok(priceMatches(null, null) && !priceMatches(null, 14688.0) && priceMatches(14688.25, 14688.25) && !priceMatches(14688.0, 14690.0), 'no price matches no price only');
 });
 
-test('listing shorthand said as words; captions keep it (tests/captions.php)', () => {
+test('listing shorthand said as words; captions keep it', () => {
   assert.equal(speechScript('2016 RANGE ROVER SPORT 4WD 4dr V6 HSE'), 'twenty sixteen Range Rover Sport four wheel drive four door V 6 H-S-E');
   assert.equal(nativeSpeech('Sedan 4D with 4WD'), 'Sedan four door with four wheel drive');
   assert.ok(speechScript('Q4 4DRV') !== '' && !speechScript('Q4 4DRV').includes('four door') && captionDisplayText('SPORT 4WD 4dr') === 'Sport 4WD 4dr', 'other codes untouched; captions keep 4WD and 4dr');

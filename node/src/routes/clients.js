@@ -1,6 +1,4 @@
-// Clients and inventory actions, same JSON in and out as the PHP dashboard's ?api=<action> (public/index.php).
-// The selected client comes from the PHP session (ctx.client) until the session moves to Node; selecting a client
-// therefore stays a PHP action (client_select).
+// Clients and inventory actions for the session's selected client (ctx.client; client_select is in server.js).
 import { clientsLoad, clientFind, clientAdd, clientReanalyze, clientSaveDetails, clientDetails, clientInventoryKey } from '../lib/clients.js';
 import { state } from '../lib/db.js';
 import { syncInventory } from '../lib/website.js';

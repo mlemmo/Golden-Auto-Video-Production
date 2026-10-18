@@ -2,19 +2,19 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { phpJsonEncode } from '../src/lib/phpjson.js';
+import { jsonEncode } from '../src/lib/storedjson.js';
 import { openDb, closeDb, state, save, stateIds, stateMentions, jobGet, jobInsert, jobSave, jobsList } from '../src/lib/db.js';
 
-test('phpJsonEncode writes JSON the way PHP json_encode does', () => {
-  assert.equal(phpJsonEncode({ url: 'https://x.com/a', city: 'San José', n: 9000, f: 14688.25 }), '{"url":"https:\\/\\/x.com\\/a","city":"San Jos\\u00e9","n":9000,"f":14688.25}');
-  assert.equal(phpJsonEncode({}), '[]');
-  assert.equal(phpJsonEncode([]), '[]');
-  assert.equal(phpJsonEncode({ 0: 'a', 1: 'b' }), '["a","b"]');
-  assert.equal(phpJsonEncode({ 0: 'a', 2: 'b' }), '{"0":"a","2":"b"}');
-  assert.equal(phpJsonEncode('😀'), '"\\ud83d\\ude00"');
-  assert.equal(phpJsonEncode(1e25), '1.0e+25');
-  assert.equal(phpJsonEncode({ a: undefined, b: null }), '{"b":null}');
-  assert.throws(() => phpJsonEncode(NaN));
+test('jsonEncode writes the stored JSON format', () => {
+  assert.equal(jsonEncode({ url: 'https://x.com/a', city: 'San José', n: 9000, f: 14688.25 }), '{"url":"https:\\/\\/x.com\\/a","city":"San Jos\\u00e9","n":9000,"f":14688.25}');
+  assert.equal(jsonEncode({}), '[]');
+  assert.equal(jsonEncode([]), '[]');
+  assert.equal(jsonEncode({ 0: 'a', 1: 'b' }), '["a","b"]');
+  assert.equal(jsonEncode({ 0: 'a', 2: 'b' }), '{"0":"a","2":"b"}');
+  assert.equal(jsonEncode('😀'), '"\\ud83d\\ude00"');
+  assert.equal(jsonEncode(1e25), '1.0e+25');
+  assert.equal(jsonEncode({ a: undefined, b: null }), '{"b":null}');
+  assert.throws(() => jsonEncode(NaN));
 });
 
 test('state rows and jobs in the shared SQLite file', () => {
@@ -22,7 +22,7 @@ test('state rows and jobs in the shared SQLite file', () => {
   const cfg = { data_dir: dir + '/data' };
   try {
     const db = openDb(cfg);
-    assert.equal(statSync(cfg.data_dir).mode & 0o777, 0o700, 'data folder created private, like PHP');
+    assert.equal(statSync(cfg.data_dir).mode & 0o777, 0o700, 'data folder created private');
     assert.equal(state(db, 'inventory'), null);
     save(db, 'inventory', { vehicles: [{ StockNumber: '870288', price: 14688.25, photos: ['https://x/a.jpg'] }] });
     save(db, 'inventory:bay-motors', { vehicles: [] });

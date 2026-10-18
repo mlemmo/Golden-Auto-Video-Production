@@ -1,6 +1,6 @@
-// multipart/form-data uploads (the dashboard's import, spokesperson and footage forms), read the way PHP fills
-// $_POST and $_FILES: text fields as strings, each file saved to a temporary file as { name, tmp_name, size, error }
-// with PHP's error codes (0 OK, 1 larger than upload_max_filesize = 64 MB, 4 no file chosen). No npm dependency.
+// multipart/form-data uploads (the dashboard's import, spokesperson and footage forms), read into
+// fields (strings) and files, each saved to a temporary file as { name, tmp_name, size, error } with error codes
+// 0 OK, 1 larger than 64 MB, 4 no file chosen. No npm dependency.
 import { writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { HttpError } from './auth.js';
@@ -40,7 +40,7 @@ export function parseMultipart(body, contentType, dir, maxFile = UPLOAD_MAX_FILE
     if (base === '') files[name] = { name: '', tmp_name: '', size: 0, error: 4 };
     else if (data.length > maxFile) files[name] = { name: base, tmp_name: '', size: 0, error: 1 };
     else {
-      const tmp = dir + '/php' + randomBytes(8).toString('hex');
+      const tmp = dir + '/upload-' + randomBytes(8).toString('hex');
       writeFileSync(tmp, data, { mode: 0o600 });
       files[name] = { name: base, tmp_name: tmp, size: data.length, error: 0 };
     }

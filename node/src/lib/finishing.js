@@ -1,13 +1,13 @@
-// Finishing: captions timed from real speech, and the intro/closing-card render of lip-synced videos. Port of
-// private/finishing.php. Media work is done by the same local, free tools as PHP: private/finish_video.py (speech
+// Finishing: captions timed from real speech, and the intro/closing-card render of lip-synced videos. Media work
+// is done by local, free tools: private/finish_video.py (speech
 // timing, cards), FFmpeg and whisper.cpp. No network and no paid calls.
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, realpathSync, statSync, accessSync, unlinkSync, constants } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { str, toInt, toFloat, trim, truthy } from './php.js';
-import { phpJsonEncode } from './phpjson.js';
+import { str, toInt, toFloat, trim, truthy } from './text.js';
+import { jsonEncode } from './storedjson.js';
 import { captionCues, captionRetime, captionSpokenScript, captionCallForPrice, captionSrt, validateSrt } from './captions.js';
 import { narrationTables, narrationCheckAudio } from './narrations.js';
 import { CLIENT_DEFAULT, clientInventory } from './clients.js';
@@ -34,7 +34,7 @@ export function runProcess(cmd, args, { input = null, cwd, timeoutMs = 0, stdio 
 
 /** goldenFinishPython(): the finishing helper (op analyze or render), JSON in and out. */
 export async function finishPython(input) {
-  const r = await runProcess('/usr/bin/python3', [HELPER], { input: phpJsonEncode(input) });
+  const r = await runProcess('/usr/bin/python3', [HELPER], { input: jsonEncode(input) });
   let result = null; try { result = JSON.parse(r.stdout.toString()); } catch { /* reported below */ }
   if (result === null || typeof result !== 'object') throw new Error('Finishing helper failed. Check python3-pil and fonts-dejavu-core installation.');
   if (r.code !== 0 || result.error != null) throw new Error(result.error != null ? str(result.error) : 'Finishing helper failed.');
@@ -80,7 +80,7 @@ export async function finishDraft(db, cfg, job, python = finishPython) {
   if (!cues.length) throw new Error('Caption script is empty.');
   if ((vehicle.price ?? null) === null) cues = captionCallForPrice(cues, duration - 2.0);
   const srt = captionSrt(cues, 2.0);
-  db.prepare('UPDATE jobs SET payload=? WHERE id=?').run(phpJsonEncode(job), job.id);
+  db.prepare('UPDATE jobs SET payload=? WHERE id=?').run(jsonEncode(job), job.id);
   return { srt, note: 'Two-second intro and smooth dissolve enabled. Uses inventory photo ' + (index + 1) + '. Caption timestamps include the intro. Cue timing follows the pauses in the approved audio and is spread by syllable count inside each sentence; it is not word-level transcription, so review the final render.' };
 }
 

@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 // Photo worker (cron, every minute): copies and sorts photos of website-imported client cars (src/lib/photos.js).
-// Node version of private/photo_worker.php. One run at a time: a lock folder in data_dir, taken over when older than
+// Photo worker (cron, every minute). One run at a time: a lock folder in data_dir, taken over when older than
 // 15 minutes (a run that died). Free: public photo downloads, FFmpeg and the local image model.
 import { mkdirSync, rmSync, statSync } from 'node:fs';
 import { loadConfig } from '../lib/config.js';
 import { openDb } from '../lib/db.js';
 import { dcsProcessPhotos } from '../lib/photos.js';
-import { gmdateC } from '../lib/php.js';
+import { gmdateC } from '../lib/text.js';
 
 const cfg = loadConfig();
 const lock = String(cfg.data_dir) + '/photo-worker.lock.d';

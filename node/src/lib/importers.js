@@ -1,10 +1,10 @@
-// Website importer for clients on Dealer Car Search sites (e.g. eLease Returns). Port of private/importers.php
-// (dcsParseVdp, clientImportDcs). Every vehicle page listed in the sitemap (/vdp/<id>/...) is read for its tracking
+// Website importer for clients on Dealer Car Search sites (e.g. eLease Returns): dcsParseVdp, clientImportDcs.
+// Every vehicle page listed in the sitemap (/vdp/<id>/...) is read for its tracking
 // object (year, make, model, price, id) and detail list (trim, colour, engine, mileage, stock, VIN). Photos are left to
-// the photo worker (still PHP: it copies, re-encodes and sorts them with the local image model).
+// the photo worker (it copies, re-encodes and sorts them with the local image model).
 import { parseHtml, hasClassToken } from './dom.js';
 import { htmlEntityDecode } from './html.js';
-import { trim, upper, toInt, toFloat, isNumeric, truthy, quote, gmdateC, U_SPACE, strlen } from './php.js';
+import { trim, upper, toInt, toFloat, isNumeric, truthy, quote, gmdateC, U_SPACE, strlen } from './text.js';
 import { clientFetch, clientInventoryKey, clientsLoad } from './clients.js';
 import { state, save } from './db.js';
 
@@ -12,7 +12,7 @@ export const DCS_PHOTO_LIMIT = 150;
 export const DCS_MAX_CARS = 150;
 const uSpaces = new RegExp(U_SPACE + '+', 'gu');
 
-/** substr($s, strlen($prefix)) on bytes, as PHP does. */
+/** The rest of s after prefix, cut by UTF-8 byte length. */
 function cutBytes(s, prefix) { return Buffer.from(s, 'utf8').subarray(strlen(prefix)).toString('utf8'); }
 
 /** Vehicle facts from one Dealer Car Search vehicle page, in the app's inventory shape (photos still remote). */
@@ -107,7 +107,7 @@ export async function clientImportDcs(db, client, fetchFn = clientFetch) {
     for (const k of ['photo_sources_done', 'photo_labels', 'photos_checked_at', 'sheet_photos']) if (prev && Object.hasOwn(prev, k) && prev[k] !== null) v[k] = prev[k];
     v.active = true; v.imported_at = prev?.imported_at ?? gmdateC(); v.detail_checked_at = gmdateC();
     prev ? updated++ : added++;
-    // A car that moved stock numbers keeps its place; a new one goes last, as in PHP's array.
+    // A car that moved stock numbers keeps its place; a new one goes last.
     byStock.set(v.StockNumber, v); seen.add(v.StockNumber);
   }
   let gone = 0;

@@ -1,14 +1,13 @@
 // Vehicle photos: importing a DealerCenter media ZIP (or a list of downloaded photos), downloading DealerCenter CDN
-// photos, and the car asset sheet sent to the video model. Port of private/import.php (importMediaZip, mbSafeText,
-// sheetBytes) and private/app.php (validateAppBase, defaultSheetPhotos, downloadPhotos, assetSheet). Image work is
-// done with FFmpeg (src/lib/images.js) instead of GD.
+// photos, and the car asset sheet sent to the video model. Image work is done with FFmpeg
+// (src/lib/images.js).
 import { randomBytes, createHash } from 'node:crypto';
 import { existsSync, mkdirSync, writeFileSync, readFileSync, statSync, unlinkSync } from 'node:fs';
 import { readZip } from './zip.js';
 import { probeImage, toJpeg, renderSheet } from './images.js';
-import { trim, upper, lower, filterValidateInt, strnatcasecmp, stripTags, strlen, isNumeric, toFloat, gmdateC, parseUrl, str } from './php.js';
+import { trim, upper, lower, filterValidateInt, strnatcasecmp, stripTags, strlen, isNumeric, toFloat, gmdateC, parseUrl, str } from './text.js';
 import { title } from './price.js';
-import { phpJsonEncode } from './phpjson.js';
+import { jsonEncode } from './storedjson.js';
 
 const assetDir = (cfg) => String(cfg.asset_dir ?? '');
 
@@ -40,7 +39,7 @@ export function mbSafeText(s) {
 
 /**
  * importMediaZip() for already-read images: images = [{ name, bytes }] (from a ZIP or a download). Validates the
- * listing fields exactly as PHP does, sorts photos by name naturally, saves each as a ≤1600 px JPEG on white with a
+ * listing fields, sorts photos by name naturally, saves each as a ≤1600 px JPEG on white with a
  * random 40-hex name, and returns the vehicle. On any failure the files written so far are removed.
  */
 export function importMedia(images, fields, cfg) {
@@ -89,9 +88,9 @@ export function importMedia(images, fields, cfg) {
     price: prices.length ? Math.max(...prices) : null, description, photos, original_filenames: originals, imported_at: gmdateC(), url: '', detail_checked_at: gmdateC() };
 }
 
-/** importMediaZip(): a DealerCenter media ZIP file → vehicle (ZIP rules as PHP: ≤50 MB, ≤150 entries, safe paths). */
+/** importMediaZip(): a DealerCenter media ZIP file → vehicle (ZIP rules: ≤50 MB, ≤150 entries, safe paths). */
 export function importMediaZip(path, fields, cfg) {
-  importMedia(null, fields, cfg);  // the listing fields first, as PHP checks them before opening the ZIP
+  importMedia(null, fields, cfg);  // the listing fields first, before opening the ZIP
   if (!existsSync(path) || statSync(path).size > 50000000) throw new Error('ZIP must be under 50 MB.');
   const zip = readZip(readFileSync(path));
   if (zip.length > 150) throw new Error('ZIP has too many entries.');
@@ -148,8 +147,8 @@ export async function sheetBytes(urls, cfg, download = downloadPhotos) {
 
 /**
  * assetSheet(): the reference sheet for the video model — up to 9 original photos in a 2- (≤4 photos) or 3-column
- * grid on a dark background, with the car's name and stock number and "SOURCE PHOTO n" under each. Same layout as
- * PHP's; drawn with FFmpeg. Returns the sheet record saved as state 'sheet:<VIN>'.
+ * grid on a dark background, with the car's name and stock number and "SOURCE PHOTO n" under each, drawn with
+ * FFmpeg. Returns the sheet record saved as state 'sheet:<VIN>'.
  */
 export async function assetSheet(v, cfg, selected = [], download = downloadPhotos) {
   const base = validateAppBase(cfg);
@@ -180,6 +179,6 @@ export async function assetSheet(v, cfg, selected = [], download = downloadPhoto
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o755 });
   const name = randomBytes(20).toString('hex') + '.jpg';
   writeFileSync(dir + '/' + name, jpg, { mode: 0o644 });
-  return { url: base + '/assets/' + name, photo_urls: urls, gallery_hash: createHash('sha256').update(phpJsonEncode(all)).digest('hex'),
+  return { url: base + '/assets/' + name, photo_urls: urls, gallery_hash: createHash('sha256').update(jsonEncode(all)).digest('hex'),
     content_hash: hash.digest('hex'), created_at: gmdateC(), photo_count: urls.length };
 }

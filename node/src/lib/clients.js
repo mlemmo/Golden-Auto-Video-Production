@@ -1,11 +1,11 @@
 // Clients (dealers): storage, website checks and analysis, dealer details for scripts and speech.
-// Port of private/clients.php. Golden Auto is the first client and keeps the original 'inventory' state; other
+// Golden Auto is the first client and keeps the original 'inventory' state; other
 // clients use 'inventory:<id>'. Adding a client analyses its website and recommends how to import its inventory.
 import { request as httpsRequest } from 'node:https';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { DEALER_DEFAULT } from './scripts.js';
-import { lower, str, trim, strlen, truthy, gmdateC, parseUrl } from './php.js';
+import { lower, str, trim, strlen, truthy, gmdateC, parseUrl } from './text.js';
 import { htmlEntityDecode } from './html.js';
 import { state, save } from './db.js';
 
@@ -22,7 +22,7 @@ export function clientWebsiteSpoken(website, name) {
   return said + ' dot ' + tld;
 }
 
-/** parse_url($url, PHP_URL_HOST) for the addresses clients are stored with ("https://www.example.com"). */
+/** The host part of the addresses clients are stored with ("https://www.example.com"). */
 function urlHost(url) {
   const m = url.match(/^(?:[A-Za-z][A-Za-z0-9+.-]*:)?\/\/(?:[^@/?#]*@)?(\[[^\]]*\]|[^:/?#]*)/);
   return m && m[1] !== '' ? m[1] : null;
@@ -131,7 +131,7 @@ export async function clientReanalyze(db, id, fetchFn = clientFetch) {
 
 // ---- Fetching dealer websites -----------------------------------------------------------------------------------
 
-/** First public IPv4 address of a host (like PHP's gethostbynamel + FILTER_FLAG_NO_PRIV_RANGE|NO_RES_RANGE). */
+/** First public IPv4 address of a host (private and reserved ranges skipped). */
 export function isPublicIPv4(ip) {
   const p = ip.split('.').map(Number);
   if (p.length !== 4 || p.some((x) => !(x >= 0 && x <= 255))) return false;
@@ -200,7 +200,7 @@ export const CLIENT_PLATFORMS = {
 };
 export const CLIENT_FEED_PLATFORMS = ['DealerCenter', 'Dealer.com (Cox Automotive)', 'Dealer Inspire', 'DealerOn', 'DealerFire / DealerSocket', 'Dealer eProcess', 'CDK Global / Sincro', 'Carsforsale.com', 'Dealer Car Search', 'Frazer', 'Dealer Spike', 'Overfuel', 'AutoManager'];
 
-/** PHP json_decode($s, true): the value, or null for invalid JSON (PHP also gives null for "null"). */
+/** Parsed JSON, or null for invalid JSON (also null for "null"). */
 function jsonDecode(s) { try { return JSON.parse(s); } catch { return null; } }
 const isList = (v) => Array.isArray(v);
 const isArr = (v) => v !== null && typeof v === 'object';
@@ -233,7 +233,7 @@ export async function clientAnalyze(website, fetchFn = clientFetch) {
       for (const n of nodes) {
         if (!isArr(n)) continue;
         const t = toArray(n['@type']);
-        // PHP: !$dealer — no dealer yet, or one whose fields were all missing (an empty array).
+        // No dealer yet, or one whose fields were all missing (an empty array).
         if (intersects(t, ['AutoDealer', 'AutomotiveBusiness', 'LocalBusiness']) && (dealer === null || Object.keys(dealer).length === 0)) {
           const addr = isArr(n.address) && !isList(n.address) ? n.address : {};
           dealer = {};

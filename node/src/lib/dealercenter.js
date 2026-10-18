@@ -1,12 +1,12 @@
-// DealerCenter inventory tracking for Golden Auto. Port of private/dealercenter_sync.php. Input: a snapshot of the
+// DealerCenter inventory tracking for Golden Auto. Input: a snapshot of the
 // DealerCenter active list (no costs). Photos come from each item's photo_urls (imagescf.dealercenter.net, downloaded
 // server-to-server; the URL set is tracked so replaced photos are noticed) or, as a fallback, from ZIPs named
 // <stock>.zip with photo_count. Compares with saved inventory, records a change log in state row "sync_log", marks
-// vehicles missing from the snapshot inactive (kept, never deleted). Differences from PHP: downloaded photos are
-// imported directly (PHP packs them into a temporary ZIP first), and images are made with FFmpeg.
+// vehicles missing from the snapshot inactive (kept, never deleted). Downloaded photos are imported directly and
+// images are made with FFmpeg.
 import { createHash } from 'node:crypto';
 import { existsSync, unlinkSync } from 'node:fs';
-import { trim, upper, str, filterValidateInt, isNumeric, toFloat, gmdateC, parseUrl, U_SPACE } from './php.js';
+import { trim, upper, str, filterValidateInt, isNumeric, toFloat, gmdateC, parseUrl, U_SPACE } from './text.js';
 import { money, title } from './price.js';
 import { state, save } from './db.js';
 import { importMedia, importMediaZip, downloadPhotos, assetSheet, mbSafeText } from './media.js';

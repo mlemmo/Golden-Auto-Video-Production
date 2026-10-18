@@ -1,7 +1,6 @@
-// Sign-in sessions for the Node dashboard (what PHP's session_start gives index.php): an HttpOnly, SameSite=Strict
-// cookie holding a random id, data kept server-side in its own SQLite file (data_dir/node-sessions.sqlite, so the
-// shared agent.sqlite schema stays as PHP's). Idle sessions end after 24 minutes, like PHP's default
-// session.gc_maxlifetime. Data: { csrf, auth, client, attempts }.
+// Sign-in sessions for the dashboard: an HttpOnly, SameSite=Strict
+// cookie holding a random id, data kept server-side in its own SQLite file (data_dir/node-sessions.sqlite, apart from
+// agent.sqlite). Idle sessions end after 24 minutes. Data: { csrf, auth, client, attempts }.
 import { DatabaseSync } from 'node:sqlite';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 

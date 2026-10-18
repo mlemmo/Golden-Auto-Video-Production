@@ -1,7 +1,7 @@
-// Spoken text for the voice models. Port of integerWords…speechWordCount (private/captions.php) and
-// nativeSpeech, seedanceRespell, speechScript, acronymSpeech (private/references.php). Output must match PHP exactly.
+// Spoken text for the voice models: numbers, prices, years and codes said as words (integerWords…speechWordCount,
+// nativeSpeech, seedanceRespell, speechScript, acronymSpeech).
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { intdiv, lower, quote, ucfirst, U_BOUNDARY, U_SPACE } from './php.js';
+import { intdiv, lower, quote, ucfirst, U_BOUNDARY, U_SPACE } from './text.js';
 
 const SMALL = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve',
   'thirteen', 'fourteen', 'fifteen', 'sixteen', 'seventeen', 'eighteen', 'nineteen'];
@@ -61,8 +61,7 @@ export function nativeSpeech(s) {
 
 /**
  * Websites of the current client besides mygoldenauto.net, as {display: spoken} ("eleasereturns.com" → "e lease
- * returns dot com"); used by speechScript and nativeSpeech. PHP keeps them in a per-request static; a Node server
- * handles many requests at once, so a request should wrap its work in withSpeechSites(sites, fn), which keeps the
+ * returns dot com"); used by speechScript and nativeSpeech. The server handles many requests at once, so a request should wrap its work in withSpeechSites(sites, fn), which keeps the
  * sites to that request. speechSites(set) outside such a wrapper sets a process-wide default (scripts and tests).
  */
 const siteStore = new AsyncLocalStorage();
@@ -101,7 +100,7 @@ export const SEEDANCE_RESPELL = { 'San Ramon': 'San Rah-moan' };
 export function seedanceRespell(s, extra = {}) {
   const all = { ...SEEDANCE_RESPELL, ...(extra && typeof extra === 'object' && !Array.isArray(extra) ? extra : {}) };
   for (const [word, say] of Object.entries(all)) {
-    // PHP's array_merge renumbers integer keys, and the loop skips non-string keys; numeric-looking keys are skipped too.
+    // Only text keys count: numeric-looking keys are skipped.
     if (typeof say === 'string' && word !== '' && !/^(?:0|-?[1-9]\d*)$/.test(word)) {
       s = s.replace(new RegExp(U_BOUNDARY + quote(word) + U_BOUNDARY, 'giu'), () => say);
     }

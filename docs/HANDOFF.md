@@ -1,31 +1,48 @@
-# Handoff — state on 2026-10-16
+# Handoff — state on 2026-10-18
 
-Read CLAUDE.md first (rules, flows, tests). This note is the current status and what to do next.
+Read CLAUDE.md first (rules, flows, tests). This note is the current status and what to do next. Sawyer now directs
+the work (Mark started it).
 
 ## Where things stand
-- **Default flow (voice=elevenlabs):** approve an ElevenLabs preview for the car in step 3 → one Seedance 2.5
-  generation (four wide shots around the whole car, spokesperson beside it, approved MP3 as `audio_urls`) →
-  caption_worker keeps **Seedance's own speech** (lips match it) and burns captions timed from that audio.
-  Swapping in the ElevenLabs MP3 was tried and rejected by the user (lip sync very bad); code kept behind `audio_swap`.
-- **Picture:** the user is happy with the framing (whole car in frame, presenter beside it, four shots).
-- **Captions:** white bold text, no box/outline, faint shadow, MarginV=28 (on the floor below the car).
-  `captionCues` matches audio pauses to sentence/comma boundaries (`captionAnchors`); trim stays with the car name.
-- **Dashboard:** numbered steps 1 Vehicle → 2 Script → 3 Voice (preview/approve in place) → 4 Look → 5 Generate,
-  Videos, Tools. Per-section status lines above the triggering button; every delete confirms.
+- **Staging runs on Node + React, no PHP.** Node service `golden-auto-staging-node` (127.0.0.1:4352), React dashboard
+  built into `public/app/` on deploy, Node caption and photo workers from cron, config in `private/config.json`.
+  Deploy: `bash /srv/golden-auto-staging/ubuntu/update.sh` (docs/DEPLOY_UBUNTU.md).
+- **Production (`main`) is still the old PHP app** until the user approves its switch.
+- The Node test site (node.mygoldenauto.net, branch `nodejs`) was retired on 2026-10-18 after merging into staging;
+  its data backup is `/home/mark/backups/golden-auto-node-test-site-2026-10-18.tar.gz`.
+- **Default flow (voice=elevenlabs):** approve an ElevenLabs preview → one Seedance 2.5 generation (four wide shots,
+  spokesperson beside the car, approved MP3 as `audio_urls`) → the caption worker keeps Seedance's own speech (lips
+  match it) and burns captions timed from that audio.
 
-## Open problems (next steps)
-1. **"San Ramon" is mispronounced by Seedance.** A pronunciation note and the respelling "San Ruh-mone" both failed.
-   The default respelling is now **"San Rah-moan"** (`SEEDANCE_RESPELL`); it still needs a paid test render.
-   Respelling is configurable: `'respell' => ['San Ramon' => '...']` in private/config.php. If it is still wrong,
-   try "San Ra-MOAN". Fallback: drop the city from the spoken line, keep it in captions.
-2. **Verify on the server** (not possible from the cloud sessions that built this): caption_worker cron runs every
-   minute; a native/elevenlabs job goes generating → captions → Ready without clicks; Shotstack/HeyGen pipeline in
-   `inventory-ads/` is **not used** — keep its timer disabled (`sudo systemctl disable --now goldenauto-video.timer`).
-3. Existing open items in CLAUDE.md: DealerCenter SFTP XML import, word-level caption timing.
+## Done on 2026-10-18
+- Sign-in redirects after posting (no "resend form" prompt); client switch and add without a page reload.
+- Car list re-read every 20 s while photos import; Dealer Car Search import errors name the sitemap car.
+- Steady spoken word count while typing.
+- Whisper-guided caption timing (`captionRetime`), short cues joined, smaller native caption text (FontSize 11).
+- React dashboard (`web/`) replaced the old pages; status messages are pop-ups, important failures stay until
+  dismissed and are listed under Notifications.
+- PHP removed from `staging`.
+- Staging's photo URLs pointed at production (copied data, so asset-sheet rebuilds failed); rewritten to
+  staging.mygoldenauto.net in staging's database only (backup `private/data/agent.sqlite.bak-before-photo-urls`).
+
+## Open items (next steps)
+1. **Switch production to Node** — next, after Sawyer tests staging and the user approves. Same way as staging: a
+   setup script plus one sudo command, `config-from-php.js` once for its config, Node worker cron lines in place of
+   the PHP one; then merge `staging` into `main` and remove PHP from `main`.
+2. **"Refresh inventory" for Golden Auto returns 403**: mygoldenauto.net blocks the server via Cloudflare. Workaround:
+   read the DealerCenter snapshot from the public website in a browser and run
+   `node node/src/cli/dealercenter-sync.js snapshot.json [zip-dir]` (photos download fine from imagescf.dealercenter.net).
+3. **DealerCenter SFTP XML import** (needs host/credentials and a sample XML).
+4. **Word-level caption alignment** (ElevenLabs `with-timestamps` on new takes would give exact timing).
+5. "San Ramon" pronunciation by Seedance: default respelling "San Rah-moan" (config `respell`); next fallback
+   "San Ra-MOAN", then drop the city from the spoken line.
 
 ## Working on this server with Claude Code
-- Work in a separate checkout (e.g. ~/golden-auto-dev), commit, push, then deploy with `bash /srv/golden-auto/ubuntu/update.sh`.
-  Don't edit /srv/golden-auto directly — update.sh fast-forwards it from GitHub.
-- Never print or commit private/config.php or API keys. Never call Higgsfield/ElevenLabs/fal/HeyGen/Shotstack from
+- Work in `~/golden-auto-dev` on `staging`, commit, push, then run `update.sh`. Don't edit `/srv/...` folders directly.
+- Node comes from nvm in `/home/mark/.nvm` (alias `default`); non-interactive shells (systemd, cron, update.sh) load
+  it with `ubuntu/node/nvm-env.sh`.
+- Never print or commit `private/config.json` or API keys. Never call Higgsfield/ElevenLabs/fal/HeyGen/Shotstack from
   tests; real generations cost money and need the user's approval in the dashboard.
-- Logs: caption worker → private/data/finishing-worker.log; PHP errors → the PHP-FPM / Nginx error logs.
+- Logs: `journalctl -u golden-auto-staging-node`; workers → `private/data/finishing-worker.log`,
+  `private/data/photo-worker.log`.
+- inventory-ads/ is not used: keep `goldenauto-video.timer` disabled.

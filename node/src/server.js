@@ -1,6 +1,5 @@
 // Golden Auto Node service: the whole dashboard — the sign-in page, the React dashboard (web/, built into
-// public/app/), sessions, and every action as JSON at POST /api/node/<action> (also POST /?api=<action>, the older
-// address). Static files (style.css, the React build, uploaded and generated assets) are served here too; behind
+// public/app/), sessions, and every action as JSON at POST /api/node/<action>. Static files (style.css, the React build, uploaded and generated assets) are served here too; behind
 // Nginx, Nginx serves most of them straight from disk.
 import { createServer } from 'node:http';
 import { readFileSync, mkdtempSync, rmSync, statSync, createReadStream } from 'node:fs';
@@ -23,7 +22,7 @@ const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url),
 const HOST = process.env.HOST ?? '127.0.0.1';
 const PORT = Number(process.env.PORT ?? 4350);
 const MAX_BODY = 1 << 20;
-const MAX_UPLOAD = 72 * 1024 * 1024;  // Nginx client_max_body_size and PHP post_max_size
+const MAX_UPLOAD = 72 * 1024 * 1024;  // same as Nginx client_max_body_size
 
 // Session actions.
 const sessionRoutes = {
@@ -32,7 +31,7 @@ const sessionRoutes = {
 };
 
 // action → handler(ctx), ctx = { cfg, db, client, dealer, body, files, req, session }. A plain Error is a user-facing
-// message (HTTP 400, like PHP's RuntimeException); HttpError carries its own status; anything else is a logged 500.
+// message (HTTP 400); HttpError carries its own status; anything else is a logged 500.
 export const actions = { ...clientRoutes, ...narrationRoutes, ...jobRoutes, ...finishingRoutes, ...sessionRoutes };
 
 const SECURITY = { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer' };
@@ -148,7 +147,7 @@ async function page(req, res, cfg, store, session, https) {
 }
 
 // Static files from public/: the stylesheet, the React build (public/app/; hashed file names under app/static/ never
-// change, so they are cached for a year) and uploaded or generated assets. Never PHP files or dotfiles.
+// change, so they are cached for a year) and uploaded or generated assets. Never dotfiles.
 const TYPES = { '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.mp4': 'video/mp4', '.mp3': 'audio/mpeg',
   '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.woff2': 'font/woff2' };
@@ -173,8 +172,8 @@ export const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   if (staticFile(req, res, url.pathname)) return;
   if (req.method === 'GET' && url.pathname === '/api/node/health') return send(res, 200, { ok: true, service: pkg.name, version: pkg.version, node: process.version });
-  const api = url.pathname.match(/^\/api\/node\/([a-z_]+)$/)?.[1] ?? (['/', '/index.php'].includes(url.pathname) && url.searchParams.has('api') ? url.searchParams.get('api') : null);
-  const isPage = api === null && ['/', '/index.php'].includes(url.pathname) && ['GET', 'POST'].includes(req.method);
+  const api = url.pathname.match(/^\/api\/node\/([a-z_]+)$/)?.[1] ?? null;
+  const isPage = api === null && url.pathname === '/' && ['GET', 'POST'].includes(req.method);
   if ((api === null && !isPage) || (api !== null && !Object.hasOwn(actions, api))) return send(res, 404, { error: 'Not found' });
   try {
     const { https, allowed } = connection(req);

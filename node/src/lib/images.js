@@ -1,7 +1,6 @@
-// Image work with FFmpeg (already on the server; no npm image library): what PHP does with GD — reading an image's
-// size and type, re-encoding/resizing photos to JPEG on white, and drawing the car asset sheet. Output is not
-// byte-identical to GD (different JPEG encoder, DejaVu Sans instead of GD's bitmap font); sizes, layout and text are.
-// Like GD, EXIF rotation is ignored (-noautorotate), so photos keep the orientation PHP gave them.
+// Image work with FFmpeg (already on the server; no npm image library): reading an image's size and type,
+// re-encoding/resizing photos to JPEG on white, and drawing the car asset sheet (DejaVu Sans). EXIF rotation is
+// ignored (-noautorotate), so photos keep the orientation they were stored with.
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

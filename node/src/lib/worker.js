@@ -1,20 +1,20 @@
 // Caption worker run (every minute): the one-approval auto build, then one queued final render — download the
 // generated video (or copy uploaded footage), time captions from real speech when asked, and burn them in with
-// FFmpeg (or the intro/closing-card render for lip-synced videos). Port of private/caption_worker.php. Free: status
+// FFmpeg (or the intro/closing-card render for lip-synced videos). Free: status
 // checks, a download of our own finished video, and local tools only.
 import { request } from 'node:https';
 import { lookup } from 'node:dns/promises';
 import { randomBytes } from 'node:crypto';
 import { createWriteStream, writeFileSync, mkdirSync, copyFileSync, existsSync, statSync, readFileSync, readdirSync, unlinkSync, rmdirSync, chmodSync, openSync, closeSync } from 'node:fs';
-import { str, toInt, toFloat, truthy, gmdateC, parseUrl } from './php.js';
-import { phpJsonEncode } from './phpjson.js';
+import { str, toInt, toFloat, truthy, gmdateC, parseUrl } from './text.js';
+import { jsonEncode } from './storedjson.js';
 import { validateSrt } from './captions.js';
 import { isPublicIPv4, pinnedLookup } from './clients.js';
 import { jobError, footageLocalPath } from './jobs.js';
 import { autoBuild } from './autobuild.js';
 import { NARRATION_OFFSET, runProcess, nativeCaptions, finishRender, jobNarration } from './finishing.js';
 
-const saveRenderJob = (db, j) => db.prepare('UPDATE jobs SET payload=? WHERE id=?').run(phpJsonEncode(j), j.id);
+const saveRenderJob = (db, j) => db.prepare('UPDATE jobs SET payload=? WHERE id=?').run(jsonEncode(j), j.id);
 
 /** downloadMaster(): https only, a public IPv4 address pinned for the connection, no redirects, at most 100 MB. */
 export async function downloadMaster(url, path) {
@@ -58,7 +58,7 @@ export function renderArgs(cfg, job, narration, output) {
 
 /**
  * One worker run. opts: { download, autoBuildOpts, captions(cfg, job, source, work, offset), render(db, cfg, job, work,
- * output, w, h), ffmpeg(args, work, log), random, now } — replaceable in tests. Returns the lines PHP prints.
+ * output, w, h), ffmpeg(args, work, log), random, now } — replaceable in tests. Returns the log lines.
  */
 export async function captionWorkerRun(db, cfg, opts = {}) {
   const { download = downloadMaster, captions = nativeCaptions, render = finishRender, random = randomBytes, now = () => Date.now() } = opts;

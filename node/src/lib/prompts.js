@@ -1,12 +1,12 @@
-// Seedance video prompts. Port of promptNative, speechPronunciationGuide and prompt (private/app.php). The prompt text
-// is part of each generation's duplicate-request fingerprint, so it must match PHP character for character.
-import { trim, rtrim, lower, round } from './php.js';
+// Seedance video prompts (promptNative, speechPronunciationGuide, prompt). The prompt text is part of each
+// generation's duplicate-request fingerprint, so any change to it makes earlier requests look new.
+import { trim, rtrim, lower, round } from './text.js';
 import { seedanceRespell, SPEECH_PRONUNCIATION } from './speech.js';
 import { title } from './price.js';
 
 export const SPOKESPERSON_DEFAULT_DESCRIPTION = 'trustworthy friendly adult woman age 28–33, casual professional attire';
 
-/** PHP float-to-string for the numbers in prompts (whole floats without ".0"). */
+/** Number-to-text for the numbers in prompts (whole floats without ".0"). */
 const num = (x) => String(x);
 
 export function speechPronunciationGuide(speech) {

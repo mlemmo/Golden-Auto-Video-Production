@@ -1,4 +1,4 @@
-// Port of the Dealer Car Search parts of tests/importers.php (the photo worker is still PHP), plus Golden Auto's
+// Dealer Car Search website import, plus Golden Auto's
 // website reader. No network: websites are faked.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

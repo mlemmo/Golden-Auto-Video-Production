@@ -1,7 +1,7 @@
-// A small HTML parser for reading dealer listing pages the way PHP's DOMDocument::loadHTML (libxml2) does, enough
+// A small HTML parser for reading dealer listing pages the way libxml2's HTML parser does, enough
 // for the queries the importers use: elements, attributes, text content, ancestors. No npm dependency.
 // libxml behaviours kept: a page without a UTF-8 charset declaration is read as ISO-8859-1 (so UTF-8 bytes show up
-// as "Ã©", as in PHP); entities are decoded in text and attribute values; <script>/<style> hold raw text; void
+// as "Ã©"); entities are decoded in text and attribute values; <script>/<style> hold raw text; void
 // elements never have children; an open <li>/<p>/<option>/<tr>/<td>/<th>/<dt>/<dd> is closed by the next one; an
 // end tag closes up to its nearest open match and is ignored when nothing matches; the first of duplicate
 // attributes wins.
@@ -27,7 +27,7 @@ export class El {
   hasAncestor(tag) { for (let p = this.parent; p; p = p.parent) if (p.tag === tag) return true; return false; }
 }
 
-/** The page as PHP would decode it: UTF-8 only when the page declares it, otherwise ISO-8859-1. */
+/** The page decoded as libxml2 would: UTF-8 only when the page declares it, otherwise ISO-8859-1. */
 function asLibxmlText(html) {
   const head = html.slice(0, 4096);
   if (/<meta[^>]+charset\s*=\s*["']?\s*utf-?8/i.test(head)) return html;

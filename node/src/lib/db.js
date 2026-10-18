@@ -1,13 +1,12 @@
-// Data layer: the same SQLite file and tables as the PHP dashboard (private/app.php db/state/save), shared by both
-// while areas move over. Node's built-in node:sqlite, no npm dependency. Rows are written as PHP would write them
-// (phpjson.js), so PHP keeps reading them unchanged.
+// Data layer: <data_dir>/agent.sqlite with the state and jobs tables (db/state/save), through Node's built-in
+// node:sqlite. Rows are written in the stored JSON format (storedjson.js).
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync, existsSync } from 'node:fs';
-import { phpJsonEncode } from './phpjson.js';
+import { jsonEncode } from './storedjson.js';
 
 const cache = new Map();
 
-/** db($cfg): opens <data_dir>/agent.sqlite (created 0700 like PHP) and makes sure both tables exist. */
+/** db($cfg): opens <data_dir>/agent.sqlite (folder created 0700) and makes sure both tables exist. */
 export function openDb(cfg) {
   const dir = String(cfg.data_dir ?? '');
   if (!dir) throw new Error('data_dir missing from config');
@@ -15,7 +14,7 @@ export function openDb(cfg) {
   if (cache.has(file)) return cache.get(file);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o700 });
   const db = new DatabaseSync(file);
-  // PHP's PDO opens the file with a busy timeout too; wait rather than fail while the other side writes.
+  // Workers and the service share the file: wait rather than fail while another process writes.
   db.exec('PRAGMA busy_timeout = 5000');
   db.exec('CREATE TABLE IF NOT EXISTS state (id TEXT PRIMARY KEY, payload TEXT NOT NULL); CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, fingerprint TEXT UNIQUE, payload TEXT NOT NULL)');
   cache.set(file, db);
@@ -40,7 +39,7 @@ export function state(db, id) {
 }
 /** save($db, $id, $data) */
 export function save(db, id, data) {
-  db.prepare('INSERT OR REPLACE INTO state VALUES (?, ?)').run(id, phpJsonEncode(data));
+  db.prepare('INSERT OR REPLACE INTO state VALUES (?, ?)').run(id, jsonEncode(data));
 }
 /** Ids of state rows starting with a prefix (e.g. "inventory:"). */
 export function stateIds(db, prefix) {
@@ -57,10 +56,10 @@ export function jobGet(db, id) {
   return row ? JSON.parse(row.payload) : null;
 }
 export function jobInsert(db, id, fingerprint, payload) {
-  db.prepare('INSERT INTO jobs VALUES (?, ?, ?)').run(id, fingerprint ?? null, phpJsonEncode(payload));
+  db.prepare('INSERT INTO jobs VALUES (?, ?, ?)').run(id, fingerprint ?? null, jsonEncode(payload));
 }
 export function jobSave(db, job) {
-  db.prepare('UPDATE jobs SET payload = ? WHERE id = ?').run(phpJsonEncode(job), job.id);
+  db.prepare('UPDATE jobs SET payload = ? WHERE id = ?').run(jsonEncode(job), job.id);
 }
 /** Newest first, like ORDER BY rowid DESC. */
 export function jobsList(db, limit = 30) {

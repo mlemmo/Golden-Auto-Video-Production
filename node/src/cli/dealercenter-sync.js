@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// DealerCenter sync from the command line (Node version of: php private/dealercenter_sync.php snapshot.json [zip-dir]).
+// DealerCenter sync from the command line: node src/cli/dealercenter-sync.js snapshot.json [zip-dir].
 // Reads the snapshot JSON, updates Golden Auto's inventory in the shared database and prints the change log.
 import { readFileSync } from 'node:fs';
 import { loadConfig } from '../lib/config.js';
