@@ -1,0 +1,24 @@
+# Node service for video.mygoldenauto.net (production), installed by ubuntu/production/switch-to-node.sh. Listens on localhost only;
+# Nginx forwards the whole site to it. Node comes from mark's nvm (default alias) via ubuntu/node/run-node.sh.
+[Unit]
+Description=Golden Auto Node service (video.mygoldenauto.net)
+After=network.target
+
+[Service]
+Type=simple
+User=mark
+Group=mark
+WorkingDirectory=/srv/golden-auto/node
+Environment=NVM_DIR=/home/mark/.nvm
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=PORT=4353
+ExecStart=/srv/golden-auto/ubuntu/node/run-node.sh
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
