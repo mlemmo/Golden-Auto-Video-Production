@@ -135,14 +135,16 @@ async function syncLog() {
 // ---- Step 2: script ---------------------------------------------------------------------------
 let speechTimer;
 function words() {
-  const n = $('script').value.trim().split(/\s+/).filter(Boolean).length;
-  $('wordCount').textContent = n + ' written words · checking spoken length…';
+  // Keep the last spoken count while typing (a written-word count here made the number jump); only the note changes.
+  const last = $('wordCount').dataset.spoken;
+  $('wordCount').textContent = last !== undefined && $('script').value.trim() ? `${last} spoken words · updating…` : 'Checking spoken length…';
   clearTimeout(speechTimer);
   speechTimer = setTimeout(async () => {
     const value = $('script').value;
     try {
       const d = await api('speech', {script: value});
       if ($('script').value === value) {
+        $('wordCount').dataset.spoken = d.words;
         const limit = $('duration').value === '30' ? 62 : 38;
         $('wordCount').textContent = `${d.words} spoken words · aim for ${$('duration').value === '30' ? '55–60' : 'up to 38'} for ${$('duration').value} seconds` + (d.words > limit ? ' — too long, shorten it' : '');
         $('wordCount').classList.toggle('error', d.words > limit);
