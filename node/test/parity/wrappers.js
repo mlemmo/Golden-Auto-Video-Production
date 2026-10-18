@@ -14,6 +14,7 @@ import { spokespersonClean } from '../../src/lib/spokespersons.js';
 import { nativeCues, nativeCaptions } from '../../src/lib/finishing.js';
 import { phpJsonEncode } from '../../src/lib/phpjson.js';
 import { autoBuild } from '../../src/lib/autobuild.js';
+import { pageRender, esc } from '../../src/lib/pages.js';
 import { narrationApi, narrationTables, narrationTextDifferences, narrationVoiceSettings } from '../../src/lib/narrations.js';
 import { readdirSync, mkdirSync } from 'node:fs';
 import { probeImage } from '../../src/lib/images.js';
@@ -45,6 +46,7 @@ function fakeBridge(inp, net) {
   return { status: r.status, body: Buffer.from(body).toString('base64'), detail: r.detail ?? null };
 }
 export const wrappers = {
+  pageRender: (name, vars) => pageRender(name, vars), esc,
   goldenNativeCues: nativeCues,
   parityNativeCaptions: async (cfg, job, source, offset) => { const work = mkdtempSync(tmpdir() + '/ga-pnc-'); try { return await nativeCaptions(cfg, job, source, work, offset); } finally { rmSync(work, { recursive: true, force: true }); } },
   parityAutoBuild: async (cfg, tables, hf, poll) => {

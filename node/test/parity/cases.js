@@ -147,6 +147,7 @@ export function buildCases(seed = 42, count = 400) {
     if (i % 5 === 4) narrationCases(r, add);
     promptCases(r, add, v, t);
     jobCases(r, add, v, t);
+    if (i % 10 === 0) pageCases(r, add, t);
   }
   return cases;
 }
@@ -407,3 +408,13 @@ function jobCases(r, add, v, t) {
   add('jobFingerprint', v, t, 'https://a/assets/sheet.jpg', 'https://a/assets/s.png', SPOKESPERSON_DESC, 'instagram_reels', 'showroom', pick(r, [15, 30]), pick(r, ['elevenlabs', 'native']), t + ' café', pick(r, ['', 'https://a/assets/narrations/x.mp3']));
 }
 const SPOKESPERSON_DESC = 'trustworthy friendly adult woman age 28–33, casual professional attire';
+
+
+// ---- Pages: the shared templates filled by PHP's strtr and Node's renderer ----
+function pageCases(r, add, t) {
+  const val = () => pick(r, ['', 'NODE TEST • ', 'STAGING • ', t, '$1 $& {{CSRF}}', '<b>"x" & \'y\'</b>', 'é—ü']);
+  add('pageRender', 'login', { TITLE_PREFIX: val(), CSRF: val(), ERROR: val() });
+  add('pageRender', 'dashboard', { TITLE_PREFIX: val(), BANNER: val(), BOOT: 'window.CSRF=' + JSON.stringify(val()) + ';' });
+  add('pageRender', 'login', {});
+  add('esc', val() + ' & < > " \' &amp;');
+}

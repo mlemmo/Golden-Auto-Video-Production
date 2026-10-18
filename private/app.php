@@ -225,6 +225,13 @@ function publicImage(string $url): string {
 function jobFingerprint(array $v,string $spoken,string $sheet,string $avatar,string $description,string $format,string $style,int $duration,string $voice,string $promptText,string $voiceRef):string {
     return hash('sha256',json_encode([$v['Vin']??null,$v['price']??null,$spoken,$sheet,$avatar,$description,$format,$style,$duration,$voice,hash('sha256',$promptText),$voiceRef]));
 }
+/** Dashboard actions the node test site's page sends to the Node service while PHP serves the page (Node port). */
+const NODE_ACTIONS=['clients','client_add','client_analyze','client_details','inventory','sync','narration_voices','narration_list','narration_preview','narration_approve','narration_lipsync','narration_poll','narration_delete','narration_lipsync_delete','detail','sheet','speech','sync_log','import','references','generate','poll','jobs','job_delete','footage_build','spokesperson_list','spokesperson_upload','spokesperson_default','spokesperson_delete','caption_draft','finish'];
+/** A page from private/templates with {{NAME}} placeholders filled (values are inserted as given: escape them first). */
+function pageRender(string $name,array $vars):string {
+    $html=file_get_contents(__DIR__.'/templates/'.$name.'.html');
+    return strtr($html,array_combine(array_map(fn($k)=>'{{'.$k.'}}',array_keys($vars)),array_values($vars)));
+}
 function galleryPhotos(string $html): array {
     $x=doc($html);$photos=[];
     foreach ($x->query('//*[starts-with(@id,"DWS_VDP_Media_")]//*[@data-pin-media or @data-base-img-url]') as $n) {

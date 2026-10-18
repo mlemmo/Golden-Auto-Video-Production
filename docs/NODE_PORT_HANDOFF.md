@@ -57,7 +57,16 @@ worker instead of private/caption_worker.php (ubuntu/node/setup-app.sh installs 
 PHP (FFmpeg, finish_video.py, whisper.cpp); captions were identical to PHP's on a real finished video with whisper.
 PHP's `goldenNativeCaptions` now calls a pure `goldenNativeCues` (compared by parity).
 
-Next: dashboard pages and login (7) — after that every API action of the node site is on Node.
+Pages and login (7) done: the page HTML moved to `private/templates/dashboard.html` and `login.html` (PHP renders
+them with `pageRender`, output byte-identical to before; private/narration_panel.php is inlined). Node serves the
+pages, sign-in and sessions itself (`src/server.js`, `src/lib/session.js`, `src/lib/pages.js`). The node site's Nginx
+config (`ubuntu/node/nginx-golden-auto-node.conf`) sends everything except static files to Node; install it with
+`sudo bash /srv/golden-auto-node/ubuntu/node/setup-root.sh` (idempotent). Until then PHP serves the page and its
+session still signs in /api/node/ calls (fallback through node_auth.php). Still on PHP: the PHP CLI reads
+config.php and checks the password hash (password_verify); its PHP-FPM pool for this site can be removed once the
+Nginx switch is checked.
+
+Next: rollout (8) only when the user says so — the user tests the node site first.
 
 ## How to port each area (the method so far)
 
