@@ -108,7 +108,10 @@ test('Node sign-in: pages, password, CSRF, sessions, client choice, sign-out', {
     html = await (await go('/', form({ csrf, password: 'wrong' }))).text();
     assert.ok(html.includes('Incorrect password.'));
     const before = jar.ga_sid;
-    html = await (await go('/', form({ csrf, password: 'correct horse' }))).text();
+    r = await go('/', form({ csrf, password: 'correct horse' }));
+    assert.equal(r.status, 303, 'sign-in redirects (no form resend on reload)');
+    assert.equal(r.headers.get('location'), '/');
+    html = await (await go('/')).text();
     assert.ok(html.includes('window.CSRF="' + csrf + '"') && html.includes('window.NODE_ACTIONS=') && html.includes('"client_select"') && html.includes('NODE TEST — test copy'), 'dashboard page');
     assert.notEqual(jar.ga_sid, before, 'new session id after sign-in');
     assert.ok((await (await go('/index.php')).text()).includes('id="stepVehicle"'), 'signed in on reload');

@@ -140,6 +140,12 @@ async function page(req, res, cfg, store, session, https) {
     }
   }
   const headers = closeSession(store, session, https);
+  // After a successful sign-in, redirect to a plain GET of the page (Post/Redirect/Get), so reloading the
+  // dashboard never asks the browser to resend the sign-in form.
+  if (req.method === 'POST' && session.data.auth) {
+    res.writeHead(303, { ...SECURITY, ...headers, Location: new URL(req.url, 'http://localhost').pathname });
+    return res.end();
+  }
   if (!session.data.auth) return sendText(res, 200, loginPage(cfg, session.data.csrf, error), undefined, headers);
   sendText(res, 200, dashboardPage(cfg, session.data.csrf, Object.keys(actions)), undefined, headers);
 }

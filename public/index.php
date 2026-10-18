@@ -20,7 +20,9 @@ if (isset($_POST['password'])) {
     if (!hash_equals($_SESSION['csrf'],(string)($_POST['csrf']??''))) {http_response_code(403);exit('Invalid request.');}
     $_SESSION['attempts']??=[];$_SESSION['attempts']=array_values(array_filter($_SESSION['attempts'],fn($t)=>$t>time()-300));
     if(count($_SESSION['attempts'])>=5) $loginError='Too many attempts. Wait five minutes.';
-    elseif(password_verify((string)$_POST['password'],$cfg['password_hash'])) {session_regenerate_id(true);$_SESSION['auth']=true;$_SESSION['attempts']=[];}
+    elseif(password_verify((string)$_POST['password'],$cfg['password_hash'])) {session_regenerate_id(true);$_SESSION['auth']=true;$_SESSION['attempts']=[];
+        // Post/Redirect/Get: reloading the dashboard then never asks the browser to resend the sign-in form.
+        header('Location: '.strtok($_SERVER['REQUEST_URI']??'/','?'),true,303);exit;}
     else {$_SESSION['attempts'][]=time();$loginError='Incorrect password.';}
 }
 if (!($_SESSION['auth']??false)) {echo pageRender('login',['TITLE_PREFIX'=>$staging?$envLabel.' • ':'','CSRF'=>esc($_SESSION['csrf']),'ERROR'=>esc($loginError)]);exit; }

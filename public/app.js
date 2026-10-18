@@ -57,7 +57,7 @@ function render(list) {
   for (const v of list.filter(v => v.active !== false)) {
     const b = el('button'); b.className = 'vehicle'; b.dataset.stock = v.StockNumber;
     const p = el('span', price(v)); p.className = 'price';
-    b.append(p, el('strong', `${v.Year} ${v.Make} ${v.Model}`), el('small', `${v.Trim} · ${(v.Odometer == null ? 'Mileage not entered' : Number(v.Odometer).toLocaleString())} miles · #${v.StockNumber}`));
+    b.append(p, el('strong', `${v.Year} ${v.Make} ${v.Model}`), el('small', `${v.Trim} · ${(v.Odometer == null ? 'Mileage not entered' : Number(v.Odometer).toLocaleString())} miles · #${v.StockNumber}${v.photos_pending ? ' · photos importing…' : ''}`));
     b.onclick = () => select(v.StockNumber, b);
     if (chosen && chosen.StockNumber === v.StockNumber) b.classList.add('active');
     $('inventory').append(b);
@@ -84,13 +84,39 @@ $('sync').onclick = async () => {
   if (busy) return; busy = true; $('sync').disabled = true;
   message('Refreshing current inventory…');
   try {
-    const a = await api('sync'); render(a.vehicles); chosen = null; $('generate').disabled = true; $('brief').disabled = true; $('buildFootage').disabled = true;
-    const active = a.vehicles.filter(v => v.active !== false).length, r = a.report;
-    $('syncTime').textContent = `${active} vehicles · checked ${new Date(a.checked_at).toLocaleString()}`;
+    const a = await api('sync'); clearVehicle(); showInventory(a);
+    const r = a.report;
     message(r ? `Imported from the website: ${r.added} new, ${r.updated} updated, ${r.gone} no longer listed${r.errors.length ? `, ${r.errors.length} page(s) could not be read` : ''}. Select a vehicle.`
       : 'Inventory refreshed. Select a vehicle.', null, !!r?.errors.length); summary();
   } catch (e) { fail(e.message); } finally { busy = false; $('sync').disabled = false; }
 };
+// The client's saved inventory shows at once. While a website import is still copying photos (photos_pending),
+// the list re-reads it every 20 seconds, so new photos appear without reloading the page.
+let inventoryTimer;
+function showInventory(a) {
+  const list = a.vehicles || [], active = list.filter(v => v.active !== false), pending = active.filter(v => v.photos_pending).length;
+  render(list);
+  if (chosen?.photos_pending && list.some(v => v.StockNumber === chosen.StockNumber && !v.photos_pending)) {
+    chosen.photos_pending = false;
+    message(`Photos for the ${chosen.Year} ${chosen.Make} ${chosen.Model} are ready. Click the car in step 1 to see them.`, statusOf('stepVehicle'));
+  }
+  $('syncTime').textContent = (a.dealercenter_checked_at ? `${active.length} vehicles · DealerCenter synced ${new Date(a.dealercenter_checked_at).toLocaleString()}`
+    : a.checked_at ? `${active.length} vehicles · checked ${new Date(a.checked_at).toLocaleString()}` : `${active.length} vehicles`)
+    + (pending ? ` · photos importing for ${pending} (updates automatically)` : '');
+  clearTimeout(inventoryTimer);
+  if (pending) { const client = clientList.current; inventoryTimer = setTimeout(() => { if (client === clientList.current) loadInventory(); }, 20000); }
+}
+async function loadInventory() {
+  try { showInventory(await api('inventory')); } catch (e) { fail(e.message, statusOf('stepVehicle')); }
+}
+/** Back to "no vehicle selected" (after a refresh or a client switch). */
+function clearVehicle() {
+  chosen = null; $('generate').disabled = true; $('brief').disabled = true; $('buildFootage').disabled = true;
+  $('selected').textContent = 'Select a vehicle in step 1'; $('facts').textContent = ''; $('description').textContent = ''; $('script').value = '';
+  $('photoPicker').replaceChildren(); $('sheetPreview').replaceChildren(); $('sheet').value = '';
+  $('captionEditor').hidden = true; captionJob = null;
+  words(); approvedVoices(); summary();
+}
 const syncSections = [['added', 'Added'], ['removed', 'Removed — no longer in DealerCenter (hidden, videos kept)'], ['returned', 'Back in inventory'], ['price_changed', 'Price changed — review the script'], ['photos_updated', 'Photos updated — asset sheet rebuilt'], ['sheet_views', 'Asset sheet views changed'], ['waiting_photos', 'Waiting for photos'], ['updated', 'Details updated'], ['sheet_errors', 'Asset sheet problems']];
 async function syncLog() {
   try {
@@ -442,8 +468,19 @@ async function loadClients() {
   for (const c of clientList.items) { const o = el('option', c.name); o.value = c.id; sel.append(o); }
   sel.value = clientList.current; showClient();
 }
+/** Show the session's current client: its saved inventory, videos and voice previews, without reloading the page. */
+async function showClientData() {
+  await loadClients(); clearVehicle(); $('syncTime').textContent = 'Loading inventory…';
+  await Promise.all([loadInventory(), jobs(), syncLog()]);
+  if (typeof refreshNarrations === 'function') refreshNarrations().catch(e => fail(e.message, statusOf('voiceStudio')));
+}
 $('client').onchange = async () => {
-  try { await api('client_select', {id: $('client').value}); location.reload(); } catch (e) { fail(e.message, statusOf('stepVehicle')); }
+  const id = $('client').value, target = statusOf('stepVehicle');
+  if (busy) { $('client').value = clientList.current; return; }
+  busy = true; $('client').disabled = true;
+  try { await api('client_select', {id}); await showClientData(); message(`Switched to ${clientList.items.find(c => c.id === id)?.name || id}.`, target); }
+  catch (e) { $('client').value = clientList.current; fail(e.message, target); }
+  finally { busy = false; $('client').disabled = false; }
 };
 $('addClientToggle').onclick = () => { $('clientForm').hidden = !$('clientForm').hidden; };
 $('clientForm').onsubmit = async event => {
@@ -454,7 +491,8 @@ $('clientForm').onsubmit = async event => {
     const r = await api('client_add', {name: f.get('name'), website: f.get('website')});
     // Node cannot change the PHP session yet: select the new client there (PHP's client_add does this itself).
     if ((window.NODE_ACTIONS || []).includes('client_add')) await api('client_select', {id: r.client.id});
-    location.reload();
+    $('clientForm').reset(); $('clientForm').hidden = true; await showClientData();
+    message(`${r.client.name} added.`, statusOf('stepVehicle'));
   }
   catch (e) { fail(e.message, statusOf('stepVehicle')); } finally { busy = false; $('clientAdd').disabled = false; }
 };
@@ -481,13 +519,8 @@ $('clientAnalyze').onclick = async () => {
 recipe();
 (async () => { try { renderSpokespersons(await api('spokesperson_list')); } catch (e) { fail(e.message, statusOf('stepLook')); } })();
 syncLog();
-loadClients().catch(e => fail(e.message, statusOf('stepVehicle')));
 (async () => {
   try {
-    const a = await api('inventory'); render(a.vehicles || []);
-    const active = (a.vehicles || []).filter(v => v.active !== false).length;
-    $('syncTime').textContent = a.dealercenter_checked_at ? `${active} vehicles · DealerCenter synced ${new Date(a.dealercenter_checked_at).toLocaleString()}`
-      : a.checked_at ? `${active} vehicles · checked ${new Date(a.checked_at).toLocaleString()}` : `${active} vehicles`;
-    await jobs();
+    await loadClients(); await loadInventory(); await jobs();
   } catch (e) { fail(e.message, statusOf('stepVehicle')); }
 })();
