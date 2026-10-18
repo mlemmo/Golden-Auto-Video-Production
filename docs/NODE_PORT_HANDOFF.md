@@ -72,6 +72,12 @@ re-read every 20 s while photos import, client_analyze returns script_details, D
 (`dcsPageError`), steady word count while typing, and whisper-guided caption timing (`captionRetime`, see CLAUDE.md)
 with smaller native caption text.
 
+Staging on Node (2026-10-18): `nodejs` merged into `staging`; staging switched to Node (setup-node-root.sh, service
+golden-auto-staging-node on 4352, cron runs the Node workers); then the React dashboard (web/) replaced the PHP pages
+and PHP was removed from `staging` (config in private/config.json). Staging's photo URLs pointed at production
+(copied data, asset-sheet rebuild failed); rewritten to staging.mygoldenauto.net in staging's database only, backup
+private/data/agent.sqlite.bak-before-photo-urls. Production (`main`) is still PHP.
+
 Next: rollout (8) only when the user says so — the user tests the node site first.
 
 ## How to port each area (the method so far)
