@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openMemoryDb, save, state } from '../src/lib/db.js';
 import { clientFind, clientInventory } from '../src/lib/clients.js';
-import { dcsParseVdp, clientImportDcs } from '../src/lib/importers.js';
+import { dcsParseVdp, dcsSitemapName, dcsPageError, clientImportDcs } from '../src/lib/importers.js';
 import { goldenInventory, syncInventory } from '../src/lib/website.js';
 
 const page = (id, year, make, model, price, stock, miles, photos = 3) =>
@@ -27,6 +27,14 @@ test('vehicle facts from a listing page', () => {
   assert.equal(v.description, 'CLEAN CARFAX. WE CHARGE A $80.00 DOC FEE.');
   assert.equal(v.dealer.telephone, '800-407-0303');
   assert.throws(() => dcsParseVdp(page('2', 'x', 'Audi', 'Q5', '1', 'S', '1'), 'u'), /missing year, make or model/);
+});
+
+test('a sitemap car whose page is gone is named in the import errors', () => {
+  const url = 'https://leasereturns.com/vdp/21455939/Used-2020-MercedesBenz-S560-for-sale-in-San-Ramon-CA';
+  assert.equal(dcsSitemapName(url), '2020 MercedesBenz S560');
+  assert.equal(dcsPageError(url, 'has no year, make or model on the site (it may have been sold)'),
+    '2020 MercedesBenz S560 is listed in the website’s sitemap, but its page has no year, make or model on the site (it may have been sold): ' + url);
+  assert.match(dcsPageError('https://lr.com/vdp/1/Used-Car', 'could not be loaded (HTTP 404)'), /^A vehicle is listed/);
 });
 
 test('website import: new, updated and sold cars; photos left to the photo worker', async () => {

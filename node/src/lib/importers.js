@@ -62,6 +62,20 @@ export function dcsParseVdp(html, url) {
   };
 }
 
+/** Year and name of a car from its sitemap address (/vdp/<id>/Used-2020-MercedesBenz-S560-for-sale-in-…), or ''. */
+export function dcsSitemapName(url) {
+  let path; try { path = new URL(url).pathname; } catch { path = url.split(/[?#]/)[0]; }
+  let slug = path.replace(/\/+$/, '').split('/').pop() ?? '';
+  try { slug = decodeURIComponent(slug); } catch { /* keep as is */ }
+  const m = slug.match(/(?:^|-)((?:19|20)\d{2})-(.+?)(?:-for-sale(?:-.*)?)?$/s);
+  return m ? m[1] + ' ' + m[2].replaceAll('-', ' ') : '';
+}
+/** Import error for one vehicle page from the sitemap, naming the car the sitemap gives. */
+export function dcsPageError(url, problem) {
+  const name = dcsSitemapName(url);
+  return (name !== '' ? name : 'A vehicle') + ' is listed in the website’s sitemap, but its page ' + problem + ': ' + url;
+}
+
 /**
  * Import a Dealer Car Search client's inventory from its website. Cars that left the site stay listed as inactive.
  * Photos are left to the photo worker: a car whose photo set is new or changed is marked photos_pending.
@@ -81,9 +95,9 @@ export async function clientImportDcs(db, client, fetchFn = clientFetch) {
   let added = 0, updated = 0, dealer = null;
   for (const url of pages) {
     const r = await fetchFn(url);
-    if ((r.code ?? 0) !== 200) { errors.push('HTTP ' + (r.code ?? 0) + ' for ' + url); continue; }
+    if ((r.code ?? 0) !== 200) { errors.push(dcsPageError(url, 'could not be loaded (HTTP ' + (r.code ?? 0) + ')')); continue; }
     let v;
-    try { v = dcsParseVdp(String(r.body), url); } catch (e) { errors.push(e.message); continue; }
+    try { v = dcsParseVdp(String(r.body), url); } catch { errors.push(dcsPageError(url, 'has no year, make or model on the site (it may have been sold)')); continue; }
     dealer ??= v.dealer; delete v.dealer;
     const prev = byStock.get(v.StockNumber) ?? null;
     // Photos are copied and sorted by the photo worker; until then the car keeps the photos it had.

@@ -30,6 +30,8 @@ try{
     verify($v['price']===177995.0,'price from the listing, not the loan calculator or the fee text');
     verify(count($v['photo_sources'])===10&&!in_array('https://imagescdn.dealercarsearch.com/Media/3073/999/other.jpg',$v['photo_sources'],true),'only this car’s photos');
     verify($v['description']==='CLEAN CARFAX. WE CHARGE A $80.00 DOC FEE.'&&($v['dealer']['telephone']??'')==='800-407-0303','description and dealer details');
+    $gone='https://leasereturns.com/vdp/21455939/Used-2020-MercedesBenz-S560-for-sale-in-San-Ramon-CA';
+    verify(dcsSitemapName($gone)==='2020 MercedesBenz S560'&&dcsPageError($gone,'could not be loaded (HTTP 404)')==='2020 MercedesBenz S560 is listed in the website’s sitemap, but its page could not be loaded (HTTP 404): '.$gone,'a sitemap car whose page is gone is named in the import errors');
 
     $db->exec("INSERT INTO state VALUES ('clients','".json_encode(['items'=>[['id'=>'golden-auto','name'=>'Golden Auto','website'=>'https://www.mygoldenauto.net'],['id'=>'lr','name'=>'LR','website'=>'https://lr.com','analysis'=>['sitemap'=>'https://lr.com/sitemap']]]])."')");
     $r=clientImportDcs($db,$cfg,clientFind($db,'lr'),$fetch);

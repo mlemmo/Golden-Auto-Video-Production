@@ -104,6 +104,17 @@ function dcsProcessPhotos(PDO $db,array $cfg,int $budget=50,?callable $fetch=nul
     return $log;
 }
 
+/** Year and name of a car from its sitemap address (/vdp/<id>/Used-2020-MercedesBenz-S560-for-sale-in-…), or ''. */
+function dcsSitemapName(string $url): string {
+    $slug=rawurldecode(basename((string)parse_url($url,PHP_URL_PATH)));
+    return preg_match('~(?:^|-)((?:19|20)\d{2})-(.+?)(?:-for-sale(?:-.*)?)?$~',$slug,$m)?$m[1].' '.str_replace('-',' ',$m[2]):'';
+}
+/** Import error for one vehicle page from the sitemap, naming the car the sitemap gives. */
+function dcsPageError(string $url, string $problem): string {
+    $name=dcsSitemapName($url);
+    return ($name!==''?$name:'A vehicle').' is listed in the website’s sitemap, but its page '.$problem.': '.$url;
+}
+
 /**
  * Import a Dealer Car Search client's inventory from its website. Cars that left the site stay listed as inactive;
  * photos are only copied for new cars or when the car's photo set changed. Returns a short report.
@@ -118,8 +129,8 @@ function clientImportDcs(PDO $db,array $cfg,array $client,?callable $fetch=null)
     $key=clientInventoryKey($client['id']);$old=state($db,$key)??['vehicles'=>[]];$byStock=[];foreach($old['vehicles'] as $v)$byStock[$v['StockNumber']]=$v;
     $seen=[];$added=0;$updated=0;$errors=[];$dealer=null;
     foreach($pages as $url){
-        $r=$fetch($url);if(($r['code']??0)!==200){$errors[]='HTTP '.($r['code']??0).' for '.$url;continue;}
-        try{$v=dcsParseVdp((string)$r['body'],$url);}catch(RuntimeException $e){$errors[]=$e->getMessage();continue;}
+        $r=$fetch($url);if(($r['code']??0)!==200){$errors[]=dcsPageError($url,'could not be loaded (HTTP '.($r['code']??0).')');continue;}
+        try{$v=dcsParseVdp((string)$r['body'],$url);}catch(RuntimeException){$errors[]=dcsPageError($url,'has no year, make or model on the site (it may have been sold)');continue;}
         $dealer??=$v['dealer'];unset($v['dealer']);
         $prev=$byStock[$v['StockNumber']]??null;
         // Photos are copied and sorted by the photo worker; until then the car keeps the photos it had.

@@ -86,7 +86,7 @@ $('sync').onclick = async () => {
   try {
     const a = await api('sync'); clearVehicle(); showInventory(a);
     const r = a.report;
-    message(r ? `Imported from the website: ${r.added} new, ${r.updated} updated, ${r.gone} no longer listed${r.errors.length ? `, ${r.errors.length} page(s) could not be read` : ''}. Select a vehicle.`
+    message(r ? `Imported from the website: ${r.added} new, ${r.updated} updated, ${r.gone} no longer listed${r.errors.length ? `, ${r.errors.length} page(s) could not be read` : ''}. Select a vehicle.${r.errors.length ? '\n' + r.errors.join('\n') : ''}`
       : 'Inventory refreshed. Select a vehicle.', null, !!r?.errors.length); summary();
   } catch (e) { fail(e.message); } finally { busy = false; $('sync').disabled = false; }
 };

@@ -3,7 +3,7 @@ import { htmlEntityDecode } from '../../src/lib/html.js';
 import { parseUrl } from '../../src/lib/php.js';
 import { clientAnalyze, clientAdd, clientsLoad, clientSaveDetails, clientInventoryKey, clientWebsite } from '../../src/lib/clients.js';
 import { openMemoryDb, save, state } from '../../src/lib/db.js';
-import { dcsParseVdp, clientImportDcs } from '../../src/lib/importers.js';
+import { dcsParseVdp, dcsSitemapName, dcsPageError, clientImportDcs } from '../../src/lib/importers.js';
 import { jsonp, goldenInventory } from '../../src/lib/website.js';
 import { importMediaZip } from '../../src/lib/media.js';
 import { dcNormalize, dcCleanDescription, dcSync } from '../../src/lib/dealercenter.js';
@@ -154,6 +154,8 @@ export const wrappers = {
     } finally { rmSync(dir, { recursive: true, force: true }); }
   },
   dcsParseVdp,
+  dcsSitemapName,
+  dcsPageError,
   jsonp,
   parityGoldenInventory(source, pages) {
     return goldenInventory(source, async (u) => { if (!Object.hasOwn(pages, u)) throw new Error('Remote request failed (HTTP 404).'); return String(pages[u]); });

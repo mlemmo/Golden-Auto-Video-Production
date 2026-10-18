@@ -233,6 +233,11 @@ function vdpPage(r, id, opts = {}) {
 function importerCases(r, add, i) {
   const id = String(24000000 + i);
   add('dcsParseVdp', vdpPage(r, id), 'https://lr.com/vdp/' + id + '/x');
+  const slug = pick(r, ['Used-2020-MercedesBenz-S560-for-sale-in-San-Ramon-CA', 'New-2026-Porsche-911', 'Used-1996-BMW-Z3-for-sale', 'Used-Car', '2023-Land-Rover-Range-Rover',
+    'Certified-Pre-Owned-2019-Audi-Q5-for-sale-in-X', 'Used-2015-Mercedes%2DBenz-M%20Class', 'Used-1899-Ford-T', 'x-for-sale', '', 'Used-2021-Kia-Rio-for-sale-in-for-sale']);
+  const url = pick(r, ['https://lr.com/vdp/', 'https://leasereturns.com/vdp/', 'lr.com/vdp/']) + id + '/' + slug + pick(r, ['', '/', '?x=1', '#a']);
+  add('dcsSitemapName', url);
+  add('dcsPageError', url, pick(r, ['could not be loaded (HTTP 404)', 'has no year, make or model on the site (it may have been sold)']));
   const client = { id: 'lr', name: 'LR', website: 'https://lr.com', ...(r() < 0.7 ? { analysis: { sitemap: 'https://lr.com/sitemap' } } : {}) };
   const site = (cars) => {
     const pages = {};
