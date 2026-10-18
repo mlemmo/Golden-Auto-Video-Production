@@ -50,7 +50,14 @@ releases it, unclear submissions stay `submission_uncertain`. Higgsfield POST/PU
 as in PHP; tests use a fake transport. PHP's `enrich()` takes an optional page fetcher for parity. The Node server now
 sets the selected client's spoken website per request (PHP's `speechSites`), which narration routes also lacked.
 
-Next per the order below: the caption worker (6; caption_draft/finish stay PHP until then), dashboard pages (7).
+Caption worker (6) done: `src/lib/worker.js` (one run: auto build, stuck-render check, one queued render),
+`src/lib/autobuild.js`, `src/lib/finishing.js`, CLI `node src/cli/caption-worker.js` (lock folder
+`caption-worker.lock.d`), and the `caption_draft`/`finish` actions on Node. The node site's cron runs the Node caption
+worker instead of private/caption_worker.php (ubuntu/node/setup-app.sh installs both Node workers). Same free tools as
+PHP (FFmpeg, finish_video.py, whisper.cpp); captions were identical to PHP's on a real finished video with whisper.
+PHP's `goldenNativeCaptions` now calls a pure `goldenNativeCues` (compared by parity).
+
+Next: dashboard pages and login (7) — after that every API action of the node site is on Node.
 
 ## How to port each area (the method so far)
 

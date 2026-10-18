@@ -11,6 +11,9 @@ import { dcsProcessPhotos } from '../../src/lib/photos.js';
 import { promptNative, prompt, speechPronunciationGuide } from '../../src/lib/prompts.js';
 import { galleryPhotos, enrich, jobError, referenceImageUrl, jobFingerprint } from '../../src/lib/jobs.js';
 import { spokespersonClean } from '../../src/lib/spokespersons.js';
+import { nativeCues, nativeCaptions } from '../../src/lib/finishing.js';
+import { phpJsonEncode } from '../../src/lib/phpjson.js';
+import { autoBuild } from '../../src/lib/autobuild.js';
 import { narrationApi, narrationTables, narrationTextDifferences, narrationVoiceSettings } from '../../src/lib/narrations.js';
 import { readdirSync, mkdirSync } from 'node:fs';
 import { probeImage } from '../../src/lib/images.js';
@@ -42,6 +45,20 @@ function fakeBridge(inp, net) {
   return { status: r.status, body: Buffer.from(body).toString('base64'), detail: r.detail ?? null };
 }
 export const wrappers = {
+  goldenNativeCues: nativeCues,
+  parityNativeCaptions: async (cfg, job, source, offset) => { const work = mkdtempSync(tmpdir() + '/ga-pnc-'); try { return await nativeCaptions(cfg, job, source, work, offset); } finally { rmSync(work, { recursive: true, force: true }); } },
+  parityAutoBuild: async (cfg, tables, hf, poll) => {
+    const db = openMemoryDb(); narrationTables(db);
+    for (const [id, v] of Object.entries(tables.state ?? {})) save(db, id, v);
+    for (const t of ['jobs', 'narrations', 'narration_lipsync']) for (const r of tables[t] ?? []) db.prepare(`INSERT INTO ${t} VALUES (?,?,?)`).run(r.id, null, phpJsonEncode(r));
+    const log = await autoBuild(db, cfg, {
+      poll: async (id) => { if ((poll[id] ?? 'ok') !== 'ok') throw new Error(String(poll[id])); return []; },
+      hfStatus: async (rid) => { const r = hf[rid] ?? null; if (r === null || typeof r !== 'object') throw new Error(String(r ?? 'no answer')); return r; },
+    });
+    const dump = {};
+    for (const t of ['jobs', 'narration_lipsync']) for (const r of db.prepare(`SELECT payload FROM ${t} ORDER BY rowid`).all()) (dump[t] ??= []).push(JSON.parse(r.payload));
+    return parityStable({ log, db: dump });
+  },
   galleryPhotos, jobError, referenceImageUrl, spokespersonClean, jobFingerprint,
   parityEnrich: async (v, html) => { const r = await enrich(v, async () => html); delete r.detail_checked_at; return r; },
   promptNative, prompt, speechPronunciationGuide,

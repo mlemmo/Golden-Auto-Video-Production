@@ -121,6 +121,9 @@ export function buildCases(seed = 42, count = 400) {
     add('captionCues', marked, r() < 0.3 ? '' : veh, spans(r, end), end);
     add('captionStripExtra', marked.replace(/ /g, () => pick(r, [' ', '\x01', '\x02'])));
     add('captionSpokenScript', t, h);
+    const job = { script: t, vehicle: r() < 0.2 ? undefined : veh, duration: pick(r, [15, 30, '30', undefined]) };
+    if (r() < 0.7) job.price = r() < 0.4 ? null : 14688;
+    add('goldenNativeCues', job, { spans: spans(r, end), speech_end: end }, r() < 0.5 ? [] : h, pick(r, [0, 0.5]));
     const dur = 5 + Math.floor(r() * 30);
     add('captionDraft', t, dur, r() < 0.5 ? '' : veh);
     add('captionSrt', [{ text: 'A\nB', start: r() * 3, end: 3 + r() * 3 }, { text: 'C', start: 6.5, end: 7.25 }], r() * 2);

@@ -36,18 +36,18 @@ if [ ! -f "$dir/private/data/agent.sqlite" ]; then
   echo "production data copied"
 fi
 
-line="* * * * * /usr/bin/php $dir/private/caption_worker.php >> $dir/private/data/finishing-worker.log 2>&1"
-if ! crontab -l 2>/dev/null | grep -qF "$dir/private/caption_worker.php"; then
-  (crontab -l 2>/dev/null; echo "$line") | crontab -
-  echo "node test site caption worker added to cron"
-fi
-# Photo worker (free: public photo downloads and the local image model): copies and sorts photos of website-imported
-# client cars. Uses config photo_python when set; without the model it keeps every photo.
-line="* * * * * /usr/bin/php $dir/private/photo_worker.php >> $dir/private/data/photo-worker.log 2>&1"
-if [ -f "$dir/private/photo_worker.php" ] && ! crontab -l 2>/dev/null | grep -qF "$dir/private/photo_worker.php"; then
-  (crontab -l 2>/dev/null; echo "$line") | crontab -
-  echo "node test site photo worker added to cron"
-fi
+# Workers run on Node on this site (Node port): the caption worker (auto build + final renders) and the photo worker
+# (free: public photo downloads and the local image model). Older PHP worker lines for this folder are replaced.
+node_run=". $dir/ubuntu/node/nvm-env.sh && node $dir/node/src/cli"
+for worker in "caption-worker:caption_worker.php:finishing-worker.log" "photo-worker:photo_worker.php:photo-worker.log"; do
+  IFS=: read -r js php log <<< "$worker"
+  line="* * * * * /bin/bash -c \"$node_run/$js.js\" >> $dir/private/data/$log 2>&1"
+  current=$(crontab -l 2>/dev/null || true)
+  if ! grep -qF "$dir/node/src/cli/$js.js" <<< "$current"; then
+    (grep -vF "$dir/private/$php" <<< "$current" || true; echo "$line") | crontab -
+    echo "node test site $js (Node) in cron"
+  fi
+done
 
 # nvm (latest release, from its GitHub repository) and the current Node LTS, for mark only. Upgrade later with
 #   nvm install --lts && nvm alias default 'lts/*' && sudo systemctl restart golden-auto-node

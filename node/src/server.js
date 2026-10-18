@@ -9,6 +9,7 @@ import { openDb } from './lib/db.js';
 import { clientRoutes } from './routes/clients.js';
 import { narrationRoutes } from './routes/narrations.js';
 import { jobRoutes, MULTIPART } from './routes/jobs.js';
+import { finishingRoutes } from './routes/finishing.js';
 import { parseMultipart } from './lib/multipart.js';
 import { CLIENT_DEFAULT, clientFind, clientDetails } from './lib/clients.js';
 import { withSpeechSites } from './lib/speech.js';
@@ -23,7 +24,7 @@ const MAX_UPLOAD = 72 * 1024 * 1024;  // Nginx client_max_body_size and PHP post
 
 // action → handler(ctx), ctx = { cfg, db, client, dealer, body, files, req }. A plain Error is a user-facing message (HTTP 400,
 // like PHP's RuntimeException); HttpError carries its own status; anything else is a 500 that is logged, not shown.
-export const actions = { ...clientRoutes, ...narrationRoutes, ...jobRoutes };
+export const actions = { ...clientRoutes, ...narrationRoutes, ...jobRoutes, ...finishingRoutes };
 
 function send(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
