@@ -33,11 +33,11 @@ function renderNotice(n) {
   );
 }
 
-/** Where the pop-ups appear: top right (top centre on phones), in the dashboard's colours. */
+/** Where the pop-ups appear: bottom right (bottom centre on phones), clear of the header buttons, in the dashboard's colours. */
 export function Popups() {
   const narrow = typeof window !== 'undefined' && window.matchMedia('(max-width: 700px)').matches;
   return (
-    <Toaster position={narrow ? 'top-center' : 'top-right'} gutter={10} containerStyle={{ top: 72 }}
+    <Toaster position={narrow ? 'bottom-center' : 'bottom-right'} gutter={10} containerStyle={{ bottom: 20 }}
       toastOptions={{
         className: 'popup',
         style: { background: '#1b2230', color: '#f4f4f5', border: '1px solid #303744', borderRadius: 12, padding: '12px 14px', maxWidth: 440, fontSize: 14, lineHeight: 1.45, whiteSpace: 'pre-wrap', boxShadow: '0 10px 30px rgba(0,0,0,.45)' },
