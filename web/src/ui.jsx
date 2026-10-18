@@ -1,24 +1,39 @@
 // Small shared pieces: status pop-ups, delete buttons, prices.
 import { useCallback, useState } from 'react';
 import toast, { Toaster, ToastBar } from 'react-hot-toast';
+import { addNotice, dismissAll, dismissNotice, useNotices } from './notices.js';
+
+export const SECTION_NAME = { vehicle: 'Clients & vehicles', sheet: 'Car photos', generate: 'Generate', videos: 'Videos', captions: 'Captions',
+  studio: 'Voice previews', builder: 'Lip-sync builder', spokesperson: 'Spokespersons', import: 'ZIP import' };
 
 /**
- * A section's status messages, shown as pop-ups (react-hot-toast): [null, say(text, isError)]. One pop-up per
- * section: a new message replaces the section's previous one. "…" at the end means work in progress (spinner,
- * stays until the result replaces it); results close after a few seconds; errors stay longer and close on click.
+ * A section's status messages, shown as pop-ups (react-hot-toast): [null, say(text, kind)].
+ *   say('Working…')        spinner until the section's next message replaces it
+ *   say('Done.')           tick, closes after 5 s
+ *   say(text, 'warn')      input reminder (amber), closes after 8 s
+ *   say(text, true)        important failure: stays on screen and in Notifications until dismissed
  */
 export function useStatus(section) {
-  const say = useCallback((text, error = false) => {
+  const say = useCallback((text, kind = false) => {
     const id = 'status-' + section;
     if (!text) toast.dismiss(id);
-    else if (error) toast.error(text, { id, duration: 10000 });
+    else if (kind === 'warn') toast(text, { id, duration: 8000, icon: '⚠️', className: 'popup popup-warn' });
+    else if (kind) { toast.dismiss(id); addNotice(section, text, renderNotice); }
     else if (/…$/.test(text)) toast.loading(text, { id, duration: Infinity });
     else toast.success(text, { id, duration: 5000 });
   }, [section]);
   return [null, say];
 }
+function renderNotice(n) {
+  return (
+    <div className="notice">
+      <span><b>{SECTION_NAME[n.section] ?? n.section}</b>{n.count > 1 ? ` (×${n.count})` : ''}{'\n' + n.text}</span>
+      <button type="button" className="small notice-dismiss" onClick={() => dismissNotice(n.id)}>Dismiss</button>
+    </div>
+  );
+}
 
-/** Where the pop-ups appear: top right (top centre on phones), in the dashboard's colours. Click one to close it. */
+/** Where the pop-ups appear: top right (top centre on phones), in the dashboard's colours. */
 export function Popups() {
   const narrow = typeof window !== 'undefined' && window.matchMedia('(max-width: 700px)').matches;
   return (
@@ -27,15 +42,44 @@ export function Popups() {
         className: 'popup',
         style: { background: '#1b2230', color: '#f4f4f5', border: '1px solid #303744', borderRadius: 12, padding: '12px 14px', maxWidth: 440, fontSize: 14, lineHeight: 1.45, whiteSpace: 'pre-wrap', boxShadow: '0 10px 30px rgba(0,0,0,.45)' },
         success: { iconTheme: { primary: '#7bd36a', secondary: '#1b2230' } },
-        error: { iconTheme: { primary: '#ff7a6b', secondary: '#1b2230' }, style: { borderColor: '#7a3434' } },
+        error: { iconTheme: { primary: '#ff7a6b', secondary: '#1b2230' }, style: { borderColor: '#c0503f', background: '#2a1b1d' } },
         loading: { iconTheme: { primary: '#efbd64', secondary: '#303744' } },
       }}>
       {(t) => (
         <ToastBar toast={t}>
-          {({ icon, message }) => <div onClick={() => toast.dismiss(t.id)} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', cursor: 'pointer' }} role="status">{icon}{message}</div>}
+          {/* Click closes progress, success and reminder pop-ups; failures close only with their Dismiss button. */}
+          {({ icon, message }) => <div onClick={() => t.type !== 'error' && toast.dismiss(t.id)} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', cursor: t.type === 'error' ? 'default' : 'pointer' }} role={t.type === 'error' ? 'alert' : 'status'}>{icon}{message}</div>}
         </ToastBar>
       )}
     </Toaster>
+  );
+}
+
+/** Header button: failures not yet dismissed, with a list to read and dismiss them. */
+export function Notifications() {
+  const notices = useNotices();
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="notices">
+      <button type="button" className={'secondary' + (notices.length ? ' has-notices' : '')} id="notifications" aria-expanded={open} onClick={() => setOpen(!open)}>
+        Notifications{notices.length ? <span className="notice-count">{notices.length}</span> : null}
+      </button>
+      {open && (
+        <div className="notices-panel" role="dialog" aria-label="Notifications">
+          <div className="notices-head"><strong>Notifications</strong>
+            {notices.length > 0 && <button type="button" className="secondary small" onClick={dismissAll}>Dismiss all</button>}
+          </div>
+          {!notices.length && <p>No failures to review.</p>}
+          {notices.map((n) => (
+            <div key={n.id} className="notice-item">
+              <small>{SECTION_NAME[n.section] ?? n.section} · {n.at.toLocaleTimeString()}{n.count > 1 ? ` · ×${n.count}` : ''}</small>
+              <p>{n.text}</p>
+              <button type="button" className="secondary small" onClick={() => dismissNotice(n.id)}>Dismiss</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

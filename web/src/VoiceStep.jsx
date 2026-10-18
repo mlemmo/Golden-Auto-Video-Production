@@ -69,7 +69,7 @@ function VoiceStudio({ hidden }) {
 
   // 1. Copy the script from step 2 (spoken form for the voice, normal spelling for captions).
   async function copyScript() {
-    if (!s.chosen) { say('Select a vehicle in step 1 first.', true); return; }
+    if (!s.chosen) { say('Select a vehicle in step 1 first.', 'warn'); return; }
     const script = s.script.trim() || s.chosen.scripts?.[s.duration] || s.chosen.script;
     setCaptions(script);
     try {
@@ -81,8 +81,8 @@ function VoiceStudio({ hidden }) {
   }
   // 3. Paid preview, using the video length chosen in step 2.
   function createPreview() {
-    if (!s.chosen) { say('Select a vehicle in step 1 first.', true); return; }
-    if (!text.trim()) { say('Copy the script from step 2 first.', true); return; }
+    if (!s.chosen) { say('Select a vehicle in step 1 first.', 'warn'); return; }
+    if (!text.trim()) { say('Copy the script from step 2 first.', 'warn'); return; }
     say('Creating the voice preview…');
     act('narration_preview', { stock: s.chosen.StockNumber, voice_id: voiceId, text, caption_script: captions, duration: Number(s.duration), approve_spend: spend, new_take: newTake });
     setSpend(false); setNewTake(false);

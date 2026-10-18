@@ -56,3 +56,15 @@ a.button{display:inline-block;background:var(--gold);color:#151a23;border-radius
 .staging-banner{background:#7a3d00;color:#ffe2bf;font-weight:700;text-align:center;padding:8px 12px;border-radius:8px;margin-bottom:12px}
 .client-bar{display:flex;gap:10px;align-items:end;margin-bottom:10px}.client-bar label{flex:1;margin:0}
 #clientAnalysis ol{padding-left:20px}#clientAnalysis li p{margin:2px 0}#clientAnalysis small{color:var(--muted)}
+/* Pop-ups and notifications */
+.header-actions{display:flex;gap:10px;align-items:center}
+.notices{position:relative}
+.notice-count{display:inline-block;min-width:20px;margin-left:8px;padding:0 6px;border-radius:999px;background:#c0503f;color:#fff;font-size:12px;line-height:20px;text-align:center}
+#notifications.has-notices{border-color:#c0503f}
+.notices-panel{position:absolute;right:0;top:calc(100% + 8px);width:min(420px,90vw);max-height:60vh;overflow:auto;background:#1b2230;border:1px solid var(--line);border-radius:12px;padding:12px;z-index:10000;box-shadow:0 10px 30px rgba(0,0,0,.45)}
+.notices-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.notice-item{padding:10px 0;border-top:1px solid var(--line)}.notice-item p{color:#ffd7d2;margin:4px 0 8px;white-space:pre-wrap}.notice-item small{color:var(--muted)}
+.notice{display:flex;flex-direction:column;gap:8px}.notice b{color:#ffb3a8}
+.notice-dismiss{align-self:flex-start;background:#c0503f;color:#fff}
+.popup-warn{border-color:#8a6a1f!important;background:#2a2516!important}
+@media(max-width:700px){header{flex-wrap:wrap;gap:12px}.notices-panel{position:fixed;left:16px;right:16px;top:70px;width:auto}}

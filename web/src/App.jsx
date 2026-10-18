@@ -3,7 +3,7 @@
 // previews) and gives it to the steps through StudioContext.
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { api, boot } from './api.js';
-import { Popups, useStatus, vehicleName } from './ui.jsx';
+import { Notifications, Popups, useStatus, vehicleName } from './ui.jsx';
 import VehicleStep from './VehicleStep.jsx';
 import ScriptStep from './ScriptStep.jsx';
 import VoiceStep from './VoiceStep.jsx';
@@ -177,7 +177,10 @@ export default function App() {
           <h1>Inventory → video</h1>
           <p>Pick a car, approve the words, generate. The final captioned video is built for you.</p>
         </div>
-        <button className="secondary" id="logout" onClick={signOut}>Sign out</button>
+        <div className="header-actions">
+          <Notifications />
+          <button className="secondary" id="logout" onClick={signOut}>Sign out</button>
+        </div>
       </header>
       <nav className="steps" aria-label="Steps">
         <a href="#stepVehicle"><b>1</b> Vehicle</a><a href="#stepScript"><b>2</b> Script</a><a href="#stepVoice"><b>3</b> Voice</a>

@@ -69,7 +69,7 @@ function AssetSheet() {
   const rebuild = () => {
     if (!c) return;
     const photos = c.photos.filter((u) => picked.includes(u));
-    if (photos.length < 1 || photos.length > 9) { say('Select 1–9 photos.', true); return; }
+    if (photos.length < 1 || photos.length > 9) { say('Select 1–9 photos.', 'warn'); return; }
     s.run(async () => {
       say('Creating asset sheet from the selected photos…');
       try {

@@ -22,7 +22,7 @@ export default function GenerateStep() {
 
   const generate = () => {
     if (!c) return;
-    if (s.voice === 'elevenlabs' && !s.approvedVoice) { say('Choose an approved voice preview in step 3 first.', true); return; }
+    if (s.voice === 'elevenlabs' && !s.approvedVoice) { say('Choose an approved voice preview in step 3 first.', 'warn'); return; }
     s.run(async () => {
       say('Checking current availability and submitting one paid generation…');
       try {
@@ -36,9 +36,9 @@ export default function GenerateStep() {
   };
   const buildFootage = () => {
     if (!c) return;
-    if (!s.approvedVoice) { say('Choose an approved voice preview in step 3 first.', true); return; }
-    if (!s.footage) { say('Choose the car video in step 4 first.', true); return; }
-    if (s.footage.size > 64 * 1024 * 1024) { say('That video is larger than 64 MB. Export or film it at 1080p.', true); return; }
+    if (!s.approvedVoice) { say('Choose an approved voice preview in step 3 first.', 'warn'); return; }
+    if (!s.footage) { say('Choose the car video in step 4 first.', 'warn'); return; }
+    if (s.footage.size > 64 * 1024 * 1024) { say('That video is larger than 64 MB. Export or film it at 1080p.', 'warn'); return; }
     s.run(async () => {
       say('Uploading your footage… this can take a minute on a slow connection.');
       try {
