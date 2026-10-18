@@ -1,4 +1,4 @@
-# Node service for video.mygoldenauto.net (production), installed by ubuntu/production/switch-to-node.sh. Listens on localhost only;
+# Node service for video.mygoldenauto.net (production), installed by ubuntu/production/setup-node-root.sh. Listens on localhost only;
 # Nginx forwards the whole site to it. Node comes from mark's nvm (default alias) via ubuntu/node/run-node.sh.
 [Unit]
 Description=Golden Auto Node service (video.mygoldenauto.net)
