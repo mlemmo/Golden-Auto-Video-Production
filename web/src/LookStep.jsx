@@ -2,7 +2,6 @@
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
 import { useStudio } from './App.jsx';
-import { Status } from './ui.jsx';
 
 export default function LookStep() {
   const s = useStudio();
@@ -63,7 +62,7 @@ export default function LookStep() {
 
 function AssetSheet() {
   const s = useStudio();
-  const [status, say] = s.statuses.sheet;
+  const [, say] = s.statuses.sheet;
   const c = s.chosen;
   const [picked, setPicked] = useState([]);
   useEffect(() => { setPicked(c?.asset_sheet?.photo_urls ?? []); }, [c?.StockNumber, c?.asset_sheet?.url]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -103,7 +102,6 @@ function AssetSheet() {
           ))}
         </div>
         <label>Optional asset sheet URL override<input id="sheet" type="url" placeholder="https://your-domain.com/car-asset-sheet.jpg" value={s.sheetUrl} onChange={(e) => s.setSheetUrl(e.target.value)} /></label>
-        <Status s={status} />
         <button id="rebuild" className="secondary" disabled={!c || s.busy} onClick={rebuild}>Rebuild asset sheet</button>
       </details>
     </>

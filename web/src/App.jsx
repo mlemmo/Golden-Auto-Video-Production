@@ -3,7 +3,7 @@
 // previews) and gives it to the steps through StudioContext.
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { api, boot } from './api.js';
-import { useStatus, vehicleName } from './ui.jsx';
+import { Popups, useStatus, vehicleName } from './ui.jsx';
 import VehicleStep from './VehicleStep.jsx';
 import ScriptStep from './ScriptStep.jsx';
 import VoiceStep from './VoiceStep.jsx';
@@ -49,10 +49,10 @@ export default function App() {
     busyRef.current = true; setBusy(true);
     try { await fn(); } finally { busyRef.current = false; setBusy(false); }
   }, []);
-  // Status lines, one per section (each sits just above the button that triggers it).
+  // Status messages, one pop-up per section (see useStatus).
   const statuses = {
-    vehicle: useStatus(), sheet: useStatus(), generate: useStatus(), videos: useStatus(), captions: useStatus(),
-    studio: useStatus(), builder: useStatus(), spokesperson: useStatus(), import: useStatus(),
+    vehicle: useStatus('vehicle'), sheet: useStatus('sheet'), generate: useStatus('generate'), videos: useStatus('videos'), captions: useStatus('captions'),
+    studio: useStatus('studio'), builder: useStatus('builder'), spokesperson: useStatus('spokesperson'), import: useStatus('import'),
   };
   const sayVehicle = statuses.vehicle[1];
 
@@ -169,6 +169,7 @@ export default function App() {
   const signOut = async () => { try { await api('logout'); } finally { location.reload(); } };
   return (
     <Studio.Provider value={ctx}>
+      <Popups />
       {boot.banner && <div className="staging-banner">{boot.banner}</div>}
       <header>
         <div>

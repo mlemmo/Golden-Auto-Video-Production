@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { api } from './api.js';
 import { GENERATING, useStudio } from './App.jsx';
-import { DangerButton, Link, Status } from './ui.jsx';
+import { DangerButton, Link } from './ui.jsx';
 
 function stage(j) {
   if (GENERATING.includes(j.status)) return ['Generating at Higgsfield…', 'busy'];
@@ -20,7 +20,7 @@ const VOICE = { elevenlabs: 'approved voice', native: 'Seedance voice', narratio
 
 export default function Videos() {
   const s = useStudio();
-  const [status, say] = s.statuses.videos;
+  const [, say] = s.statuses.videos;
   const [, sayCaptions] = s.statuses.captions;
   const [draft, setDraft] = useState({ srt: '', reviewed: false });
 
@@ -35,7 +35,6 @@ export default function Videos() {
   return (
     <section className="panel" id="videos">
       <div className="step-head"><span className="step-num">✓</span><div><h2>Videos</h2><p>Generation takes a few minutes; this list refreshes itself while a video is being made. Download finished videos promptly.</p></div></div>
-      <Status s={status} />
       <div className="actions"><button type="button" className="secondary" id="refreshJobs" onClick={async () => { await s.loadJobs(); say('List refreshed.'); }}>Refresh list</button></div>
       <div id="jobs" className="list">
         {s.jobs && !rows.length && <p>No videos yet. Generate one in step 5.</p>}
@@ -81,7 +80,7 @@ function Job({ j, say, openCaptions }) {
 
 function CaptionEditor({ draft, setDraft }) {
   const s = useStudio();
-  const [status, say] = s.statuses.captions;
+  const [, say] = s.statuses.captions;
   const [rendering, setRendering] = useState(false);
   const render = async () => {
     setRendering(true);
@@ -94,7 +93,6 @@ function CaptionEditor({ draft, setDraft }) {
       <p className="hint">Check wording and timing against the video. You can paste a corrected SRT. Prices stay numeric.</p>
       <textarea id="captionSrt" rows={14} value={draft.srt} onChange={(e) => setDraft({ ...draft, srt: e.target.value })} />
       <label className="check"><input id="captionReviewed" type="checkbox" checked={draft.reviewed} onChange={(e) => setDraft({ ...draft, reviewed: e.target.checked })} />I checked the captions against the video.</label>
-      <Status s={status} />
       <div className="actions">
         <button id="renderCaptions" disabled={rendering} onClick={render}>Render captioned video</button>
         <button type="button" className="secondary" id="closeCaptions" onClick={() => s.setCaptionJob(null)}>Close</button>

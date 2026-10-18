@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
 import { useStudio } from './App.jsx';
-import { DangerButton, Status } from './ui.jsx';
+import { DangerButton } from './ui.jsx';
 
 export default function VoiceStep() {
   const s = useStudio();
@@ -35,7 +35,7 @@ export default function VoiceStep() {
 
 function VoiceStudio({ hidden }) {
   const s = useStudio();
-  const [status, say] = s.statuses.studio;
+  const [, say] = s.statuses.studio;
   const [voices, setVoices] = useState(null);
   const [voiceId, setVoiceId] = useState('');
   const [text, setText] = useState('');
@@ -109,7 +109,6 @@ function VoiceStudio({ hidden }) {
       <label>Caption text — what appears on screen; keep normal spelling<textarea id="nCaptions" rows={3} maxLength={1200} value={captions} onChange={(e) => setCaptions(e.target.value)} /></label>
       <label className="check"><input type="checkbox" id="nPreviewSpend" checked={spend} onChange={(e) => setSpend(e.target.checked)} />I approve one paid ElevenLabs voice preview at my account’s current rate.</label>
       <label className="check"><input type="checkbox" id="nNewTake" checked={newTake} onChange={(e) => setNewTake(e.target.checked)} />Make another take even if an identical preview already exists.</label>
-      <Status s={status} />
       <div className="actions">
         <button type="button" id="nCreatePreview" disabled={pending} onClick={createPreview}>Create voice preview</button>
         <button type="button" id="nRefresh" className="secondary" disabled={pending} onClick={() => s.refreshNarrations().then(() => say('Previews refreshed.')).catch((e) => say(e.message, true))}>Refresh previews</button>

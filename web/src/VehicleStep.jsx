@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import { api } from './api.js';
 import { useStudio } from './App.jsx';
-import { Status, miles, price } from './ui.jsx';
+import { miles, price } from './ui.jsx';
 
 const METHOD_TITLE = { feed: 'Daily inventory feed', website_dealercenter: 'Website reader', website_structured: 'Website import',
   browser_snapshot: 'Browser snapshot', zip: 'Manual import', dealercenter_snapshot: 'DealerCenter website snapshot' };
@@ -12,7 +12,7 @@ const SYNC_SECTIONS = [['added', 'Added'], ['removed', 'Removed — no longer in
 
 export default function VehicleStep() {
   const s = useStudio();
-  const [status, say] = s.statuses.vehicle;
+  const [, say] = s.statuses.vehicle;
   const c = s.client;
   return (
     <section className="panel" id="stepVehicle">
@@ -21,7 +21,6 @@ export default function VehicleStep() {
       {c && <DealerDetails key={'dealer-' + c.id + JSON.stringify(c.script_details)} />}
       <div className="step-head"><span className="step-num">1</span><div><h2>Choose a vehicle</h2><p id="syncTime">{inventoryLine(s.inventory)}</p></div></div>
       {c?.id === 'golden-auto' && <SyncLog />}
-      <Status s={status} />
       <SyncButton say={say} />
       <Inventory say={say} />
     </section>

@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, upload } from './api.js';
 import { useStudio } from './App.jsx';
-import { DangerButton, Link, Status } from './ui.jsx';
+import { DangerButton, Link } from './ui.jsx';
 
 export default function Tools() {
   return (
@@ -17,7 +17,7 @@ export default function Tools() {
 
 function Spokespersons() {
   const s = useStudio();
-  const [status, say] = s.statuses.spokesperson;
+  const [, say] = s.statuses.spokesperson;
   const formRef = useRef(null);
   const lib = s.spokespersons;
   const act = async (action, p, done) => {
@@ -61,7 +61,6 @@ function Spokespersons() {
         </div>
         <label>Description used in the video prompt<textarea name="description" rows={2} maxLength={300} required placeholder="trustworthy friendly adult man age 35–40, navy blazer over open-collar shirt" /></label>
         <p className="hint">Use a clear, well-lit, front-facing photo of one person from the waist up on a plain background. Describe what the image shows (apparent age, look, outfit). Only upload people who have agreed to appear in your ads.</p>
-        <Status s={status} />
         <button id="spokespersonButton" disabled={s.busy}>Upload spokesperson</button>
       </form>
     </details>
@@ -70,7 +69,7 @@ function Spokespersons() {
 
 function ZipImport() {
   const s = useStudio();
-  const [status, say] = s.statuses.import;
+  const [, say] = s.statuses.import;
   const formRef = useRef(null);
   const submit = (e) => {
     e.preventDefault();
@@ -95,7 +94,6 @@ function ZipImport() {
         <label>Vehicle description<textarea name="description" rows={3} /></label>
         <label>DealerCenter media ZIP<input name="media" type="file" accept=".zip" required /></label>
         <p className="hint">Enter current listing facts. ZIP photos alone do not supply pricing or availability. Maximum 50 MB; your host’s upload limit may be lower.</p>
-        <Status s={status} />
         <button id="importButton" disabled={s.busy}>Import vehicle and photos</button>
       </form>
     </details>
@@ -106,7 +104,7 @@ const FINAL = { waiting: 'preparing captions', queued: 'queued for final render'
 
 function LipsyncBuilder() {
   const s = useStudio();
-  const [status, say] = s.statuses.builder;
+  const [, say] = s.statuses.builder;
   const [narrationId, setNarrationId] = useState('');
   const [videoId, setVideoId] = useState('');
   const [current, setCurrent] = useState(false);
@@ -148,7 +146,6 @@ function LipsyncBuilder() {
       </label>
       <label className="check"><input type="checkbox" id="nCurrent" checked={current} onChange={(e) => setCurrent(e.target.checked)} />I confirm this vehicle is available and the advertised price is current.</label>
       <label className="check"><input type="checkbox" id="nSyncSpend" checked={spend} onChange={(e) => setSpend(e.target.checked)} />I approve one paid fal Sync Lipsync request at my account’s current rate; captions and the final render then run automatically.</label>
-      <Status s={status} />
       <button type="button" id="nSubmitSync" disabled={pending} onClick={submit}>Build final video with lip-sync</button>
       <div id="nSyncJobs" className="list">
         {r.lipsync.map((job) => {

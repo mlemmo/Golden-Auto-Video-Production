@@ -2,14 +2,14 @@
 // built on the server and appears under Videos.
 import { api, upload } from './api.js';
 import { useStudio } from './App.jsx';
-import { Status, price, vehicleName } from './ui.jsx';
+import { price, vehicleName } from './ui.jsx';
 
 const FORMAT_NAME = { instagram_reels: 'Instagram Reels', facebook_reels: 'Facebook Reels', facebook_feed: 'Facebook Feed', square: 'Instagram / Facebook Square' };
 const showVideos = () => document.getElementById('videos')?.scrollIntoView({ behavior: 'smooth' });
 
 export default function GenerateStep() {
   const s = useStudio();
-  const [status, say] = s.statuses.generate;
+  const [, say] = s.statuses.generate;
   const c = s.chosen, footage = s.source === 'footage';
   const approved = s.voice !== 'elevenlabs' || s.approvedVoice;
   const voiceText = { elevenlabs: 'approved ElevenLabs voice', native: 'Seedance voice', narration: 'silent video + ElevenLabs lip-sync' }[s.voice];
@@ -73,7 +73,6 @@ export default function GenerateStep() {
       </ul>
       <label className="check" id="approveLabel" hidden={footage}><input type="checkbox" id="approve" checked={s.approve} onChange={(e) => s.setApprove(e.target.checked)} />I reviewed the vehicle facts and script and approve one paid Higgsfield generation at my account’s current rate.</label>
       <label className="check"><input type="checkbox" id="confirmCurrent" checked={s.confirmCurrent} onChange={(e) => s.setConfirmCurrent(e.target.checked)} />I confirm the vehicle is available and its advertised price is current.</label>
-      <Status s={status} />
       <div className="actions">
         <button id="buildFootage" hidden={!footage} disabled={!c || s.busy} onClick={buildFootage}>Build video from my footage</button>
         <button id="generate" hidden={footage} disabled={!c || s.busy} onClick={generate}>Generate video</button>
