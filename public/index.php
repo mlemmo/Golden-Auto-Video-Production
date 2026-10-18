@@ -48,7 +48,7 @@ if (isset($_GET['api'])) {
         if ($action==='client_details') {$c=clientSaveDetails($db,$client,$in);echo json_encode(['client'=>$c+['script_details'=>clientDetails($c)]],JSON_THROW_ON_ERROR);exit;}
         if ($action==='client_select') {clientFind($db,(string)($in['id']??''));$_SESSION['client']=(string)$in['id'];echo json_encode(['message'=>'Client selected.']);exit;}
         if ($action==='client_add') {$c=clientAdd($db,(string)($in['name']??''),(string)($in['website']??''));$_SESSION['client']=$c['id'];echo json_encode(['client'=>$c],JSON_THROW_ON_ERROR);exit;}
-        if ($action==='client_analyze') {echo json_encode(['client'=>clientReanalyze($db,(string)($in['id']??$client))],JSON_THROW_ON_ERROR);exit;}
+        if ($action==='client_analyze') {$c=clientReanalyze($db,(string)($in['id']??$client));echo json_encode(['client'=>$c+['script_details'=>clientDetails($c)]],JSON_THROW_ON_ERROR);exit;}
         // Golden Auto narration-first add-on
         if(str_starts_with($action,'narration_')){require_once $private.'/narrations.php';echo json_encode(narrationApi($action,$in,$cfg,$db),JSON_THROW_ON_ERROR);exit;}
         if(str_starts_with($action,'spokesperson_')){echo json_encode(spokespersonApi($action,$in,$cfg,$db),JSON_THROW_ON_ERROR);exit;}
