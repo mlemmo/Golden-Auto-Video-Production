@@ -2,7 +2,7 @@
 
 Continue the existing app; do not rebuild it. Two environments (docs/STAGING.md): production = /srv/golden-auto, branch `main`, video.mygoldenauto.net:4343; staging = /srv/golden-auto-staging, branch `staging`, staging.mygoldenauto.net:4343. Work on `staging`, deploy and check there, then fast-forward `main` and deploy production; never edit either folder directly. Current status and next steps: docs/HANDOFF.md. PHP 8.x dashboard (`public/`), PHP/Python helpers (`private/`), SQLite state, Ubuntu + Nginx + PHP-FPM, FFmpeg. Read README.md first.
 
-Node.js port: branch `nodejs` (kept separate from `staging` until the user says otherwise), code in `node/`, status and parity check in node/README.md, handoff and next steps in docs/NODE_PORT_HANDOFF.md. Ported helpers must stay identical to PHP: run `cd node && npm test` (includes the PHP parity check).
+Node.js port: merged into `staging` on 2026-10-18 (user's instruction; Sawyer now directs the work); staging is switched to Node with `sudo bash ubuntu/staging/setup-node-root.sh`, and the React front end and PHP removal continue on `staging` (`main` stays PHP until the user approves production). Earlier: branch `nodejs`, code in `node/`, status and parity check in node/README.md, handoff and next steps in docs/NODE_PORT_HANDOFF.md. Ported helpers must stay identical to PHP: run `cd node && npm test` (includes the PHP parity check).
 
 - Never commit or print `private/config.php`, API keys, `private/data/`, or `public/assets/*` (all gitignored).
 - Paid APIs (Higgsfield, ElevenLabs, fal.ai): never call them from tests or while fixing finishing/captions. Keep the per-call approval checks and fingerprint duplicate protection.
