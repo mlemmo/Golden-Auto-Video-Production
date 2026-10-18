@@ -1,0 +1,154 @@
+// Step 3: how the voice is made. With the default method the user makes an ElevenLabs voice preview of the script,
+// listens to all of it and approves it; Seedance then follows that voice, wording and pace.
+import { useEffect, useState } from 'react';
+import { api } from './api.js';
+import { useStudio } from './App.jsx';
+import { DangerButton, Status } from './ui.jsx';
+
+export default function VoiceStep() {
+  const s = useStudio();
+  const eleven = s.voice === 'elevenlabs';
+  return (
+    <section className="panel" id="stepVoice">
+      <div className="step-head"><span className="step-num">3</span><div><h2>Voice</h2><p>Choose how the spokesperson's voice is made.</p></div></div>
+      <label>Voice
+        <select id="voice" value={s.voice} disabled={s.source === 'footage'} onChange={(e) => s.setVoice(e.target.value)}>
+          <option value="elevenlabs">Approved ElevenLabs voice — guides the voice and words (recommended)</option>
+          <option value="native">Seedance voice — made in the video, wording may vary</option>
+          <option value="narration">ElevenLabs narration + lip-sync — older two-step method</option>
+        </select>
+      </label>
+      <p className="hint" id="elevenHint" hidden={!eleven}>You make a voice preview below, listen to it and approve it. Seedance uses it as the voice, wording and pace to follow, and speaks it in the video so her lips match. Check names and numbers in the finished video.</p>
+      <p className="hint" id="voiceHint" hidden={s.voice !== 'native'}>Seedance creates the voice inside the video. Quick, but it may change or mispronounce words, and the voice differs between videos.</p>
+      <p className="hint" id="narrationHint" hidden={s.voice !== 'narration'}>Seedance films a silent video; afterwards your approved voice preview is added by lip-sync (Tools → Lip-sync builder) and the final video is built automatically.</p>
+      <VoiceStudio hidden={s.voice === 'native'} />
+      <label id="approvedVoiceLabel" hidden={!eleven}>Approved voice preview to use for this video
+        <select id="approvedVoice" value={s.approvedVoice} onChange={(e) => s.setApprovedVoice(e.target.value)}>
+          {!s.chosen ? <option value="">Choose a vehicle first</option>
+            : <option value="">{s.approvedPreviews.length ? 'Choose an approved preview' : `No approved ${s.duration}-second preview for this car yet — make one above`}</option>}
+          {s.approvedPreviews.map((p) => <option key={p.id} value={p.id}>{`${p.duration}s · ${(p.text || '').slice(0, 70)}… · ${p.id.slice(0, 8)}`}</option>)}
+        </select>
+      </label>
+    </section>
+  );
+}
+
+function VoiceStudio({ hidden }) {
+  const s = useStudio();
+  const [status, say] = s.statuses.studio;
+  const [voices, setVoices] = useState(null);
+  const [voiceId, setVoiceId] = useState('');
+  const [text, setText] = useState('');
+  const [captions, setCaptions] = useState('');
+  const [spend, setSpend] = useState(false);
+  const [newTake, setNewTake] = useState(false);
+  const [pending, setPending] = useState(false);
+
+  /** One narration action at a time; then the lists are refreshed. */
+  async function act(action, data) {
+    if (pending) return;
+    setPending(true);
+    try {
+      const r = await api(action, data);
+      if (r.message) say(r.message);
+      await s.refreshNarrations();
+    } catch (e) { say(e.message, true); }
+    finally { setPending(false); }
+  }
+  // Voices load when the page opens (listing is free); Bella is the default when the account has her.
+  async function loadVoices(automatic) {
+    try {
+      const r = await api('narration_voices');
+      setVoices(r.voices);
+      const bella = r.voices.find((v) => /^bella\b/i.test(v.name));
+      setVoiceId((cur) => (r.voices.some((v) => v.id === cur) ? cur : bella ? bella.id : ''));
+      if (!automatic) say(bella ? 'Voices loaded. Bella is selected by default.' : 'Voices loaded. Choose a voice.');
+    } catch (e) { say(e.message, true); }
+  }
+  useEffect(() => { loadVoices(true); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 1. Copy the script from step 2 (spoken form for the voice, normal spelling for captions).
+  async function copyScript() {
+    if (!s.chosen) { say('Select a vehicle in step 1 first.', true); return; }
+    const script = s.script.trim() || s.chosen.scripts?.[s.duration] || s.chosen.script;
+    setCaptions(script);
+    try {
+      const r = await api('speech', { script });
+      setText(r.speech.replace(/my golden auto dot N, E, T/gi, 'my golden auto dot net'));
+      setSpend(false);
+      say('Script copied. Respell any word in the spoken text if needed, then create a preview.');
+    } catch (e) { say(e.message, true); }
+  }
+  // 3. Paid preview, using the video length chosen in step 2.
+  function createPreview() {
+    if (!s.chosen) { say('Select a vehicle in step 1 first.', true); return; }
+    if (!text.trim()) { say('Copy the script from step 2 first.', true); return; }
+    say('Creating the voice preview…');
+    act('narration_preview', { stock: s.chosen.StockNumber, voice_id: voiceId, text, caption_script: captions, duration: Number(s.duration), approve_spend: spend, new_take: newTake });
+    setSpend(false); setNewTake(false);
+  }
+  // Previews: the selected car's only (newest first), so the list matches what you are working on.
+  const previews = s.chosen ? s.narr.previews.filter((p) => p.stock === s.chosen.StockNumber) : s.narr.previews;
+  return (
+    <div id="voiceStudio" className="studio" hidden={hidden}>
+      <ol className="mini-steps"><li>Copy the script from step 2.</li><li>Pick a voice and fix any word that sounds wrong by respelling it in the spoken text.</li><li>Create a preview, listen to all of it, then approve it.</li></ol>
+      <div className="actions">
+        <button type="button" id="nCopyScript" className="secondary" onClick={copyScript}>Copy script from step 2</button>
+        <button type="button" id="nLoadVoices" className="secondary" onClick={() => loadVoices(false)}>Reload voices</button>
+      </div>
+      <label>ElevenLabs voice — use the same one for every car to keep a consistent voice
+        <select id="nVoice" value={voiceId} onChange={(e) => setVoiceId(e.target.value)}>
+          {voices === null ? <option value="">Loading voices…</option> : <option value="">Choose a voice</option>}
+          {(voices ?? []).map((v) => {
+            const labels = [v.labels.gender, v.labels.accent, v.labels.age].filter(Boolean).join(', ');
+            return <option key={v.id} value={v.id}>{v.name + (labels ? ` — ${labels}` : '')}</option>;
+          })}
+        </select>
+      </label>
+      <label>Spoken text — respell words here to fix pronunciation (e.g. San Ruh-mone)<textarea id="nText" rows={4} maxLength={1200} value={text} onChange={(e) => setText(e.target.value)} /></label>
+      <label>Caption text — what appears on screen; keep normal spelling<textarea id="nCaptions" rows={3} maxLength={1200} value={captions} onChange={(e) => setCaptions(e.target.value)} /></label>
+      <label className="check"><input type="checkbox" id="nPreviewSpend" checked={spend} onChange={(e) => setSpend(e.target.checked)} />I approve one paid ElevenLabs voice preview at my account’s current rate.</label>
+      <label className="check"><input type="checkbox" id="nNewTake" checked={newTake} onChange={(e) => setNewTake(e.target.checked)} />Make another take even if an identical preview already exists.</label>
+      <Status s={status} />
+      <div className="actions">
+        <button type="button" id="nCreatePreview" disabled={pending} onClick={createPreview}>Create voice preview</button>
+        <button type="button" id="nRefresh" className="secondary" disabled={pending} onClick={() => s.refreshNarrations().then(() => say('Previews refreshed.')).catch((e) => say(e.message, true))}>Refresh previews</button>
+      </div>
+      <div id="nPreviews" className="list">
+        {s.chosen && !previews.length && <p>No voice previews for this car yet.</p>}
+        {previews.map((p) => <Preview key={p.id} p={p} act={act} />)}
+      </div>
+    </div>
+  );
+}
+
+function Preview({ p, act }) {
+  const [reviewed, setReviewed] = useState(false);
+  const state = p.status !== 'ready' ? [p.status, 'busy'] : p.too_long ? ['Too long', 'bad'] : p.approved ? ['Approved', 'ok'] : ['Listen and approve', 'busy'];
+  return (
+    <div className="job">
+      <div className="job-head">
+        <strong>{`${p.vehicle} · ${p.duration}s${p.audio_duration ? ' · ' + p.audio_duration.toFixed(1) + 's of speech' : ''}`}</strong>
+        <span className={'badge ' + state[1]}>{state[0]}</span>
+      </div>
+      <p>Spoken: {p.text}</p>
+      <p>Captions: {p.caption_script}</p>
+      {p.text_mismatch?.length > 0 && <p className="mismatch">{'Caption text and spoken text differ: ' + p.text_mismatch.slice(0, 5).join('; ') + '. Captions show the caption text, so fix one of them if they should match.'}</p>}
+      {p.error && <p>{p.error}</p>}
+      {p.status === 'ready' && p.audio_url && <audio controls preload="none" src={p.audio_url} />}
+      {p.status === 'ready' && p.audio_url && p.too_long && <p>Too long for the video. Shorten the script and create a new preview.</p>}
+      {p.status === 'ready' && p.audio_url && !p.too_long && !p.approved && (
+        <label className="check"><input type="checkbox" checked={reviewed} onChange={(e) => setReviewed(e.target.checked)} />I listened to the whole preview and every word, number and name sounds right.</label>
+      )}
+      <div className="actions">
+        {p.status === 'ready' && p.audio_url && !p.too_long && !p.approved && (
+          <button type="button" className="small" onClick={() => act('narration_approve', { id: p.id, reviewed })}>Approve this voice</button>
+        )}
+        {p.status !== 'submitting' && (
+          <DangerButton label="Delete preview" what={`this voice preview for ${p.vehicle}`} detail="Its audio file is removed. Previews used by a finished video cannot be deleted."
+            onConfirm={() => act('narration_delete', { id: p.id })} />
+        )}
+      </div>
+    </div>
+  );
+}

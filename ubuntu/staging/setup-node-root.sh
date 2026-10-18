@@ -2,9 +2,8 @@
 # Switch staging.mygoldenauto.net from PHP to the Node service. Run: sudo bash ubuntu/staging/setup-node-root.sh
 # Installs and starts golden-auto-staging-node.service (port 4352), checks it answers, then replaces staging's Nginx
 # site with the Node config and reloads Nginx (no downtime). Adds a sudoers rule so deploys can restart that one
-# service. Production's site is not touched. To go back to PHP:
-#   sudo install -m 644 ubuntu/staging/nginx-golden-auto-staging.conf /etc/nginx/sites-available/golden-auto-staging
-#   sudo nginx -t && sudo systemctl reload nginx
+# service. Production's site is not touched. The PHP-era Nginx site is kept as
+# /etc/nginx/sites-available/golden-auto-staging.php-backup (it only works with a checkout from before PHP was removed).
 set -euo pipefail
 [ "$(id -u)" -eq 0 ] || { echo "Run with sudo." >&2; exit 1; }
 here="$(cd "$(dirname "$0")" && pwd)"

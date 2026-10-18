@@ -1,0 +1,18 @@
+{
+  "password_hash": "",
+  "higgsfield_key": "",
+  "elevenlabs_key": "",
+  "fal_key": "",
+  "data_dir": "/srv/golden-auto/private/data",
+  "public_base_url": "https://video.example.com:4343",
+  "environment": "",
+  "render_backend": "linux",
+  "respell": { "San Ramon": "San Rah-moan" },
+  "narration_speed": 0.9,
+  "voice_reference_url": "",
+  "ffmpeg_path": "/usr/bin/ffmpeg",
+  "whisper_cli": "",
+  "whisper_model": "",
+  "whisper_threads": 4,
+  "source": "https://www.mygoldenauto.net"
+}

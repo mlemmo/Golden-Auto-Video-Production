@@ -1,4 +1,5 @@
 private/config.php
+private/config.json
 private/data/
 public/assets/*
 !public/assets/.gitkeep
@@ -7,3 +8,4 @@ public/assets/*
 *.lock
 __pycache__/
 *.pyc
+public/app/

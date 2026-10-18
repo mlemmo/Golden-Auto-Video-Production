@@ -1,14 +1,13 @@
-// Golden Auto Node service: the whole dashboard of the node test site — the sign-in and dashboard pages (same
-// templates as PHP), sessions, and every action with the same JSON in and out as PHP's ?api=<action>. Actions answer
-// at POST /api/node/<action> and, like PHP, at POST /?api=<action>. Nginx serves static files (style, scripts,
-// assets) and sends the rest here (ubuntu/node/nginx-golden-auto-node.conf). No npm dependencies.
-// While a browser still holds a PHP session (before the Nginx switch), /api/node/ calls are signed in through PHP
-// (src/lib/auth.js, public/node_auth.php) as before.
+// Golden Auto Node service: the whole dashboard — the sign-in page, the React dashboard (web/, built into
+// public/app/), sessions, and every action as JSON at POST /api/node/<action> (also POST /?api=<action>, the older
+// address). Static files (style.css, the React build, uploaded and generated assets) are served here too; behind
+// Nginx, Nginx serves most of them straight from disk.
 import { createServer } from 'node:http';
-import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { readFileSync, mkdtempSync, rmSync, statSync, createReadStream } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { checkAuth, HttpError } from './lib/auth.js';
-import { loadConfig } from './lib/config.js';
+import { extname, resolve, sep } from 'node:path';
+import { HttpError } from './lib/auth.js';
+import { loadConfig, ROOT } from './lib/config.js';
 import { openDb } from './lib/db.js';
 import { clientRoutes } from './routes/clients.js';
 import { narrationRoutes } from './routes/narrations.js';
@@ -26,7 +25,7 @@ const PORT = Number(process.env.PORT ?? 4350);
 const MAX_BODY = 1 << 20;
 const MAX_UPLOAD = 72 * 1024 * 1024;  // Nginx client_max_body_size and PHP post_max_size
 
-// Session actions (index.php handles these itself).
+// Session actions.
 const sessionRoutes = {
   client_select: ({ db, body, session }) => { clientFind(db, String(body.id ?? '')); session.data.client = String(body.id); return { message: 'Client selected.' }; },
   logout: ({ session }) => { session.destroyed = true; return {}; },
@@ -94,13 +93,9 @@ async function runAction(name, req, res, cfg, store, session, https) {
   try {
     const db = openDb(cfg);
     let client;
-    if (session.data.auth) {
-      if (!sameSecret(session.data.csrf, req.headers['x-csrf-token'] ?? '')) throw new HttpError(403, 'Invalid request.');
-      client = currentClient(db, session.data);
-    } else if (parseCookies(req.headers.cookie).PHPSESSID && req.url.startsWith('/api/node/') && !Object.hasOwn(sessionRoutes, name)) {
-      // A page still served by PHP: its session decides (until Nginx sends the whole site here).
-      ({ client } = await checkAuth(req, process.env.NODE_AUTH_URL ?? String(cfg.public_base_url).replace(/\/$/, '') + '/node_auth.php'));
-    } else throw new HttpError(401, 'Sign in again.');
+    if (!session.data.auth) throw new HttpError(401, 'Sign in again.');
+    if (!sameSecret(session.data.csrf, req.headers['x-csrf-token'] ?? '')) throw new HttpError(403, 'Invalid request.');
+    client = currentClient(db, session.data);
     let body, files = {};
     if (MULTIPART.has(name)) {
       uploadDir = mkdtempSync(tmpdir() + '/ga-upload-');
@@ -147,11 +142,36 @@ async function page(req, res, cfg, store, session, https) {
     return res.end();
   }
   if (!session.data.auth) return sendText(res, 200, loginPage(cfg, session.data.csrf, error), undefined, headers);
-  sendText(res, 200, dashboardPage(cfg, session.data.csrf, Object.keys(actions)), undefined, headers);
+  const html = dashboardPage(cfg, session.data.csrf, process.env.GOLDEN_ROOT ?? ROOT);
+  if (html === null) return sendText(res, 503, 'The dashboard front end is not built yet: run npm run build in web/.', 'text/plain; charset=UTF-8', headers);
+  sendText(res, 200, html, undefined, headers);
+}
+
+// Static files from public/: the stylesheet, the React build (public/app/; hashed file names under app/static/ never
+// change, so they are cached for a year) and uploaded or generated assets. Never PHP files or dotfiles.
+const TYPES = { '.css': 'text/css; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json', '.svg': 'image/svg+xml',
+  '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.mp4': 'video/mp4', '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.woff2': 'font/woff2' };
+function staticFile(req, res, pathname) {
+  if (!['GET', 'HEAD'].includes(req.method)) return false;
+  if (!(pathname === '/style.css' || pathname.startsWith('/app/static/') || pathname.startsWith('/assets/'))) return false;
+  const base = resolve((process.env.GOLDEN_ROOT ?? ROOT) + '/public');
+  let file;
+  try { file = resolve(base, '.' + decodeURIComponent(pathname)); } catch { return send(res, 400, { error: 'Bad path' }), true; }
+  const type = TYPES[extname(file).toLowerCase()];
+  let st = null;
+  try { st = statSync(file); } catch { /* missing */ }
+  if (!file.startsWith(base + sep) || file.includes(sep + '.') || !type || !st?.isFile()) return send(res, 404, { error: 'Not found' }), true;
+  const cache = pathname.startsWith('/app/static/') ? 'public, max-age=31536000, immutable' : 'no-cache';
+  res.writeHead(200, { 'Content-Type': type, 'Content-Length': st.size, 'Cache-Control': cache, 'X-Content-Type-Options': 'nosniff' });
+  if (req.method === 'HEAD') return res.end(), true;
+  createReadStream(file).pipe(res);
+  return true;
 }
 
 export const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
+  if (staticFile(req, res, url.pathname)) return;
   if (req.method === 'GET' && url.pathname === '/api/node/health') return send(res, 200, { ok: true, service: pkg.name, version: pkg.version, node: process.version });
   const api = url.pathname.match(/^\/api\/node\/([a-z_]+)$/)?.[1] ?? (['/', '/index.php'].includes(url.pathname) && url.searchParams.has('api') ? url.searchParams.get('api') : null);
   const isPage = api === null && ['/', '/index.php'].includes(url.pathname) && ['GET', 'POST'].includes(req.method);

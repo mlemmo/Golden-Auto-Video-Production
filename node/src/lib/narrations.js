@@ -128,7 +128,7 @@ export function narrationReserve(db, table, record, fingerprint) {
 export const narrationRejected = (code) => [400, 401, 402, 403, 404, 405, 413, 415, 422, 429].includes(code);
 export function narrationKey(cfg, name) {
   const key = trim(str(cfg[name] ?? ''));
-  if (!key) throw new Error('Add ' + name + ' to private/config.php first.');
+  if (!key) throw new Error('Add ' + name + ' to private/config.json first.');
   return key;
 }
 export function narrationAudioPath(cfg, record) {

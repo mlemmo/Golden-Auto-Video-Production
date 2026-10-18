@@ -193,7 +193,7 @@ export function jobFingerprint(v, spoken, sheet, avatar, description, format, st
  * reader), random } — replaceable in tests so nothing is ever sent.
  */
 export async function generateJob(db, cfg, client, inp, { transport = uploadHttp, getText = requestText, random = randomBytes } = {}) {
-  if (!truthy(cfg.higgsfield_key)) throw new Error('Add your Higgsfield API key to private/config.php first.');
+  if (!truthy(cfg.higgsfield_key)) throw new Error('Add your Higgsfield API key to private/config.json first.');
   if (!truthy(inp.approve_spend ?? false)) throw new Error('Confirm this paid generation.');
   const a = state(db, clientInventoryKey(client)) ?? {};
   let v = null;
@@ -249,7 +249,7 @@ export async function generateJob(db, cfg, client, inp, { transport = uploadHttp
   if (voice === 'elevenlabs') voiceRef = validateAppBase(cfg) + '/assets/narrations/' + approvedVoice.audio_name;
   else {
     voiceRef = voice === 'native' ? trim(str(cfg.voice_reference_url ?? '')) : '';
-    if (voiceRef !== '' && !/^https:\/\/[^\t\n\v\f\r ?#]+\.(mp3|wav|m4a)\n?$/i.test(voiceRef)) throw new Error('voice_reference_url in config.php must be a public https link to an MP3, WAV or M4A file.');
+    if (voiceRef !== '' && !/^https:\/\/[^\t\n\v\f\r ?#]+\.(mp3|wav|m4a)\n?$/i.test(voiceRef)) throw new Error('voice_reference_url in private/config.json must be a public https link to an MP3, WAV or M4A file.');
   }
   const respell = cfg.respell && typeof cfg.respell === 'object' && !Array.isArray(cfg.respell) ? cfg.respell : {};
   const promptText = voice === 'elevenlabs'

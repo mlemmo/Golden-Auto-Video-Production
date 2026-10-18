@@ -2,13 +2,18 @@
   "name": "golden-auto-node",
   "version": "0.1.0",
   "private": true,
-  "description": "Node.js port of the Golden Auto AI car video dashboard (runs next to the PHP version until it replaces it).",
+  "description": "Golden Auto AI car video dashboard: the Node service (sign-in, actions, workers). The React front end is in ../web.",
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch-path=src src/server.js",
     "test": "node --test \"test/**/*.test.js\"",
-    "parity": "node --test test/parity/parity.test.js"
+    "password-hash": "node src/cli/password-hash.js"
+  },
+  "dependencies": {
+    "bcryptjs": "2.4.3"
   }
 }
