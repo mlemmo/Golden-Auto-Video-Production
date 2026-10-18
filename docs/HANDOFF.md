@@ -4,10 +4,11 @@ Read CLAUDE.md first (rules, flows, tests). This note is the current status and 
 the work (Mark started it).
 
 ## Where things stand
-- **Staging runs on Node + React, no PHP.** Node service `golden-auto-staging-node` (127.0.0.1:4352), React dashboard
-  built into `public/app/` on deploy, Node caption and photo workers from cron, config in `private/config.json`.
-  Deploy: `bash /srv/golden-auto-staging/ubuntu/update.sh` (docs/DEPLOY_UBUNTU.md).
-- **Production (`main`) is still the old PHP app** until the user approves its switch.
+- **Production and staging both run the Node + React app.** Production: `golden-auto-production-node`
+  (127.0.0.1:4353), `/srv/golden-auto`, branch `main`; staging: `golden-auto-staging-node` (127.0.0.1:4352),
+  `/srv/golden-auto-staging`, branch `staging`. React dashboard built into `public/app/` on deploy, Node caption and
+  photo workers from cron, config in `private/config.json`. Deploy with each folder's `ubuntu/update.sh`; promote by
+  fast-forwarding `main` to `staging` (docs/STAGING.md, docs/DEPLOY_UBUNTU.md).
 - The Node test site (node.mygoldenauto.net, branch `nodejs`) was retired on 2026-10-18 after merging into staging;
   its data backup is `/home/mark/backups/golden-auto-node-test-site-2026-10-18.tar.gz`.
 - **Default flow (voice=elevenlabs):** approve an ElevenLabs preview → one Seedance 2.5 generation (four wide shots,
@@ -21,28 +22,32 @@ the work (Mark started it).
 - Whisper-guided caption timing (`captionRetime`), short cues joined, smaller native caption text (FontSize 11).
 - React dashboard (`web/`) replaced the old pages; status messages are pop-ups, important failures stay until
   dismissed and are listed under Notifications.
-- PHP removed from `staging`.
+- Old app code removed; config is `private/config.json` on both sites.
+- **Production switched to Node + React** (`sudo bash ubuntu/production/setup-node-root.sh`, Node worker cron lines,
+  `main` fast-forwarded to `staging`).
+- The paid Subaru video (2013 SUBARU XV CROSSTREK, job `aeff52baf6630e4c0bebda0d`, whisper-guided caption timing)
+  copied from the retired Node test site into production; production database backup before that:
+  `/srv/golden-auto/private/data/agent.sqlite.bak-before-subaru-import`.
+- Pop-up notifications moved to the bottom right (bottom centre on phones), clear of Sign out and Notifications.
 - Staging's photo URLs pointed at production (copied data, so asset-sheet rebuilds failed); rewritten to
   staging.mygoldenauto.net in staging's database only (backup `private/data/agent.sqlite.bak-before-photo-urls`).
 
 ## Open items (next steps)
-1. **Switch production to Node** — next, after Sawyer tests staging and the user approves. Same way as staging: a
-   setup script plus one sudo command, `config-from-php.js` once for its config, Node worker cron lines in place of
-   the PHP one; then merge `staging` into `main` and remove PHP from `main`.
-2. **"Refresh inventory" for Golden Auto returns 403**: mygoldenauto.net blocks the server via Cloudflare. Workaround:
+1. **"Refresh inventory" for Golden Auto returns 403**: mygoldenauto.net blocks the server via Cloudflare. Workaround:
    read the DealerCenter snapshot from the public website in a browser and run
    `node node/src/cli/dealercenter-sync.js snapshot.json [zip-dir]` (photos download fine from imagescf.dealercenter.net).
-3. **DealerCenter SFTP XML import** (needs host/credentials and a sample XML).
-4. **Word-level caption alignment** (ElevenLabs `with-timestamps` on new takes would give exact timing).
-5. "San Ramon" pronunciation by Seedance: default respelling "San Rah-moan" (config `respell`); next fallback
+2. **DealerCenter SFTP XML import** (needs host/credentials and a sample XML).
+3. **Word-level caption alignment** (ElevenLabs `with-timestamps` on new takes would give exact timing).
+4. "San Ramon" pronunciation by Seedance: default respelling "San Rah-moan" (config `respell`); next fallback
    "San Ra-MOAN", then drop the city from the spoken line.
 
 ## Working on this server with Claude Code
-- Work in `~/golden-auto-dev` on `staging`, commit, push, then run `update.sh`. Don't edit `/srv/...` folders directly.
+- Work in `~/golden-auto-dev` on `staging`, commit, push, run staging's `update.sh` and check; then fast-forward
+  `main` and run production's `update.sh`. Don't edit `/srv/...` folders directly.
 - Node comes from nvm in `/home/mark/.nvm` (alias `default`); non-interactive shells (systemd, cron, update.sh) load
   it with `ubuntu/node/nvm-env.sh`.
 - Never print or commit `private/config.json` or API keys. Never call Higgsfield/ElevenLabs/fal/HeyGen/Shotstack from
   tests; real generations cost money and need the user's approval in the dashboard.
-- Logs: `journalctl -u golden-auto-staging-node`; workers → `private/data/finishing-worker.log`,
+- Logs: `journalctl -u golden-auto-production-node` / `golden-auto-staging-node`; workers → `private/data/finishing-worker.log`,
   `private/data/photo-worker.log`.
 - inventory-ads/ is not used: keep `goldenauto-video.timer` disabled.

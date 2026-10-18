@@ -1,6 +1,6 @@
 // Configuration: read once from private/config.json (mode 600, gitignored), so secrets live in one place and are
-// never copied, printed or committed. asset_dir defaults to <root>/public/assets. A site that still has an old
-// private/config.php converts it once with: node src/cli/config-from-php.js.
+// never copied, printed or committed. asset_dir defaults to <root>/public/assets. Start
+// from private/config.example.json.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve } from 'node:path';
@@ -14,7 +14,7 @@ export function loadConfig(root = process.env.GOLDEN_ROOT ?? ROOT) {
   let cfg;
   // Never echo the file or the parser's message: either could contain parts of a secret.
   try { cfg = JSON.parse(readFileSync(root + '/private/config.json', 'utf8')); }
-  catch { throw new Error('Could not read private/config.json (missing or not valid JSON). Convert an old private/config.php once with node src/cli/config-from-php.js.'); }
+  catch { throw new Error('Could not read private/config.json (missing or not valid JSON). Start from private/config.example.json.'); }
   if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) throw new Error('private/config.json must hold one JSON object.');
   cfg.asset_dir ??= root + '/public/assets';
   loaded = { root, cfg };

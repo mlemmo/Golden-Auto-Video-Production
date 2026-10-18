@@ -6,7 +6,7 @@ Golden Auto Video Studio: a private dashboard that turns a car dealer's inventor
 
 Runs on Ubuntu behind Nginx (https, port 4343): Node 20+ (from nvm), SQLite (Node's built-in `node:sqlite`), FFmpeg (libx264, libass), Python 3 with Pillow and fonts-dejavu-core, whisper.cpp. See `docs/DEPLOY_UBUNTU.md` and `docs/STAGING.md`.
 
-Staging (`staging` branch) runs this Node + React app. Production (`main`) still runs the old PHP app until the user approves its switch.
+Production (`main`, video.mygoldenauto.net) and staging (`staging`, staging.mygoldenauto.net) both run this Node + React app (production since 2026-10-18).
 
 ## Layout
 
@@ -17,7 +17,7 @@ Staging (`staging` branch) runs this Node + React app. Production (`main`) still
 | `node/src/cli/photo-worker.js` | Cron, every minute: copies and sorts photos of website-imported client cars |
 | `node/src/cli/dealercenter-sync.js` | Golden Auto's DealerCenter sync: `node node/src/cli/dealercenter-sync.js snapshot.json [zip-dir]`. The snapshot (active list without costs: stock, VIN, year, make, model, trim, colour, mileage, prices, description, photo_urls) is read from the public website in a browser, since Cloudflare blocks this server; photos are downloaded server-to-server from imagescf.dealercenter.net (fallback: `photo_count` plus ZIPs named `<stock>.zip`). Adds new cars, re-imports photos when the photo set changes, logs price changes, marks missing cars inactive (hidden, paid actions blocked, videos kept). Log in state row `sync_log`, shown in the dashboard |
 | `node/src/cli/password-hash.js` | New dashboard password hash: `cd node && npm run password-hash` |
-| `web/` | React 18 dashboard (Vite). `npm run build` writes `public/app/` (not committed). Status messages are pop-ups (react-hot-toast); important failures stay until dismissed and are listed under the Notifications button |
+| `web/` | React 18 dashboard (Vite). `npm run build` writes `public/app/` (not committed). Status messages are pop-ups (react-hot-toast, bottom right, bottom centre on phones); important failures stay until dismissed and are listed under the Notifications button |
 | `private/finish_video.py` | Speech timing analysis (speech end + voiced spans) and the intro/closing-card render |
 | `private/narration_bridge.py` | ElevenLabs and fal.ai calls for voice previews and lip-sync (no redirects, allowed hosts only, errors stripped of keys) |
 | `private/photo_classify.py` | Local CLIP model that sorts website photos (venv `~/golden-auto-ml`, config `photo_python`) |
@@ -25,7 +25,7 @@ Staging (`staging` branch) runs this Node + React app. Production (`main`) still
 | `private/config.json` | Configuration (gitignored, mode 600). Copy `private/config.example.json` |
 | `private/data/agent.sqlite` | Data: tables `state`, `jobs`, `narrations`, `narration_lipsync`. Sessions in `node-sessions.sqlite`, worker logs next to them |
 | `public/` | `style.css`, the dashboard build (`app/`), photos, sheets, voice previews and videos (`assets/`) |
-| `ubuntu/` | `update.sh` (deploy), `staging/` (Node service, Nginx site, one-time setup), `node/` (nvm loader for systemd, cron and deploys) |
+| `ubuntu/` | `update.sh` (deploy, `main` or `staging`), `production/` and `staging/` (each site's Node service, Nginx site, one-time setup), `node/` (nvm loader for systemd, cron and deploys) |
 | `inventory-ads/` | Separate Python pipeline (HeyGen + Shotstack); disabled, `--dry-run` only |
 
 `private/config.json`, `private/data/` and `public/assets/*` are never committed.

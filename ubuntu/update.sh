@@ -23,7 +23,7 @@ python3 -I -m py_compile private/*.py
 if [ -f "/etc/systemd/system/$service" ]; then
   sudo systemctl restart "$service" && echo "Node service restarted ($service)"
 else
-  echo "Node service $service not installed yet (staging: ubuntu/staging/setup-node-root.sh; production: ubuntu/production/switch-to-node.sh)."
+  echo "Node service $service not installed yet (staging: ubuntu/staging/setup-node-root.sh; production: ubuntu/production/setup-node-root.sh)."
 fi
 # Automated inventory video ads (inventory-ads/): production only. install.sh enables the paid nightly timer, so only
 # run it when the timer is already enabled (a disabled timer stays off).
