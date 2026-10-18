@@ -38,7 +38,7 @@ export async function downloadMaster(url, path) {
   if (status !== 200 || size < 1000 || size > 100000000) throw new Error('Video download failed (HTTP ' + status + '). Refresh the generation result if its link expired.');
 }
 
-export const CAPTION_STYLE_NATIVE = 'FontName=DejaVu Sans,Bold=1,FontSize=13,PrimaryColour=&H00FFFFFF,BackColour=&H80000000,BorderStyle=1,Outline=0,Shadow=1.5,Alignment=2,MarginV=28';
+export const CAPTION_STYLE_NATIVE = 'FontName=DejaVu Sans,Bold=1,FontSize=11,PrimaryColour=&H00FFFFFF,BackColour=&H80000000,BorderStyle=1,Outline=0,Shadow=1.5,Alignment=2,MarginV=28';
 export const CAPTION_STYLE_PLAIN = 'FontName=DejaVu Sans,FontSize=10,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=1,Shadow=0,Alignment=2,MarginV=40';
 
 /** The FFmpeg arguments for a captioned render (everything except the fal intro/closing-card path). */

@@ -66,6 +66,12 @@ session still signs in /api/node/ calls (fallback through node_auth.php). Still 
 config.php and checks the password hash (password_verify); its PHP-FPM pool for this site can be removed once the
 Nginx switch is checked.
 
+Testing fixes (2026-10-18, user Sawyer testing the node site; PHP and Node changed together, parity cases added):
+sign-in redirects (Post/Redirect/Get, no resend prompt), client switch/add without page reload and the car list
+re-read every 20 s while photos import, client_analyze returns script_details, DCS import errors name the sitemap car
+(`dcsPageError`), steady word count while typing, and whisper-guided caption timing (`captionRetime`, see CLAUDE.md)
+with smaller native caption text.
+
 Next: rollout (8) only when the user says so — the user tests the node site first.
 
 ## How to port each area (the method so far)

@@ -46,7 +46,7 @@ try{
     }else{
     // Native-voice videos: bold white words, no box or outline, with a faint soft shadow so they stay readable.
     $style=in_array($job['voice']??'',['native','elevenlabs'],true)
-        ?'FontName=DejaVu Sans,Bold=1,FontSize=13,PrimaryColour=&H00FFFFFF,BackColour=&H80000000,BorderStyle=1,Outline=0,Shadow=1.5,Alignment=2,MarginV=28'
+        ?'FontName=DejaVu Sans,Bold=1,FontSize=11,PrimaryColour=&H00FFFFFF,BackColour=&H80000000,BorderStyle=1,Outline=0,Shadow=1.5,Alignment=2,MarginV=28'
         :'FontName=DejaVu Sans,FontSize=10,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=1,Shadow=0,Alignment=2,MarginV=40';
     $filter="scale=$w:$h:force_original_aspect_ratio=increase,crop=$w:$h,setsar=1,subtitles=captions.srt:force_style='$style'";
     

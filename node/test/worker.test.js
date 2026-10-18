@@ -100,7 +100,7 @@ test('worker: native video captioned from its own speech and rendered; stuck ren
 test('render arguments match the PHP worker', () => {
   const cfg = { ffmpeg_path: '/usr/bin/ffmpeg' };
   const a = renderArgs(cfg, { format: 'facebook_feed', voice: 'native' }, null, '/x/out.mp4');
-  assert.equal(a.join(' '), "/usr/bin/ffmpeg -nostdin -n -hide_banner -loglevel error -i master.mp4 -vf scale=1080:1350:force_original_aspect_ratio=increase,crop=1080:1350,setsar=1,subtitles=captions.srt:force_style='FontName=DejaVu Sans,Bold=1,FontSize=13,PrimaryColour=&H00FFFFFF,BackColour=&H80000000,BorderStyle=1,Outline=0,Shadow=1.5,Alignment=2,MarginV=28' -c:v libx264 -preset veryfast -crf 20 -threads 1 -pix_fmt yuv420p -c:a aac -movflags +faststart /x/out.mp4");
+  assert.equal(a.join(' '), "/usr/bin/ffmpeg -nostdin -n -hide_banner -loglevel error -i master.mp4 -vf scale=1080:1350:force_original_aspect_ratio=increase,crop=1080:1350,setsar=1,subtitles=captions.srt:force_style='FontName=DejaVu Sans,Bold=1,FontSize=11,PrimaryColour=&H00FFFFFF,BackColour=&H80000000,BorderStyle=1,Outline=0,Shadow=1.5,Alignment=2,MarginV=28' -c:v libx264 -preset veryfast -crf 20 -threads 1 -pix_fmt yuv420p -c:a aac -movflags +faststart /x/out.mp4");
   const f = renderArgs(cfg, { format: 'square', voice: 'elevenlabs', provider: 'footage', duration: 27 }, '/n/v.mp3', 'o.mp4');
   assert.deepEqual(f.slice(8, 20), ['-i', '/n/v.mp3', '-filter_complex', '[1:a]adelay=500:all=1,apad[a]', '-map', '0:v', '-map', '[a]', '-shortest', '-t', '27', '-vf']);
   assert.ok(renderArgs(cfg, { format: 'instagram_reels' }, null, 'o').join(' ').includes('FontSize=10') && renderArgs(cfg, { format: 'x' }, null, 'o').join(' ').includes('1080:1920'));

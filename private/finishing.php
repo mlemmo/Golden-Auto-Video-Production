@@ -96,6 +96,8 @@ function goldenNativeCues(array $job,array $timing,array $heard,float $offset=0.
     $spoken=$heard?captionSpokenScript((string)$job['script'],$heard):null;
     $cues=captionCues($spoken??(string)$job['script'],(string)($job['vehicle']??''),$timing['spans']??[],(float)$timing['speech_end']);
     if(!$cues)throw new RuntimeException('Caption script is empty.');
+    // Recognized words fix the timing of each cue (a comma she said without a pause no longer shifts the rest).
+    if($heard)$cues=captionRetime($cues,(string)$job['script'],$heard,$timing['spans']??[],(float)$timing['speech_end']);
     // No advertised price: nobody says a price, and "Call For Price" is shown once the speech has finished.
     if(array_key_exists('price',$job)&&$job['price']===null)$cues=captionCallForPrice($cues,(float)($job['duration']??30)-$offset);
     return validateSrt(captionSrt($cues,$offset),(float)($job['duration']??30));

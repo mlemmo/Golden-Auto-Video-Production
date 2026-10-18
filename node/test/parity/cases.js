@@ -124,6 +124,12 @@ export function buildCases(seed = 42, count = 400) {
     const job = { script: t, vehicle: r() < 0.2 ? undefined : veh, duration: pick(r, [15, 30, '30', undefined]) };
     if (r() < 0.7) job.price = r() < 0.4 ? null : 14688;
     add('goldenNativeCues', job, { spans: spans(r, end), speech_end: end }, r() < 0.5 ? [] : h, pick(r, [0, 0.5]));
+    // Whisper-guided re-timing: real heard words with a repeated word, short cues to merge, snapping to spans.
+    const sp = spans(r, end);
+    add('captionSnap', sp, r() * end, r() < 0.5);
+    add('captionWrapLines', sentence(r) + (r() < 0.5 ? ' ' + sentence(r) : ''));
+    const rep = h.length > 2 && r() < 0.5 ? (() => { const i = Math.floor(r() * (h.length - 1)); return [...h.slice(0, i + 1), [h[i][0], h[i][2], h[i][2] + 0.4], ...h.slice(i + 1)]; })() : h;
+    add('goldenNativeCues', { script: t, vehicle: veh, duration: 30, price: 14688 }, { spans: sp, speech_end: end }, rep, 0);
     const dur = 5 + Math.floor(r() * 30);
     add('captionDraft', t, dur, r() < 0.5 ? '' : veh);
     add('captionSrt', [{ text: 'A\nB', start: r() * 3, end: 3 + r() * 3 }, { text: 'C', start: 6.5, end: 7.25 }], r() * 2);

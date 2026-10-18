@@ -3,9 +3,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   CAPTION_EXTRA, CAPTION_MAX_LINE, captionCallForPrice, captionCues, captionDisplayText, captionDraft, captionSpokenScript, captionSrt, validateSrt,
+  captionRetime, captionSnap, captionWrapLines,
 } from '../src/lib/captions.js';
 import { nativeSpeech, seedanceRespell, speechScript, speechWordCount, withSpeechSites } from '../src/lib/speech.js';
 import { adPrice, highestPrice, priceMatches } from '../src/lib/price.js';
+import { nativeCues } from '../src/lib/finishing.js';
 import { clientDetails } from '../src/lib/clients.js';
 import { script } from '../src/lib/scripts.js';
 
@@ -143,4 +145,20 @@ test('each client is named in scripts and its website is said in words', async (
   ]);
   assert.equal(a, 'Visit e lease returns dot com.');
   assert.equal(b, 'Visit eleasereturns.com.');
+});
+
+test('captions re-timed from recognized words: comma said without a pause, repeated word, short cue joined', () => {
+  // The 2013 Subaru take (2026-10-18): no pause after "Premium," and an added line "Just 14,060 miles." after "miles."
+  const script = 'Looking for a dependable SUV? Take a look at this 2013 SUBARU XV CROSSTREK Premium, here at Golden Auto in San Ramon. It comes with all-wheel drive, a silver exterior, with just over 60,000 miles. Just $14,688. Book your test drive today at mygoldenauto.net.';
+  const heard = [['Looking', 0.31, 0.46], ['for', 0.46, 0.65], ['a', 0.65, 0.7], ['dependable', 0.7, 1.32], ['SUV?', 1.32, 1.74], ['Take', 2.4, 2.4], ['a', 2.4, 2.4], ['look', 2.4, 2.47], ['at', 2.47, 2.71], ['this', 2.71, 2.86], ['2013', 2.86, 3.76], ['Subaru', 3.76, 4.26], ['XV', 4.26, 4.85], ['Cross', 4.85, 4.89], ['Premium', 4.89, 5.46], ['here', 5.46, 5.7], ['at', 5.7, 5.82], ['Golden', 5.82, 6.23], ['Auto', 6.23, 6.53], ['in', 6.53, 6.54], ['San', 6.54, 6.72], ['Ramon.', 6.72, 7.24], ['It', 7.24, 7.55], ['comes', 7.55, 7.77], ['with', 7.77, 8.08], ['all-wheel', 8.08, 8.76], ['drive,', 8.76, 9.36], ['a', 9.36, 9.73], ['silver', 9.73, 9.82], ['exterior,', 9.82, 10.66], ['and', 10.66, 10.83], ['just', 10.83, 11.07], ['over', 11.07, 11.37], ['60,000', 11.37, 12.23], ['miles.', 12.23, 12.72], ['Just', 13.24, 13.55], ['14,060', 13.55, 15.03], ['miles.', 15.03, 15.92], ['Just', 16.56, 16.56], ['$14,688.', 16.56, 18.84], ['Book', 19.98, 19.98], ['your', 19.98, 20.05], ['test', 20.05, 20.29], ['drive', 20.29, 20.67], ['today', 20.67, 21.21], ['at', 21.21, 21.42], ['MyGoldenAuto.net.', 21.42, 23.76]];
+  const spans = [[0.31, 2.0], [2.49, 7.33], [7.9, 9.36], [9.69, 10.93], [11.11, 12.83], [13.25, 13.47], [13.66, 16.16], [16.58, 19.54], [20.59, 23.83]];
+  const srt = nativeCues({ script, vehicle: '2013 SUBARU XV CROSSTREK', duration: 30, price: 14688 }, { spans, speech_end: 23.83 }, heard);
+  const cues = [...srt.matchAll(/(\d\d:\d\d:\d\d,\d{3}) --> (\d\d:\d\d:\d\d,\d{3})\n([\s\S]*?)(?:\n\n|\n?$)/g)].map((m) => [m[1].slice(6), m[2].slice(6), m[3].replace(/\n/g, ' / ')]);
+  assert.deepEqual(cues[1], ['02,450', '05,420', 'Take a look / at this 2013 Subaru / XV Crosstrek Premium,'], 'short "Crosstrek Premium," joined; no line ends on "at"');
+  assert.deepEqual(cues[2].slice(0, 2), ['05,420', '07,530'], '"here at Golden Auto in San Ramon." while she says it, not a pause later');
+  assert.deepEqual(cues[5], ['11,070', '13,030', 'with just over / 60,000 miles.'], 'first "miles.", not the one in her added line');
+  assert.equal(cues[6][0], '16,540', 'nothing shown during the added line');
+  assert.equal(captionWrapLines('Take a look at this 2013 Subaru XV Crosstrek Premium, and more words here to overflow it'), null, 'too long for three lines');
+  assert.equal(captionSnap([[1, 2], [3, 4]], 2.8, true), 3, 'a start just before speech snaps to it');
+  assert.equal(captionSnap([[1, 2], [3, 4]], 1.5, true), 1.5, 'a start mid-speech stays');
 });

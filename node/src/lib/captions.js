@@ -204,6 +204,102 @@ export function captionStripExtra(text) {
 }
 
 /**
+ * Re-time cues from the recognized words: each cue runs from its first to its last recognized word, snapped to the
+ * measured speech (whisper's own times are loose, often early). A clause boundary she said without a pause no longer
+ * shifts the following captions. Cues too short to read (under CAPTION_MIN_READ s) join a neighbour in the same
+ * sentence, rewrapped to up to CAPTION_MAX_LINES lines. Cues come back unchanged when too little was recognized or
+ * the words cannot be matched to the cues.
+ */
+export const CAPTION_MIN_READ = 1.0;
+export const CAPTION_MAX_LINES = 3;
+export function captionRetime(cues, script, heard, spans, audioEnd) {
+  const [aligned, matched, total] = captionAlignWords(captionDisplayText(script), heard);
+  if (!cues.length || !aligned.length || total === 0 || matched < 0.6 * total) return cues;
+  // A repeated word ("miles." said twice): use its earliest saying right after the previous caption word.
+  for (let p = 0; p < aligned.length; p++) {
+    if (aligned[p][3] || aligned[p][1] === null) continue;
+    const key = captionWordKey(aligned[p][0]);
+    for (let q = p - 1; q >= 0 && aligned[q][3]; q--) if (captionWordKey(aligned[q][0]) === key) {
+      [aligned[q][1], aligned[q][2], aligned[p][1], aligned[p][2]] = [aligned[p][1], aligned[p][2], aligned[q][1], aligned[q][2]];
+    }
+  }
+  const words = aligned.filter((w) => !w[3]);
+  spans = spans.filter((s) => s[1] - s[0] >= 0.05);
+  let out = [], k = 0;
+  for (const c of cues) {
+    const n = trim(c.text, ' \t\n\r\0\x0B').split(new RegExp(US + '+', 'u')).filter((x) => x !== '').length;
+    const timed = words.slice(k, k + n).filter((w) => w[1] !== null); k += n;
+    out.push(timed.length ? { text: c.text, start: captionSnap(spans, Number(timed[0][1]), true), end: captionSnap(spans, Number(timed[timed.length - 1][2]), false) } : c);
+  }
+  if (k !== words.length) return cues;
+  // Same lead-in, hold and minimum time as captionCues.
+  const n = out.length;
+  for (let i = 0; i < n; i++) {
+    const next = i + 1 < n ? out[i + 1].start : audioEnd + 0.08;
+    const start = Math.max(0, out[i].start - 0.04);
+    out[i].start = start; out[i].end = Math.min(Math.max(out[i].end + 0.2, start + 0.8), next - 0.04);
+    if (out[i].end <= out[i].start + 0.2) out[i].end = out[i].start + 0.2;
+    if (i + 1 < n) out[i + 1].start = Math.max(out[i + 1].start, out[i].end + 0.04);
+  }
+  // Too short to read: join the cue before it in the same sentence, else the next one.
+  const flat = (t) => trim(t.replaceAll('\n', ' '), ' \t\n\r\0\x0B');
+  for (let again = true; again;) {
+    again = false;
+    for (let i = 0; i < out.length; i++) {
+      if (out[i].end - out[i].start >= CAPTION_MIN_READ) continue;
+      const j = i > 0 && !/[.!?]$/.test(flat(out[i - 1].text)) ? i - 1 : i + 1 < out.length && !/[.!?]$/.test(flat(out[i].text)) ? i + 1 : -1;
+      if (j < 0) continue;
+      const [a, b] = j < i ? [out[j], out[i]] : [out[i], out[j]];
+      const text = captionWrapLines(flat(a.text) + ' ' + flat(b.text));
+      if (text === null) continue;
+      out.splice(Math.min(i, j), 2, { text, start: a.start, end: b.end });
+      again = true; break;
+    }
+  }
+  return out;
+}
+
+/** A time snapped to the measured speech: a start to its stretch's start (or the next one's), an end to its stretch's end. */
+export function captionSnap(spans, t, start) {
+  const inn = spans.find((s) => t >= s[0] && t <= s[1]) ?? null;
+  if (start) {
+    if (inn && t - inn[0] <= 0.35) return Number(inn[0]);
+    if (inn && inn[1] - t > 0.3) return t;
+    for (const s of spans) if (s[0] > t) return s[0] - t <= 0.8 ? Number(s[0]) : t;
+    return t;
+  }
+  if (inn) return inn[1] - t <= 0.8 ? Number(inn[1]) : t;
+  for (let i = spans.length - 1; i >= 0; i--) if (spans[i][1] < t) return t - spans[i][1] <= 0.8 ? Number(spans[i][1]) : t;
+  return t;
+}
+
+/** Text on the fewest lines (up to CAPTION_MAX_LINES of CAPTION_MAX_LINE), balanced, not ending a line on a small word; null if it can't fit. */
+export function captionWrapLines(text) {
+  const w = text.split(/ +/).filter((x) => x !== '');
+  for (let lines = 1; lines <= CAPTION_MAX_LINES; lines++) {
+    let best = null, bestScore = Infinity;
+    for (const o of captionLineSplits(w, 0, lines)) {
+      const len = o.map(strlen);
+      let glue = 0;
+      for (const l of o.slice(0, -1)) if (CAPTION_GLUE.includes(lower(l.split(' ').pop()))) glue++;
+      const score = Math.max(...len) - Math.min(...len) + 12 * glue;
+      if (score < bestScore) { bestScore = score; best = o; }
+    }
+    if (best !== null) return best.join('\n');
+  }
+  return null;
+}
+function captionLineSplits(w, from, lines) {
+  if (lines === 1) { const l = w.slice(from).join(' '); return from < w.length && strlen(l) <= CAPTION_MAX_LINE ? [[l]] : []; }
+  const out = [];
+  for (let e = from + 1; e < w.length; e++) {
+    const l = w.slice(from, e).join(' '); if (strlen(l) > CAPTION_MAX_LINE) break;
+    for (const r of captionLineSplits(w, e, lines - 1)) out.push([l, ...r]);
+  }
+  return out;
+}
+
+/**
  * Match audio pauses to clause boundaries. Returns control points [[weight, voiced seconds], ...] from (0,0) to (W,V).
  * Pauses shorter than 0.15 s are ignored; a long pause left unmatched, or a sentence end with no pause, costs more.
  */

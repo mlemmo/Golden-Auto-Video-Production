@@ -8,7 +8,7 @@ import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { str, toInt, toFloat, trim, truthy } from './php.js';
 import { phpJsonEncode } from './phpjson.js';
-import { captionCues, captionSpokenScript, captionCallForPrice, captionSrt, validateSrt } from './captions.js';
+import { captionCues, captionRetime, captionSpokenScript, captionCallForPrice, captionSrt, validateSrt } from './captions.js';
 import { narrationTables, narrationCheckAudio } from './narrations.js';
 import { CLIENT_DEFAULT, clientInventory } from './clients.js';
 import { priceMatches } from './price.js';
@@ -106,6 +106,8 @@ export function nativeCues(job, timing, heard, offset = 0.0) {
   const spoken = heard.length ? captionSpokenScript(str(job.script), heard) : null;
   let cues = captionCues(spoken ?? str(job.script), str(job.vehicle ?? ''), timing.spans ?? [], toFloat(timing.speech_end));
   if (!cues.length) throw new Error('Caption script is empty.');
+  // Recognized words fix the timing of each cue (a comma she said without a pause no longer shifts the rest).
+  if (heard.length) cues = captionRetime(cues, str(job.script), heard, timing.spans ?? [], toFloat(timing.speech_end));
   // No advertised price: nobody says a price, and "Call For Price" is shown once the speech has finished.
   if (Object.hasOwn(job, 'price') && job.price === null) cues = captionCallForPrice(cues, toFloat(job.duration ?? 30) - offset);
   return validateSrt(captionSrt(cues, offset), toFloat(job.duration ?? 30));
