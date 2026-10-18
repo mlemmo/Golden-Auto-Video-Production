@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Started by golden-auto-node.service: runs the Node service with nvm's default Node, so upgrading Node is
+# Started by the site's Node service (golden-auto-staging-node.service): runs the Node service with nvm's default Node, so upgrading Node is
 # "nvm install … && nvm alias default …" plus a service restart, with no change to the service file.
 set -eo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"

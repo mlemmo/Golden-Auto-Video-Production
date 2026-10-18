@@ -2,7 +2,7 @@
 # Pull the latest code from GitHub for this checkout's branch, check it, build the dashboard and restart the site's
 # Node service. Never touches private/config.json, data/ or assets.
 #   staging (/srv/golden-auto-staging, branch staging): Node service golden-auto-staging-node.
-# Production (/srv/golden-auto, branch main) and the Node test site (branch nodejs) run their own branch's update.sh.
+# Production (/srv/golden-auto, branch main) runs its own branch's update.sh until it is switched to Node.
 set -euo pipefail
 cd "$(cd "$(dirname "$0")/.." && pwd)"
 branch="$(git rev-parse --abbrev-ref HEAD)"

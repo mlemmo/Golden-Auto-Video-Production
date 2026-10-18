@@ -1,9 +1,9 @@
-# Sourced (not run) by the Node test site scripts: puts nvm's default Node on PATH for non-interactive shells
-# (systemd, update.sh, setup-app.sh), where ~/.bashrc is not read. Node itself is managed with nvm as mark:
-#   upgrade: nvm install --lts && nvm alias default 'lts/*' && sudo systemctl restart golden-auto-node
+# Sourced (not run) by the deploy and service scripts: puts nvm's default Node on PATH for non-interactive shells
+# (systemd, cron, update.sh), where ~/.bashrc is not read. Node itself is managed with nvm as mark:
+#   upgrade: nvm install --lts && nvm alias default 'lts/*' && sudo systemctl restart golden-auto-staging-node
 export NVM_DIR="${NVM_DIR:-$HOME/.nvm}"
 if [ ! -s "$NVM_DIR/nvm.sh" ]; then
-  echo "nvm not found in $NVM_DIR; run ubuntu/node/setup-app.sh as mark first." >&2
+  echo "nvm not found in $NVM_DIR; install nvm and Node as mark first (see docs/DEPLOY_UBUNTU.md)." >&2
   return 1 2>/dev/null || exit 1
 fi
 # nvm is not written for "set -u"; relax it while nvm loads, then restore the caller's setting.
