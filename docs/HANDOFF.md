@@ -33,7 +33,7 @@ the work (Mark started it).
   staging.mygoldenauto.net in staging's database only (backup `private/data/agent.sqlite.bak-before-photo-urls`).
 
 ## Accounts (2026-10-18)
-Email sign-in with admin / user / viewer roles and per-client access; no registration page (Tools → Manage users).
+Email sign-in with admin / user / viewer roles and per-client access; no registration page (Admin → Manage users).
 Each site has its own accounts: the first sign-in on a site (email + the old shared dashboard password) creates its
 first admin. Paid records say who approved them (`approved_by`).
 

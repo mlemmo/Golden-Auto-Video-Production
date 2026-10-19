@@ -11,7 +11,7 @@ import VoiceStep from './VoiceStep.jsx';
 import LookStep from './LookStep.jsx';
 import GenerateStep from './GenerateStep.jsx';
 import Videos from './Videos.jsx';
-import { ToolsMenu, ToolWindows } from './Tools.jsx';
+import { AdminMenu, ToolsMenu, ToolWindows } from './Tools.jsx';
 
 const Studio = createContext(null);
 export const useStudio = () => useContext(Studio);
@@ -277,6 +277,7 @@ export default function App() {
         <div className="header-actions">
           <Notifications />
           {!readOnly && <ToolsMenu />}
+          {isAdmin && <AdminMenu />}
           <AccountMenu onSignOut={signOut} />
         </div>
       </div>

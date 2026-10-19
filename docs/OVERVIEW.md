@@ -24,7 +24,7 @@ Auto only so far.
 - **Developers** (the team, with Claude Code) keep the code running on the company's Ubuntu server.
 
 **Accounts.** Everyone signs in with their own email and password. There is no registration page: an admin adds
-people under Tools → Manage users and chooses their role and which clients they may use:
+people under Admin → Manage users and chooses their role and which clients they may use:
 
 | Role | Can do |
 | --- | --- |

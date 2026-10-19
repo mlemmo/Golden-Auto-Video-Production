@@ -5,15 +5,18 @@ import { useClientState, useStudio } from './App.jsx';
 import { DangerButton, Link } from './ui.jsx';
 import { PasswordTool, UsersTool } from './Accounts.jsx';
 
+// Everyday tools (Tools menu) and the admin's (Admin menu). Each opens in a full-page window.
 const TOOLS = [
-  ['users', 'Manage users', 'Add accounts, set roles and which clients each person may use', 'admin'],
-  ['spokespersons', 'Manage spokespersons', 'Upload new spokesperson images and manage saved ones', 'admin'],
   ['import', 'Import a vehicle (DealerCenter ZIP)', 'For cars not on the website yet'],
   ['lipsync', 'Lip-sync builder', 'Only for the “ElevenLabs narration + lip-sync” voice method'],
 ];
+const ADMIN_TOOLS = [
+  ['users', 'Manage users', 'Add accounts, set roles and which clients each person may use'],
+  ['spokespersons', 'Manage spokespersons', 'Upload new spokesperson images and manage saved ones'],
+];
 
-/** ☰ Tools in the top bar: a dropdown of simple buttons, each opening its tool in a full-page window. */
-export function ToolsMenu() {
+/** A top-bar dropdown of simple buttons, each opening its tool in a full-page window. */
+function ToolDropdown({ id, icon, label, items }) {
   const s = useStudio();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -26,12 +29,12 @@ export function ToolsMenu() {
   }, [open]);
   return (
     <div className="menu" ref={ref}>
-      <button type="button" className="secondary small" id="toolsMenu" aria-haspopup="menu" aria-expanded={open} aria-label="Tools" onClick={() => setOpen(!open)}>☰<span className="label-long"> Tools</span></button>
+      <button type="button" className="secondary small" id={id} aria-haspopup="menu" aria-expanded={open} aria-label={label} onClick={() => setOpen(!open)}>{icon}<span className="label-long"> {label}</span></button>
       {open && (
         <div className="menu-list" role="menu">
-          {TOOLS.filter(([, , , only]) => !only || s.isAdmin).map(([key, label, hint]) => (
+          {items.map(([key, title, hint]) => (
             <button key={key} type="button" role="menuitem" className="menu-item" id={'tool-' + key} onClick={() => { setOpen(false); s.setTool(key); }}>
-              <strong>{label}</strong><small>{hint}</small>
+              <strong>{title}</strong><small>{hint}</small>
             </button>
           ))}
         </div>
@@ -39,6 +42,10 @@ export function ToolsMenu() {
     </div>
   );
 }
+/** ☰ Tools: vehicle import and the lip-sync builder (admins and users). */
+export const ToolsMenu = () => <ToolDropdown id="toolsMenu" icon="☰" label="Tools" items={TOOLS} />;
+/** ⚙ Admin: users and the shared spokesperson library (admins only). */
+export const AdminMenu = () => <ToolDropdown id="adminMenu" icon="⚙" label="Admin" items={ADMIN_TOOLS} />;
 
 /**
  * The open tool, filling the page (title, Close; Esc closes). All tools stay mounted while closed, so their forms
@@ -54,7 +61,7 @@ export function ToolWindows() {
     document.body.style.overflow = 'hidden';
     return () => { document.removeEventListener('keydown', esc); document.body.style.overflow = ''; };
   }, [s.tool]); // eslint-disable-line react-hooks/exhaustive-deps
-  const title = s.tool === 'account' ? 'Change password' : TOOLS.find(([key]) => key === s.tool)?.[1] ?? '';
+  const title = s.tool === 'account' ? 'Change password' : [...TOOLS, ...ADMIN_TOOLS].find(([key]) => key === s.tool)?.[1] ?? '';
   return (
     <div className="tool-window" id="tools" role="dialog" aria-modal="true" aria-label={title} hidden={!s.tool}>
       <div className="tool-window-head">
