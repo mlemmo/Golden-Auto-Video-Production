@@ -1,15 +1,16 @@
 // Tools: spokesperson images, DealerCenter media ZIP import, and the lip-sync builder (older two-step voice method).
 import { useEffect, useRef, useState } from 'react';
 import { api, upload } from './api.js';
-import { useStudio } from './App.jsx';
+import { useClientState, useStudio } from './App.jsx';
 import { DangerButton, Link } from './ui.jsx';
 
 export default function Tools() {
+  const s = useStudio();
   return (
     <section className="panel tools" id="tools">
       <h2>Tools</h2>
       <Spokespersons />
-      <ZipImport />
+      <ZipImport key={'zip-' + (s.clients.current ?? '')} />
       <LipsyncBuilder />
     </section>
   );
@@ -105,11 +106,13 @@ const FINAL = { waiting: 'preparing captions', queued: 'queued for final render'
 function LipsyncBuilder() {
   const s = useStudio();
   const [, say] = s.statuses.builder;
-  const [narrationId, setNarrationId] = useState('');
-  const [videoId, setVideoId] = useState('');
+  const [narrationId, setNarrationId] = useClientState('lipsync.narration', '');
+  const [videoId, setVideoId] = useClientState('lipsync.video', '');
   const [current, setCurrent] = useState(false);
   const [spend, setSpend] = useState(false);
   const [pending, setPending] = useState(false);
+  // Confirmation and paid-approval boxes never carry over to another client.
+  useEffect(() => { setCurrent(false); setSpend(false); }, [s.clients.current]);
   const r = s.narr;
   const approved = r.previews.filter((p) => p.status === 'ready' && p.audio_url && !p.too_long && p.approved);
   async function act(action, data) {

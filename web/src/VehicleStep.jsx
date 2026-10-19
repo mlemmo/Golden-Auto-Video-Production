@@ -56,7 +56,7 @@ function ClientBar() {
   const change = async (id) => {
     if (s.busy || switching) return;
     setSwitching(true);
-    try { await api('client_select', { id }); await s.showClientData(); say(`Switched to ${s.clients.items.find((c) => c.id === id)?.name || id}.`); }
+    try { await s.switchClient(id); say(`Switched to ${s.clients.items.find((c) => c.id === id)?.name || id}.`); }
     catch (e) { say(e.message, true); }
     finally { setSwitching(false); }
   };
@@ -66,9 +66,8 @@ function ClientBar() {
       say('Adding the client and analyzing its website…');
       try {
         const r = await api('client_add', form);
-        await api('client_select', { id: r.client.id });
         setForm({ name: '', website: '' }); setAdding(false);
-        await s.showClientData();
+        await s.switchClient(r.client.id);
         say(`${r.client.name} added.`);
       } catch (err) { say(err.message, true); }
     });

@@ -16,6 +16,7 @@ const Studio = createContext(null);
 export const useStudio = () => useContext(Studio);
 
 export const GENERATING = ['preparing_references', 'submitting', 'queued', 'in_progress'];
+const EMPTY_NARR = { previews: [], videos: [], lipsync: [] };
 
 /**
  * A step's title bar with its Collapse / Expand toggle (the whole bar is clickable). A collapsed step shows only this
@@ -41,6 +42,20 @@ export function StepHead({ id, num, title, sub, aside }) {
  * selected") and Continue, which closes this step and opens the next. ready: false while the confirmation would not
  * be true yet; waiting: why, shown beside it.
  */
+/**
+ * State that belongs to the current client (a form field): each client keeps its own value, and switching clients
+ * shows that client's value again. Values live for this page visit.
+ */
+export function useClientState(name, initial) {
+  const s = useStudio();
+  const [, rerender] = useState(0);
+  const key = (s.clients.current ?? '') + '|' + name;
+  const store = s.formStore.current;
+  const value = Object.hasOwn(store, key) ? store[key] : initial;
+  const set = useCallback((v) => { store[key] = typeof v === 'function' ? v(Object.hasOwn(store, key) ? store[key] : initial) : v; rerender((x) => x + 1); }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
+  return [value, set];
+}
+
 export function StepContinue({ from, to, label, check, ready = true, waiting = '' }) {
   const s = useStudio();
   const [ok, setOk] = useState(false);
@@ -67,7 +82,7 @@ export default function App() {
   const [inventory, setInventory] = useState(null);
   const [syncLog, setSyncLog] = useState(null);
   const [jobs, setJobs] = useState(null);
-  const [narr, setNarr] = useState({ previews: [], videos: [], lipsync: [] });
+  const [narr, setNarr] = useState(EMPTY_NARR);
   const [spokespersons, setSpokespersons] = useState({ items: [], default: null });
   // The video being prepared.
   const [chosen, setChosen] = useState(null);
@@ -85,6 +100,7 @@ export default function App() {
   const [confirmCurrent, setConfirmCurrent] = useState(false);
   const [captionJob, setCaptionJob] = useState(null);
   const [spokespersonPanelOpen, setSpokespersonPanelOpen] = useState(false);
+  const formStore = useRef({});   // per-client form values (useClientState, switchClient)
   // Collapsed steps: only step 1 is open when the page loads.
   const [collapsed, setCollapsed] = useState(START_COLLAPSED);
   const toggleStep = useCallback((id) => setCollapsed((c) => ({ ...c, [id]: !c[id] })), []);
@@ -109,18 +125,22 @@ export default function App() {
   const client = clients.items.find((c) => c.id === clients.current) ?? null;
 
   // ---- Loaders ----------------------------------------------------------------------------------
+  // Each client switch starts a new "generation": an answer to a request sent for the previous client is dropped,
+  // so one client's voice previews, videos or cars never appear under another.
+  const generation = useRef(0);
+  const fresh = (fn) => async (...args) => { const g = generation.current; const r = await fn(...args); return g === generation.current ? r : undefined; };
   const loadClients = useCallback(async () => { const r = await api('clients'); setClients(r); return r; }, []);
   const loadInventory = useCallback(async () => {
-    try { setInventory(await api('inventory')); } catch (e) { sayVehicle(e.message, true); }
-  }, [sayVehicle]);
+    try { const r = await fresh(api)('inventory'); if (r) setInventory(r); } catch (e) { sayVehicle(e.message, true); }
+  }, [sayVehicle]); // eslint-disable-line react-hooks/exhaustive-deps
   const loadSyncLog = useCallback(async () => {
-    try { setSyncLog(await api('sync_log')); } catch (e) { sayVehicle(e.message, true); }
-  }, [sayVehicle]);
+    try { const r = await fresh(api)('sync_log'); if (r) setSyncLog(r); } catch (e) { sayVehicle(e.message, true); }
+  }, [sayVehicle]); // eslint-disable-line react-hooks/exhaustive-deps
   const sayVideos = statuses.videos[1];
   const loadJobs = useCallback(async () => {
-    try { setJobs((await api('jobs')).map((r) => JSON.parse(r))); } catch (e) { sayVideos(e.message, true); }
-  }, [sayVideos]);
-  const refreshNarrations = useCallback(async () => { const r = await api('narration_list'); setNarr(r); return r; }, []);
+    try { const r = await fresh(api)('jobs'); if (r) setJobs(r.map((x) => JSON.parse(x))); } catch (e) { sayVideos(e.message, true); }
+  }, [sayVideos]); // eslint-disable-line react-hooks/exhaustive-deps
+  const refreshNarrations = useCallback(async () => { const r = await fresh(api)('narration_list'); if (r) setNarr(r); return r ?? EMPTY_NARR; }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const saySpokesperson = statuses.spokesperson[1];
   const loadSpokespersons = useCallback(async () => {
     try { showSpokespersons(await api('spokesperson_list')); } catch (e) { saySpokesperson(e.message, true); }
@@ -137,9 +157,24 @@ export default function App() {
   function clearVehicle() {
     setChosen(null); setScript(''); setSheetUrl(''); setApprove(false); setConfirmCurrent(false); setCaptionJob(null);
   }
-  /** Show the session's current client: its saved inventory, videos and voice previews, without reloading the page. */
-  async function showClientData() {
-    await loadClients(); clearVehicle(); setInventory(null);
+  /**
+   * Switch to another client without reloading the page: the current client's form is kept for when it is chosen
+   * again, the lists are emptied at once, and the new client's form, cars, videos and voice previews are shown.
+   * Approval tick boxes always start unticked.
+   */
+  async function switchClient(id) {
+    const from = clients.current;
+    if (from) formStore.current[from + '|app'] = { chosen, script, duration, voice, style, source, format, spokespersonId, sheetUrl, footage };
+    generation.current++;
+    setNarr(EMPTY_NARR); setJobs(null); setInventory(null); setSyncLog(null);
+    setApprove(false); setConfirmCurrent(false); setCaptionJob(null);
+    await api('client_select', { id });
+    await loadClients();
+    const f = formStore.current[id + '|app'] ?? {};
+    setChosen(f.chosen ?? null); setScript(f.script ?? ''); setDurationRaw(f.duration ?? '30'); setVoiceRaw(f.voice ?? 'elevenlabs');
+    setStyleRaw(f.style ?? 'showroom'); setSourceRaw(f.source ?? 'ai'); setFormat(f.format ?? 'instagram_reels');
+    if (f.spokespersonId !== undefined) setSpokespersonId(f.spokespersonId);
+    setSheetUrl(f.sheetUrl ?? ''); setFootage(f.footage ?? null);
     await Promise.all([loadInventory(), loadJobs(), loadSyncLog()]);
     refreshNarrations().catch((e) => statuses.studio[1](e.message, true));
   }
@@ -213,7 +248,7 @@ export default function App() {
     sheetUrl, setSheetUrl, footage, setFootage, approve, setApprove, confirmCurrent, setConfirmCurrent,
     captionJob, setCaptionJob, spokespersonPanelOpen, setSpokespersonPanelOpen, collapsed, toggleStep, openStep, closeStep, stepClass,
     busy, run, statuses, loadClients, loadInventory, loadJobs, loadSyncLog, refreshNarrations, showSpokespersons,
-    clearVehicle, showClientData, defaultScript,
+    clearVehicle, switchClient, formStore, defaultScript,
   };
 
   const signOut = async () => { try { await api('logout'); } finally { location.reload(); } };

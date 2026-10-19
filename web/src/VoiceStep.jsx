@@ -2,7 +2,7 @@
 // listens to all of it and approves it; Seedance then follows that voice, wording and pace.
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
-import { StepContinue, StepHead, useStudio } from './App.jsx';
+import { StepContinue, StepHead, useClientState, useStudio } from './App.jsx';
 import { DangerButton, LatestFirst, newestFirst } from './ui.jsx';
 
 export default function VoiceStep() {
@@ -41,12 +41,15 @@ function VoiceStudio({ hidden }) {
   const s = useStudio();
   const [, say] = s.statuses.studio;
   const [voices, setVoices] = useState(null);
-  const [voiceId, setVoiceId] = useState('');
-  const [text, setText] = useState('');
-  const [captions, setCaptions] = useState('');
+  // Each client keeps its own voice, spoken text and caption text (switching back shows them again).
+  const [voiceId, setVoiceId] = useClientState('studio.voice', '');
+  const [text, setText] = useClientState('studio.text', '');
+  const [captions, setCaptions] = useClientState('studio.captions', '');
   const [spend, setSpend] = useState(false);
   const [newTake, setNewTake] = useState(false);
   const [pending, setPending] = useState(false);
+  // Paid-approval boxes never carry over to another client.
+  useEffect(() => { setSpend(false); setNewTake(false); }, [s.clients.current]);
 
   /** One narration action at a time; then the lists are refreshed. */
   async function act(action, data) {
