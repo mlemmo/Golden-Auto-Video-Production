@@ -76,22 +76,32 @@ function VoiceStudio({ hidden }) {
   }
   useEffect(() => { if (!s.readOnly) loadVoices(true); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 1. Copy the script from step 2 (spoken form for the voice, normal spelling for captions).
-  async function copyScript() {
-    if (!s.chosen) { say('Select a vehicle in step 1 first.', 'warn'); return; }
-    const script = s.script.trim() || s.chosen.scripts?.[s.duration] || s.chosen.script;
-    setCaptions(script);
+  // The step 2 script fills the spoken text (spoken form) and the caption text (normal spelling) by itself. Once you
+  // have changed either one here (e.g. a respelled word), a later change in step 2 waits for "Update from step 2".
+  const [copied, setCopied] = useClientState('studio.copied', { stock: '', script: '', text: '', captions: '' });
+  const source = s.chosen ? (s.script.trim() || s.chosen.scripts?.[s.duration] || s.chosen.script || '') : '';
+  // Edits only count for the car they were made for; another car always starts from its own script.
+  const edited = copied.stock === (s.chosen?.StockNumber ?? '') && (text !== copied.text || captions !== copied.captions) && !(text === '' && captions === '');
+  const stale = source !== '' && source !== copied.script;
+  async function copyScript(manual) {
+    if (!source) return;
     try {
-      const r = await api('speech', { script });
-      setText(r.speech.replace(/my golden auto dot N, E, T/gi, 'my golden auto dot net'));
+      const r = await api('speech', { script: source });
+      const spoken = r.speech.replace(/my golden auto dot N, E, T/gi, 'my golden auto dot net');
+      setText(spoken); setCaptions(source); setCopied({ stock: s.chosen?.StockNumber ?? '', script: source, text: spoken, captions: source });
       setSpend(false);
-      say('Script copied. Respell any word in the spoken text if needed, then create a preview.');
+      if (manual) say('Updated from step 2. Respell any word in the spoken text if needed, then create a preview.');
     } catch (e) { say(e.message, true); }
   }
+  useEffect(() => {
+    if (!stale || edited || s.readOnly) return undefined;
+    const t = setTimeout(() => copyScript(false), 400);
+    return () => clearTimeout(t);
+  }, [source, edited, s.chosen?.StockNumber]); // eslint-disable-line react-hooks/exhaustive-deps
   // 3. Paid preview, using the video length chosen in step 2.
   function createPreview() {
     if (!s.chosen) { say('Select a vehicle in step 1 first.', 'warn'); return; }
-    if (!text.trim()) { say('Copy the script from step 2 first.', 'warn'); return; }
+    if (!text.trim()) { say('Write the script in step 2 first.', 'warn'); return; }
     say('Creating the voice preview…');
     act('narration_preview', { stock: s.chosen.StockNumber, voice_id: voiceId, text, caption_script: captions, duration: Number(s.duration), approve_spend: spend, new_take: newTake });
     setSpend(false); setNewTake(false);
@@ -100,9 +110,9 @@ function VoiceStudio({ hidden }) {
   const previews = newestFirst(s.chosen ? s.narr.previews.filter((p) => p.stock === s.chosen.StockNumber) : s.narr.previews);
   return (
     <div id="voiceStudio" className="studio" hidden={hidden}>
-      <ol className="mini-steps"><li>Copy the script from step 2.</li><li>Pick a voice and fix any word that sounds wrong by respelling it in the spoken text.</li><li>Create a preview, listen to all of it, then approve it.</li></ol>
+      <ol className="mini-steps"><li>The script from step 2 is filled in below by itself.</li><li>Pick a voice and fix any word that sounds wrong by respelling it in the spoken text.</li><li>Create a preview, listen to all of it, then approve it.</li></ol>
       <div className="actions">
-        <button type="button" id="nCopyScript" className="secondary" onClick={copyScript}>Copy script from step 2</button>
+        {stale && edited && <button type="button" id="nCopyScript" className="secondary" onClick={() => copyScript(true)}>The script in step 2 changed — Update from step 2</button>}
         <button type="button" id="nLoadVoices" className="secondary" onClick={() => loadVoices(false)}>Reload voices</button>
       </div>
       <label>ElevenLabs voice — use the same one for every car to keep a consistent voice
