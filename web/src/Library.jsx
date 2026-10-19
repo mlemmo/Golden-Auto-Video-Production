@@ -7,6 +7,15 @@ import { useStatus } from './ui.jsx';
 
 const FORMAT = { instagram_reels: 'Reels 9:16', facebook_reels: 'Reels 9:16', facebook_feed: 'Feed 4:5', square: 'Square 1:1' };
 const money = (p) => (p == null ? 'Call for price' : '$' + Math.round(p).toLocaleString('en-US'));
+/** Share a video's public page: the phone's share sheet when there is one, else copy the link. */
+async function shareVideo(v, say) {
+  const url = location.origin + '/v/' + v.id;
+  try {
+    if (navigator.share && matchMedia('(pointer: coarse)').matches) { await navigator.share({ title: v.vehicle, url }); return; }
+    await navigator.clipboard.writeText(url);
+    say('Link copied: ' + url);
+  } catch (e) { if (e?.name !== 'AbortError') window.prompt('Copy this link:', url); }
+}
 const fileName = (v) => `${v.vehicle} ${v.stock}`.trim().replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.mp4';
 
 export function Library({ open, onClose }) {
@@ -57,18 +66,19 @@ export function Library({ open, onClose }) {
               <div className="actions">
                 <button type="button" className="small" onClick={() => setPlaying(v)}>Watch</button>
                 <a className="button small secondary-link" href={v.url} download={fileName(v)}>Download</a>
+                <button type="button" className="secondary small share-btn" onClick={() => shareVideo(v, say)}>Share</button>
               </div>
             </article>
           ))}
         </div>
       </div>
-      {playing && <Player v={playing} client={names[playing.client]} onClose={() => setPlaying(null)} />}
+      {playing && <Player v={playing} client={names[playing.client]} onClose={() => setPlaying(null)} onShare={() => shareVideo(playing, say)} />}
     </div>
   );
 }
 
 /** Large player for presenting: plays at once; Full screen and Download beside it. */
-function Player({ v, client, onClose }) {
+function Player({ v, client, onClose, onShare }) {
   const ref = useRef(null);
   const full = () => { const el = ref.current; (el.requestFullscreen ?? el.webkitEnterFullscreen)?.call(el); };
   return (
@@ -80,6 +90,7 @@ function Player({ v, client, onClose }) {
           <div className="actions">
             <button type="button" className="secondary" onClick={full}>Full screen</button>
             <a className="button" href={v.url} download={fileName(v)}>Download</a>
+            <button type="button" className="secondary" id="playerShare" onClick={onShare}>Share</button>
             <button type="button" className="secondary" id="playerClose" onClick={onClose}>Close</button>
           </div>
         </div>

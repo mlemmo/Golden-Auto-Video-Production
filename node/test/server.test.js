@@ -152,3 +152,21 @@ test('sign-in, the React dashboard page, static files, sign-out', async () => {
     rmSync(dir, { recursive: true, force: true }); rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('share page: public page for a finished video only', async () => {
+  const dir = mkdtempSync(tmpdir() + '/ga-share-'), cfg = { data_dir: dir, public_base_url: 'https://site.example.com:4343', password_hash: HASH };
+  setConfig(cfg);
+  const db = openDb(cfg);
+  db.exec('CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, fingerprint TEXT UNIQUE, payload TEXT NOT NULL)');
+  db.prepare('INSERT INTO jobs VALUES (?,?,?)').run('aaaaaaaaaaaaaaaaaaaaaaaa', 'f1', JSON.stringify({ vehicle: '2013 SUBARU <XV>', stock: '870288', price: 14688.25, finish_status: 'completed', captioned_url: 'https://site.example.com:4343/assets/x.mp4' }));
+  db.prepare('INSERT INTO jobs VALUES (?,?,?)').run('bbbbbbbbbbbbbbbbbbbbbbbb', 'f2', JSON.stringify({ vehicle: 'NOT DONE', finish_status: 'rendering' }));
+  const base = await listen(server);
+  try {
+    const r = await fetch(base + '/v/aaaaaaaaaaaaaaaaaaaaaaaa');
+    const html = await r.text();
+    assert.equal(r.status, 200, 'no sign-in needed');
+    assert.ok(html.includes('2013 SUBARU &lt;XV&gt;') && html.includes('$14,688') && html.includes('GOLDEN AUTO') && html.includes('src="https://site.example.com:4343/assets/x.mp4"') && html.includes('noindex'));
+    assert.equal((await fetch(base + '/v/bbbbbbbbbbbbbbbbbbbbbbbb')).status, 404, 'unfinished video');
+    assert.equal((await fetch(base + '/v/cccccccccccccccccccccccc')).status, 404, 'unknown id');
+  } finally { server.close(); closeDb(cfg); rmSync(dir, { recursive: true, force: true }); }
+});

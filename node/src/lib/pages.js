@@ -42,6 +42,16 @@ export function dashboardPage(cfg, csrf, root = ROOT, user = null) {
   return html.replace('<!--GA_BOOT-->', script).replace(/<title>([^<]*)<\/title>/, (_, t) => '<title>' + esc(prefix) + t + '</title>');
 }
 
+/** The public share page of one finished video (/v/<video id>): dealer, car, price, player, download. */
+export function sharePage(v, dealer) {
+  const html = readFileSync(new URL('../templates/share.html', import.meta.url), 'utf8');
+  const price = v.price == null ? 'Call for price' : '$' + Math.round(v.price).toLocaleString('en-US');
+  const file = (v.vehicle + ' ' + (v.stock ?? '')).trim().replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.mp4';
+  const site = dealer?.website ? `<a class="button secondary-link" href="https://${esc(dealer.website)}" rel="noopener">${esc(dealer.website)}</a>` : '';
+  return fill(html, { TITLE: esc(v.vehicle + ' · ' + (dealer?.name ?? '')), VEHICLE: esc(v.vehicle), DEALER: esc((dealer?.name ?? '').toUpperCase()),
+    PRICE: esc(price), URL: esc(v.url), FILE: esc(file), SITE: site });
+}
+
 /** The dashboard password against its bcrypt hash ("$2y$…" hashes work as is). */
 export async function passwordVerify(password, hash) {
   try { return await bcrypt.compare(String(password), String(hash)); } catch { return false; }

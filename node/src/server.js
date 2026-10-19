@@ -16,7 +16,7 @@ import { parseMultipart } from './lib/multipart.js';
 import { CLIENT_DEFAULT, clientsLoad, clientFind, clientDetails, clientSpeechSites } from './lib/clients.js';
 import { withSpeechSites } from './lib/speech.js';
 import { sessionStore, newSessionId, newCsrf, sameSecret, parseCookies, sessionCookie, clearedCookie, COOKIE } from './lib/session.js';
-import { loginPage, dashboardPage } from './lib/pages.js';
+import { loginPage, dashboardPage, sharePage } from './lib/pages.js';
 import { recordActivity, usageReport } from './lib/activity.js';
 import { libraryVideos } from './lib/jobs.js';
 import { signIn, userById, userCount, publicUser, allowedClients, usersList, userCreate, userUpdate, userDelete, passwordChange } from './lib/users.js';
@@ -235,6 +235,18 @@ function staticFile(req, res, pathname) {
 export const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   if (staticFile(req, res, url.pathname)) return;
+  // Public share page of one finished video (no sign-in): /v/<video id>.
+  const share = req.method === 'GET' && url.pathname.match(/^\/v\/([a-f0-9]{16,64})$/);
+  if (share) {
+    try {
+      const cfg = loadConfig(), db = openDb(cfg);
+      const row = db.prepare('SELECT payload FROM jobs WHERE id=?').get(share[1]);
+      const j = row ? JSON.parse(row.payload) : null;
+      if (!j || j.finish_status !== 'completed' || !String(j.captioned_url ?? '').startsWith('https://')) return sendText(res, 404, 'This video is not available.', 'text/plain; charset=UTF-8');
+      let dealer = null; try { dealer = clientDetails(clientFind(db, j.client ?? CLIENT_DEFAULT)); } catch { /* client removed */ }
+      return sendText(res, 200, sharePage({ vehicle: String(j.vehicle ?? ''), stock: j.stock, price: j.price ?? null, url: j.captioned_url }, dealer));
+    } catch (e) { console.error(e); return sendText(res, 500, 'Internal error', 'text/plain; charset=UTF-8'); }
+  }
   if (req.method === 'GET' && url.pathname === '/api/node/health') return send(res, 200, { ok: true, service: pkg.name, version: pkg.version, node: process.version });
   const api = url.pathname.match(/^\/api\/node\/([a-z_]+)$/)?.[1] ?? null;
   const isPage = api === null && url.pathname === '/' && ['GET', 'POST'].includes(req.method);
