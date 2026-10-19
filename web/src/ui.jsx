@@ -104,3 +104,22 @@ export const vehicleName = (v) => `${v.Year} ${v.Make} ${v.Model}`;
 export function Link({ href, children, className }) {
   return <a href={href} target="_blank" rel="noopener noreferrer" className={className}>{children}</a>;
 }
+
+/** Newest first by created_at (ISO dates sort as text). */
+export const newestFirst = (items) => [...items].sort((a, b) => String(b.created_at ?? '').localeCompare(String(a.created_at ?? '')));
+
+/** A list showing only its newest item, with the older ones behind "Show N older …" (noun: "video"). */
+export function LatestFirst({ items, render, noun }) {
+  const [all, setAll] = useState(false);
+  const older = items.length - 1;
+  return (
+    <>
+      {(all ? items : items.slice(0, 1)).map(render)}
+      {older > 0 && (
+        <button type="button" className="secondary small show-older" onClick={() => setAll(!all)}>
+          {all ? 'Show fewer' : `Show ${older} older ${noun}${older === 1 ? '' : 's'}`}
+        </button>
+      )}
+    </>
+  );
+}

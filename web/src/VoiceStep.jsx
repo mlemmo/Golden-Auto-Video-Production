@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
 import { StepContinue, StepHead, useStudio } from './App.jsx';
-import { DangerButton } from './ui.jsx';
+import { DangerButton, LatestFirst, newestFirst } from './ui.jsx';
 
 export default function VoiceStep() {
   const s = useStudio();
@@ -92,7 +92,7 @@ function VoiceStudio({ hidden }) {
     setSpend(false); setNewTake(false);
   }
   // Previews: the selected car's only (newest first), so the list matches what you are working on.
-  const previews = s.chosen ? s.narr.previews.filter((p) => p.stock === s.chosen.StockNumber) : s.narr.previews;
+  const previews = newestFirst(s.chosen ? s.narr.previews.filter((p) => p.stock === s.chosen.StockNumber) : s.narr.previews);
   return (
     <div id="voiceStudio" className="studio" hidden={hidden}>
       <ol className="mini-steps"><li>Copy the script from step 2.</li><li>Pick a voice and fix any word that sounds wrong by respelling it in the spoken text.</li><li>Create a preview, listen to all of it, then approve it.</li></ol>
@@ -119,7 +119,7 @@ function VoiceStudio({ hidden }) {
       </div>
       <div id="nPreviews" className="list">
         {s.chosen && !previews.length && <p>No voice previews for this car yet.</p>}
-        {previews.map((p) => <Preview key={p.id} p={p} act={act} />)}
+        <LatestFirst key={s.chosen?.StockNumber ?? 'all'} items={previews} noun="voice preview" render={(p) => <Preview key={p.id} p={p} act={act} />} />
       </div>
     </div>
   );

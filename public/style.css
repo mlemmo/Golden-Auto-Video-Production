@@ -114,3 +114,4 @@ button{font-size:15px}
 .client-details-open label:first-of-type{margin-top:17px}
 .client-details-open .client-facts{margin-bottom:12px}
 .step-waiting{color:var(--muted)}
+.show-older{justify-self:start}

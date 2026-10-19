@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { api } from './api.js';
 import { GENERATING, StepHead, useStudio } from './App.jsx';
-import { DangerButton, Link } from './ui.jsx';
+import { DangerButton, LatestFirst, Link, newestFirst } from './ui.jsx';
 
 function stage(j) {
   if (GENERATING.includes(j.status)) return ['Generating at Higgsfield…', 'busy'];
@@ -31,14 +31,14 @@ export default function Videos() {
       setTimeout(() => document.getElementById('captionEditor')?.scrollIntoView({ behavior: 'smooth' }), 0);
     } catch (e) { say(e.message, true); }
   };
-  const rows = s.jobs ?? [];
+  const rows = newestFirst(s.jobs ?? []);
   return (
     <section className={s.stepClass('videos')} id="videos">
       <StepHead id="videos" num="✓" title={<h2>Videos</h2>} sub={<p>Generation takes a few minutes; this list refreshes itself while a video is being made. Download finished videos promptly.</p>} />
       <div className="actions"><button type="button" className="secondary" id="refreshJobs" onClick={async () => { await s.loadJobs(); say('List refreshed.'); }}>Refresh list</button></div>
       <div id="jobs" className="list">
         {s.jobs && !rows.length && <p>No videos yet. Generate one in step 5.</p>}
-        {rows.map((j) => <Job key={j.id} j={j} say={say} openCaptions={openCaptions} />)}
+        <LatestFirst key={s.clients.current ?? ''} items={rows} noun="video" render={(j) => <Job key={j.id} j={j} say={say} openCaptions={openCaptions} />} />
       </div>
       {s.captionJob && <CaptionEditor draft={draft} setDraft={setDraft} />}
     </section>
