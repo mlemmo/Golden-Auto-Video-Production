@@ -4,25 +4,67 @@ import { api, upload } from './api.js';
 import { useClientState, useStudio } from './App.jsx';
 import { DangerButton, Link } from './ui.jsx';
 
-/** The Tools menu: a panel sliding in from the right (☰ Tools in the top bar); closes with ×, Esc or a click outside. */
-export default function Tools({ open, onClose }) {
+const TOOLS = [
+  ['spokespersons', 'Manage spokespersons', 'Upload new spokesperson images and manage saved ones'],
+  ['import', 'Import a vehicle (DealerCenter ZIP)', 'For cars not on the website yet'],
+  ['lipsync', 'Lip-sync builder', 'Only for the “ElevenLabs narration + lip-sync” voice method'],
+];
+
+/** ☰ Tools in the top bar: a dropdown of simple buttons, each opening its tool in a full-page window. */
+export function ToolsMenu() {
   const s = useStudio();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
   useEffect(() => {
     if (!open) return undefined;
-    const esc = (e) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', esc);
-    return () => document.removeEventListener('keydown', esc);
-  }, [open, onClose]);
+    const away = (e) => { if (!ref.current?.contains(e.target)) setOpen(false); };
+    const esc = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', away); document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', away); document.removeEventListener('keydown', esc); };
+  }, [open]);
   return (
-    <>
-    {open && <div className="drawer-backdrop" onClick={onClose} />}
-    <aside className={'drawer tools' + (open ? ' open' : '')} id="tools" aria-label="Tools" aria-hidden={!open}>
-      <div className="drawer-head"><h2>Tools</h2><button type="button" className="secondary small" id="toolsClose" onClick={onClose} aria-label="Close tools">×</button></div>
-      <Spokespersons />
-      <ZipImport key={'zip-' + (s.clients.current ?? '')} />
-      <LipsyncBuilder />
-    </aside>
-    </>
+    <div className="menu" ref={ref}>
+      <button type="button" className="secondary small" id="toolsMenu" aria-haspopup="menu" aria-expanded={open} aria-label="Tools" onClick={() => setOpen(!open)}>☰<span className="label-long"> Tools</span></button>
+      {open && (
+        <div className="menu-list" role="menu">
+          {TOOLS.map(([key, label, hint]) => (
+            <button key={key} type="button" role="menuitem" className="menu-item" id={'tool-' + key} onClick={() => { setOpen(false); s.setTool(key); }}>
+              <strong>{label}</strong><small>{hint}</small>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The open tool, filling the page (title, Close; Esc closes). All tools stay mounted while closed, so their forms
+ * and the lip-sync builder's automatic status checks keep going.
+ */
+export function ToolWindows() {
+  const s = useStudio();
+  const close = () => s.setTool(null);
+  useEffect(() => {
+    if (!s.tool) return undefined;
+    const esc = (e) => { if (e.key === 'Escape') s.setTool(null); };
+    document.addEventListener('keydown', esc);
+    document.body.style.overflow = 'hidden';
+    return () => { document.removeEventListener('keydown', esc); document.body.style.overflow = ''; };
+  }, [s.tool]); // eslint-disable-line react-hooks/exhaustive-deps
+  const title = TOOLS.find(([key]) => key === s.tool)?.[1] ?? '';
+  return (
+    <div className="tool-window" id="tools" role="dialog" aria-modal="true" aria-label={title} hidden={!s.tool}>
+      <div className="tool-window-head">
+        <h2>{title}</h2>
+        <button type="button" className="secondary" id="toolsClose" onClick={close}>Close</button>
+      </div>
+      <div className="tool-window-body">
+        <div hidden={s.tool !== 'spokespersons'}><Spokespersons /></div>
+        <div hidden={s.tool !== 'import'}><ZipImport key={'zip-' + (s.clients.current ?? '')} /></div>
+        <div hidden={s.tool !== 'lipsync'}><LipsyncBuilder /></div>
+      </div>
+    </div>
   );
 }
 
@@ -46,8 +88,7 @@ function Spokespersons() {
     });
   };
   return (
-    <details className="import-panel" id="spokespersonPanel" open={s.spokespersonPanelOpen} onToggle={(e) => s.setSpokespersonPanelOpen(e.currentTarget.open)}>
-      <summary>Spokespersons — upload new spokesperson images and manage saved ones</summary>
+    <section className="tool-section" id="spokespersonPanel">
       <div id="spokespersonList" className="spokesperson-list">
         {!lib.items.length && <p>No spokespersons yet. Upload the first one below.</p>}
         {lib.items.map((p) => (
@@ -74,7 +115,7 @@ function Spokespersons() {
         <p className="hint">Use a clear, well-lit, front-facing photo of one person from the waist up on a plain background. Describe what the image shows (apparent age, look, outfit). <strong>Only upload people who have agreed to appear in your ads.</strong></p>
         <button id="spokespersonButton" disabled={s.busy}>Upload spokesperson</button>
       </form>
-    </details>
+    </section>
   );
 }
 
@@ -94,7 +135,7 @@ function ZipImport() {
     });
   };
   return (
-    <details className="import-panel"><summary>Import a vehicle from a DealerCenter media ZIP — for cars not on the website yet</summary>
+    <section className="tool-section" id="importPanel">
       <form id="importForm" ref={formRef} onSubmit={submit}>
         <div className="import-grid">
           <label>Stock number<input name="stock" required /></label><label>Year<input name="year" type="number" required min={1900} max={2100} /></label>
@@ -107,7 +148,7 @@ function ZipImport() {
         <p className="hint">Enter current listing facts. <strong>ZIP photos alone do not supply pricing or availability.</strong> Maximum 50 MB; your host’s upload limit may be lower.</p>
         <button id="importButton" disabled={s.busy}>Import vehicle and photos</button>
       </form>
-    </details>
+    </section>
   );
 }
 
@@ -143,7 +184,7 @@ function LipsyncBuilder() {
     setSpend(false);
   };
   return (
-    <details className="import-panel" id="lipsyncPanel"><summary>Lip-sync builder — only for the “ElevenLabs narration + lip-sync” voice method</summary>
+    <section className="tool-section" id="lipsyncPanel">
       <p className="hint">Choose an approved voice preview and a completed silent video of the same car, price and length, then approve once. Lip-sync runs, captions are timed from the narration and the final video is rendered automatically. Shorter narration is padded with silence; longer narration must be revised.</p>
       <label>Approved voice preview
         <select id="nApproved" value={narrationId} onChange={(e) => setNarrationId(e.target.value)}>
@@ -186,6 +227,6 @@ function LipsyncBuilder() {
           );
         })}
       </div>
-    </details>
+    </section>
   );
 }

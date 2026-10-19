@@ -10,7 +10,7 @@ import VoiceStep from './VoiceStep.jsx';
 import LookStep from './LookStep.jsx';
 import GenerateStep from './GenerateStep.jsx';
 import Videos from './Videos.jsx';
-import Tools from './Tools.jsx';
+import { ToolsMenu, ToolWindows } from './Tools.jsx';
 
 const Studio = createContext(null);
 export const useStudio = () => useContext(Studio);
@@ -99,10 +99,9 @@ export default function App() {
   const [approve, setApprove] = useState(false);
   const [confirmCurrent, setConfirmCurrent] = useState(false);
   const [captionJob, setCaptionJob] = useState(null);
-  const [spokespersonPanelOpen, setSpokespersonPanelOpen] = useState(false);
-  const formStore = useRef({});
-  // The Tools menu (spokespersons, ZIP import, lip-sync builder) slides in from the right.
-  const [toolsOpen, setToolsOpen] = useState(false);   // per-client form values (useClientState, switchClient)
+  const formStore = useRef({});   // per-client form values (useClientState, switchClient)
+  // Tools: a dropdown in the top bar; each tool opens in a full-page window (null = none open).
+  const [tool, setTool] = useState(null);
   // Collapsed steps: only step 1 is open when the page loads.
   const [collapsed, setCollapsed] = useState(START_COLLAPSED);
   const toggleStep = useCallback((id) => setCollapsed((c) => ({ ...c, [id]: !c[id] })), []);
@@ -152,7 +151,6 @@ export default function App() {
   function showSpokespersons(lib, select = null) {
     setSpokespersons(lib);
     setSpokespersonId((keep) => select ?? (lib.items.some((s) => s.id === keep) ? keep : lib.default || ''));
-    if (!lib.items.length) setSpokespersonPanelOpen(true);
   }
 
   /** Back to "no vehicle selected" (after a refresh or a client switch). */
@@ -248,9 +246,9 @@ export default function App() {
     chosen, setChosen, duration, setDuration, script, setScript, voice, setVoice, style, setStyle, source, setSource,
     format, setFormat, spokespersonId, setSpokespersonId, approvedVoice, setApprovedVoice, approvedPreviews,
     sheetUrl, setSheetUrl, footage, setFootage, approve, setApprove, confirmCurrent, setConfirmCurrent,
-    captionJob, setCaptionJob, spokespersonPanelOpen, setSpokespersonPanelOpen, collapsed, toggleStep, openStep, closeStep, stepClass,
+    captionJob, setCaptionJob, tool, setTool, collapsed, toggleStep, openStep, closeStep, stepClass,
     busy, run, statuses, loadClients, loadInventory, loadJobs, loadSyncLog, refreshNarrations, showSpokespersons,
-    clearVehicle, switchClient, formStore, defaultScript, setToolsOpen,
+    clearVehicle, switchClient, formStore, defaultScript,
   };
 
   const signOut = async () => { try { await api('logout'); } finally { location.reload(); } };
@@ -262,7 +260,7 @@ export default function App() {
         <span className="topbar-brand">{client ? client.name : 'Golden Auto'} · Video Studio</span>
         <div className="header-actions">
           <Notifications />
-          <button type="button" className="secondary small" id="toolsMenu" aria-expanded={toolsOpen} aria-controls="tools" aria-label="Tools" onClick={() => setToolsOpen(!toolsOpen)}>☰<span className="label-long"> Tools</span></button>
+          <ToolsMenu />
           <button type="button" className="secondary small" id="logout" onClick={signOut}>Sign out</button>
         </div>
       </div>
@@ -291,7 +289,7 @@ export default function App() {
         </div>
         <Videos />
       </main>
-      <Tools open={toolsOpen} onClose={() => setToolsOpen(false)} />
+      <ToolWindows />
     </Studio.Provider>
   );
 }
