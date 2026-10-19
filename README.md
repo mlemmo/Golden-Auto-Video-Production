@@ -1,6 +1,6 @@
 # Golden Auto AI Car Videos
 
-New here? Read [docs/OVERVIEW.md](docs/OVERVIEW.md) first: what the website is for, who uses it and how a video is made.
+New here? Read [docs/OVERVIEW.md](docs/OVERVIEW.md) first: what the website is for, who uses it and how a video is made. Where files are and what to edit: [docs/STRUCTURE.md](docs/STRUCTURE.md).
 
 Golden Auto Video Studio: a private dashboard that turns a car dealer's inventory (Golden Auto, San Ramon, CA, and other client dealers) into 9:16 walk-around ads for Instagram and Facebook. A Node service with a React dashboard, a few Python helpers, SQLite, FFmpeg and whisper.cpp.
 
