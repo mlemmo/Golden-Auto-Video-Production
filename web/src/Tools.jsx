@@ -60,7 +60,7 @@ function Spokespersons() {
           <label>Image (JPG, PNG or WebP, at least 300×300)<input name="image" type="file" accept="image/jpeg,image/png,image/webp" required /></label>
         </div>
         <label>Description used in the video prompt<textarea name="description" rows={2} maxLength={300} required placeholder="trustworthy friendly adult man age 35–40, navy blazer over open-collar shirt" /></label>
-        <p className="hint">Use a clear, well-lit, front-facing photo of one person from the waist up on a plain background. Describe what the image shows (apparent age, look, outfit). Only upload people who have agreed to appear in your ads.</p>
+        <p className="hint">Use a clear, well-lit, front-facing photo of one person from the waist up on a plain background. Describe what the image shows (apparent age, look, outfit). <strong>Only upload people who have agreed to appear in your ads.</strong></p>
         <button id="spokespersonButton" disabled={s.busy}>Upload spokesperson</button>
       </form>
     </details>
@@ -93,7 +93,7 @@ function ZipImport() {
         </div>
         <label>Vehicle description<textarea name="description" rows={3} /></label>
         <label>DealerCenter media ZIP<input name="media" type="file" accept=".zip" required /></label>
-        <p className="hint">Enter current listing facts. ZIP photos alone do not supply pricing or availability. Maximum 50 MB; your host’s upload limit may be lower.</p>
+        <p className="hint">Enter current listing facts. <strong>ZIP photos alone do not supply pricing or availability.</strong> Maximum 50 MB; your host’s upload limit may be lower.</p>
         <button id="importButton" disabled={s.busy}>Import vehicle and photos</button>
       </form>
     </details>
@@ -144,8 +144,8 @@ function LipsyncBuilder() {
           {r.videos.map((v) => <option key={v.id} value={v.id}>{`${v.vehicle} · ${v.duration}s · ${v.id.slice(0, 8)}`}</option>)}
         </select>
       </label>
-      <label className="check"><input type="checkbox" id="nCurrent" checked={current} onChange={(e) => setCurrent(e.target.checked)} />I confirm this vehicle is available and the advertised price is current.</label>
-      <label className="check"><input type="checkbox" id="nSyncSpend" checked={spend} onChange={(e) => setSpend(e.target.checked)} />I approve one paid fal Sync Lipsync request at my account’s current rate; captions and the final render then run automatically.</label>
+      <label className="check note-important"><input type="checkbox" id="nCurrent" checked={current} onChange={(e) => setCurrent(e.target.checked)} />I confirm this vehicle is <b>available</b> and the advertised <b>price is current</b>.</label>
+      <label className="check note-important"><input type="checkbox" id="nSyncSpend" checked={spend} onChange={(e) => setSpend(e.target.checked)} />I approve <b>one paid fal Sync Lipsync request</b> at my account’s current rate; captions and the final render then run automatically.</label>
       <button type="button" id="nSubmitSync" disabled={pending} onClick={submit}>Build final video with lip-sync</button>
       <div id="nSyncJobs" className="list">
         {r.lipsync.map((job) => {

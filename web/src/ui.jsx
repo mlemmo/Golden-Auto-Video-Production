@@ -40,7 +40,7 @@ export function Popups() {
     <Toaster position={narrow ? 'bottom-center' : 'bottom-right'} gutter={10} containerStyle={{ bottom: 20 }}
       toastOptions={{
         className: 'popup',
-        style: { background: '#1b2230', color: '#f4f4f5', border: '1px solid #303744', borderRadius: 12, padding: '12px 14px', maxWidth: 440, fontSize: 14, lineHeight: 1.45, whiteSpace: 'pre-wrap', boxShadow: '0 10px 30px rgba(0,0,0,.45)' },
+        style: { background: '#1b2230', color: '#f4f4f5', border: '1px solid #303744', borderRadius: 12, padding: '12px 14px', maxWidth: 440, fontSize: 15, lineHeight: 1.45, whiteSpace: 'pre-wrap', boxShadow: '0 10px 30px rgba(0,0,0,.45)' },
         success: { iconTheme: { primary: '#7bd36a', secondary: '#1b2230' } },
         error: { iconTheme: { primary: '#ff7a6b', secondary: '#1b2230' }, style: { borderColor: '#c0503f', background: '#2a1b1d' } },
         loading: { iconTheme: { primary: '#efbd64', secondary: '#303744' } },

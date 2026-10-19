@@ -71,8 +71,8 @@ export default function GenerateStep() {
       <ul className="summary" id="summary">
         {rows.map(([k, v, ok]) => <li key={k} className={ok ? 'ok' : 'todo'}><b>{k}</b><span>{v}</span></li>)}
       </ul>
-      <label className="check" id="approveLabel" hidden={footage}><input type="checkbox" id="approve" checked={s.approve} onChange={(e) => s.setApprove(e.target.checked)} />I reviewed the vehicle facts and script and approve one paid Higgsfield generation at my account’s current rate.</label>
-      <label className="check"><input type="checkbox" id="confirmCurrent" checked={s.confirmCurrent} onChange={(e) => s.setConfirmCurrent(e.target.checked)} />I confirm the vehicle is available and its advertised price is current.</label>
+      <label className="check note-important" id="approveLabel" hidden={footage}><input type="checkbox" id="approve" checked={s.approve} onChange={(e) => s.setApprove(e.target.checked)} />I reviewed the vehicle facts and script and approve <b>one paid Higgsfield generation</b> at my account’s current rate.</label>
+      <label className="check note-important"><input type="checkbox" id="confirmCurrent" checked={s.confirmCurrent} onChange={(e) => s.setConfirmCurrent(e.target.checked)} />I confirm the vehicle is <b>available</b> and its advertised <b>price is current</b>.</label>
       <div className="actions">
         <button id="buildFootage" hidden={!footage} disabled={!c || s.busy} onClick={buildFootage}>Build video from my footage</button>
         <button id="generate" hidden={footage} disabled={!c || s.busy} onClick={generate}>Generate video</button>

@@ -18,8 +18,8 @@ export default function VoiceStep() {
           <option value="narration">ElevenLabs narration + lip-sync — older two-step method</option>
         </select>
       </label>
-      <p className="hint" id="elevenHint" hidden={!eleven}>You make a voice preview below, listen to it and approve it. Seedance uses it as the voice, wording and pace to follow, and speaks it in the video so her lips match. Check names and numbers in the finished video.</p>
-      <p className="hint" id="voiceHint" hidden={s.voice !== 'native'}>Seedance creates the voice inside the video. Quick, but it may change or mispronounce words, and the voice differs between videos.</p>
+      <p className="hint" id="elevenHint" hidden={!eleven}>You make a voice preview below, listen to it and approve it. Seedance uses it as the voice, wording and pace to follow, and speaks it in the video so her lips match. <strong>Check names and numbers in the finished video.</strong></p>
+      <p className="hint" id="voiceHint" hidden={s.voice !== 'native'}>Seedance creates the voice inside the video. Quick, but <strong>it may change or mispronounce words</strong>, and the voice differs between videos.</p>
       <p className="hint" id="narrationHint" hidden={s.voice !== 'narration'}>Seedance films a silent video; afterwards your approved voice preview is added by lip-sync (Tools → Lip-sync builder) and the final video is built automatically.</p>
       <VoiceStudio hidden={s.voice === 'native'} />
       <label id="approvedVoiceLabel" hidden={!eleven}>Approved voice preview to use for this video
@@ -107,7 +107,7 @@ function VoiceStudio({ hidden }) {
       </label>
       <label>Spoken text — respell words here to fix pronunciation (e.g. San Ruh-mone)<textarea id="nText" rows={4} maxLength={1200} value={text} onChange={(e) => setText(e.target.value)} /></label>
       <label>Caption text — what appears on screen; keep normal spelling<textarea id="nCaptions" rows={3} maxLength={1200} value={captions} onChange={(e) => setCaptions(e.target.value)} /></label>
-      <label className="check"><input type="checkbox" id="nPreviewSpend" checked={spend} onChange={(e) => setSpend(e.target.checked)} />I approve one paid ElevenLabs voice preview at my account’s current rate.</label>
+      <label className="check note-important"><input type="checkbox" id="nPreviewSpend" checked={spend} onChange={(e) => setSpend(e.target.checked)} />I approve <b>one paid ElevenLabs voice preview</b> at my account’s current rate.</label>
       <label className="check"><input type="checkbox" id="nNewTake" checked={newTake} onChange={(e) => setNewTake(e.target.checked)} />Make another take even if an identical preview already exists.</label>
       <div className="actions">
         <button type="button" id="nCreatePreview" disabled={pending} onClick={createPreview}>Create voice preview</button>
@@ -137,7 +137,7 @@ function Preview({ p, act }) {
       {p.status === 'ready' && p.audio_url && <audio controls preload="none" src={p.audio_url} />}
       {p.status === 'ready' && p.audio_url && p.too_long && <p>Too long for the video. Shorten the script and create a new preview.</p>}
       {p.status === 'ready' && p.audio_url && !p.too_long && !p.approved && (
-        <label className="check"><input type="checkbox" checked={reviewed} onChange={(e) => setReviewed(e.target.checked)} />I listened to the whole preview and every word, number and name sounds right.</label>
+        <label className="check note-important"><input type="checkbox" checked={reviewed} onChange={(e) => setReviewed(e.target.checked)} />I listened to the whole preview and every word, number and name sounds right.</label>
       )}
       <div className="actions">
         {p.status === 'ready' && p.audio_url && !p.too_long && !p.approved && (
