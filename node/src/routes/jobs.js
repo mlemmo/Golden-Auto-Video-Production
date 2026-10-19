@@ -10,6 +10,7 @@ import { speechScript, speechWordCount } from '../lib/speech.js';
 import { assetSheet, importMediaZip } from '../lib/media.js';
 import { spokespersonApi, spokespersonFind } from '../lib/spokespersons.js';
 import { enrich, referenceImageUrl, uploadReference, generateJob, pollJob, jobsForClient, goldenJobDelete, goldenFootageBuild } from '../lib/jobs.js';
+import { withThumbs } from '../lib/thumbs.js';
 
 const sha256 = (s) => createHash('sha256').update(s).digest('hex');
 const SPOKESPERSON = ['spokesperson_list', 'spokesperson_upload', 'spokesperson_default', 'spokesperson_delete'];
@@ -54,7 +55,7 @@ export const jobRoutes = {
     save(db, key, a); save(db, 'import:' + v.StockNumber, v);
     const imported = { ...v };
     try { save(db, 'sheet:' + v.Vin, await assetSheet(v, cfg)); } catch (e) { imported.sheet_error = e.message; }
-    return { vehicles: a.vehicles, imported };
+    return { vehicles: withThumbs(cfg, a).vehicles, imported };
   },
   // Uploads both references to Higgsfield storage (no generation is submitted).
   references: async ({ cfg, db, body }) => {

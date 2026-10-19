@@ -217,9 +217,12 @@ function Inventory({ say }) {
       {hidden > 0 && <small>{hidden} vehicle{hidden > 1 ? 's' : ''} no longer in DealerCenter hidden; their videos are kept.</small>}
       {list.filter((v) => v.active !== false).map((v) => (
         <button key={v.StockNumber} className={'vehicle' + (s.chosen?.StockNumber === v.StockNumber ? ' active' : '')} data-stock={v.StockNumber} onClick={() => select(v.StockNumber)}>
-          <span className="price">{price(v)}</span>
-          <strong>{`${v.Year} ${v.Make} ${v.Model}`}</strong>
-          <small>{`${v.Trim} · ${miles(v)} miles · #${v.StockNumber}${v.photos_pending ? ' · photos importing…' : ''}`}</small>
+          {v.thumb ? <img className="thumb" src={v.thumb} alt="" loading="lazy" /> : <span className="thumb" aria-hidden="true" />}
+          <span className="vehicle-text">
+            <span className="price">{price(v)}</span>
+            <strong>{`${v.Year} ${v.Make} ${v.Model}`}</strong>
+            <small>{`${v.Trim} · ${miles(v)} miles · #${v.StockNumber}${v.photos_pending ? ' · photos importing…' : ''}`}</small>
+          </span>
         </button>
       ))}
     </div>

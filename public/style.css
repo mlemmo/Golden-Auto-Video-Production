@@ -78,3 +78,7 @@ main>.client-panel{margin-top:0}
 .client-facts dt{color:var(--muted)}.client-facts dd{margin:0}.client-facts small{color:var(--muted)}
 .client-details .studio{margin-top:6px}
 @media(max-width:600px){.client-facts{grid-template-columns:1fr;gap:0}.client-facts dd{margin-bottom:6px}}
+/* Car cards: a small photo of the whole car beside the details */
+.vehicle{display:flex;gap:14px;align-items:center}
+.vehicle .thumb{flex:none;width:104px;height:78px;object-fit:cover;border-radius:8px;background:#111722;border:1px solid var(--line)}
+.vehicle-text{flex:1;min-width:0}
