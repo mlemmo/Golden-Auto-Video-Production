@@ -1,7 +1,7 @@
 // Step 2: the script the spokesperson says, drafted from the listing, and its spoken length.
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
-import { StepHead, useStudio } from './App.jsx';
+import { StepContinue, StepHead, useStudio } from './App.jsx';
 import { miles, price, vehicleName } from './ui.jsx';
 
 export default function ScriptStep() {
@@ -24,6 +24,7 @@ export default function ScriptStep() {
         <textarea id="script" rows={5} maxLength={600} placeholder="Choose a vehicle to draft its script." value={s.script} onChange={(e) => s.setScript(e.target.value)} />
       </label>
       <SpokenLength />
+      <StepContinue from="stepScript" to="stepVoice" label="Continue to step 3: Voice" ready={!!c && s.script.trim() !== ''} />
     </section>
   );
 }

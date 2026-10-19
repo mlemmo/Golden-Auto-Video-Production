@@ -1,7 +1,7 @@
 // Step 4: video source, spokesperson, style, publish format and the car photos sent to the video model.
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
-import { StepHead, useStudio } from './App.jsx';
+import { StepContinue, StepHead, useStudio } from './App.jsx';
 
 export default function LookStep() {
   const s = useStudio();
@@ -56,6 +56,7 @@ export default function LookStep() {
       </label>
       <p className="hint" id="formatHint">{s.format === 'facebook_feed' ? 'Seedance renders a 3:4 video; it is cropped to 4:5 when finished.' : 'Generated in this shape directly. Check captions and face placement before posting.'}</p>
       <div id="aiSheet" hidden={footage}><AssetSheet /></div>
+      <StepContinue from="stepLook" to="stepGenerate" label="Continue to step 5: Generate" ready={!!s.chosen} />
     </section>
   );
 }

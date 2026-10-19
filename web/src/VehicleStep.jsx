@@ -17,7 +17,7 @@ export default function VehicleStep() {
   const hidden = (s.inventory?.vehicles ?? []).filter((v) => v.active === false).length;
   return (
     <section className={s.stepClass('stepVehicle')} id="stepVehicle">
-      <StepHead id="stepVehicle" num="1" title={<h2>Choose a vehicle</h2>} sub={<p id="syncTime">{inventoryLine(s.inventory)}</p>}
+      <StepHead id="stepVehicle" num="1" title={<h2>Choose a vehicle</h2>} sub={<p id="syncTime">{s.chosen ? <b className="selected-car">Selected: {s.chosen.Year} {s.chosen.Make} {s.chosen.Model} · </b> : null}{inventoryLine(s.inventory)}</p>}
         aside={hidden > 0 && <p className="hidden-note">{hidden} vehicle{hidden > 1 ? 's' : ''} no longer listed {hidden > 1 ? 'are' : 'is'} hidden; {hidden > 1 ? 'their videos are' : 'its videos are'} kept.</p>} />
       {c?.id === 'golden-auto' && <SyncLog />}
       <SyncButton say={say} />
@@ -224,7 +224,7 @@ function Inventory({ say }) {
       s.refreshNarrations().catch((e) => s.statuses.studio[1](e.message, true));
       say(v.sheet_error || `${v.Year} ${v.Make} ${v.Model} selected. Continue with the script in step 2.`);
       // Steps are stacked: bring step 2 into view once the car is loaded.
-      s.openStep('stepScript');
+      s.closeStep('stepVehicle'); s.openStep('stepScript');
       setTimeout(() => document.getElementById('stepScript')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
     } catch (e) { say(e.message, true); }
   });

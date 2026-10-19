@@ -101,3 +101,8 @@ button{font-size:15px}
 .panel.collapsed > :not(.step-head){display:none!important}
 .panel.collapsed .step-head{margin-bottom:0}
 @media(max-width:700px){.step-head .step-toggle{margin-left:auto}}
+/* End of a step: "Looks good" and Continue */
+.step-continue{display:flex;gap:16px;align-items:center;justify-content:flex-end;flex-wrap:wrap;margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+.step-continue label.check{margin:0;font-size:15px;color:#f4f4f5;font-weight:600}
+.step-continue label.check input{display:inline;width:auto;margin-right:8px}
+.selected-car{color:var(--gold)}

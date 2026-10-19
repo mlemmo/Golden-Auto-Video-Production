@@ -2,7 +2,7 @@
 // listens to all of it and approves it; Seedance then follows that voice, wording and pace.
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
-import { StepHead, useStudio } from './App.jsx';
+import { StepContinue, StepHead, useStudio } from './App.jsx';
 import { DangerButton } from './ui.jsx';
 
 export default function VoiceStep() {
@@ -29,6 +29,7 @@ export default function VoiceStep() {
           {s.approvedPreviews.map((p) => <option key={p.id} value={p.id}>{`${p.duration}s · ${(p.text || '').slice(0, 70)}… · ${p.id.slice(0, 8)}`}</option>)}
         </select>
       </label>
+      <StepContinue from="stepVoice" to="stepLook" label="Continue to step 4: Look" ready={!!s.chosen} />
     </section>
   );
 }

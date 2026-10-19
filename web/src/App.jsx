@@ -36,7 +36,27 @@ export function StepHead({ id, num, title, sub, aside }) {
     </div>
   );
 }
-const COLLAPSED_KEY = 'ga-collapsed-steps';
+/**
+ * End of a step without its own final button: "Looks good" and Continue, which closes this step and opens the next.
+ * ready: false while the step cannot be confirmed yet (e.g. no car chosen).
+ */
+export function StepContinue({ from, to, label, ready = true }) {
+  const s = useStudio();
+  const [ok, setOk] = useState(false);
+  useEffect(() => { setOk(false); }, [s.chosen?.StockNumber]);
+  const go = () => {
+    s.closeStep(from); s.openStep(to);
+    setTimeout(() => document.getElementById(to)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
+  };
+  return (
+    <div className="step-continue">
+      <label className="check"><input type="checkbox" checked={ok} disabled={!ready} onChange={(e) => setOk(e.target.checked)} />Looks good</label>
+      <button type="button" disabled={!ready || !ok} onClick={go}>{label}</button>
+    </div>
+  );
+}
+// Steps open when the page loads: only step 1; the others open as the work reaches them.
+const START_COLLAPSED = { stepScript: true, stepVoice: true, stepLook: true, stepGenerate: true, videos: true };
 
 export default function App() {
   // Server data.
@@ -62,11 +82,11 @@ export default function App() {
   const [confirmCurrent, setConfirmCurrent] = useState(false);
   const [captionJob, setCaptionJob] = useState(null);
   const [spokespersonPanelOpen, setSpokespersonPanelOpen] = useState(false);
-  // Collapsed steps, remembered in this browser (a convenience; everything works without it).
-  const [collapsed, setCollapsed] = useState(() => { try { return JSON.parse(localStorage.getItem(COLLAPSED_KEY)) || {}; } catch { return {}; } });
-  useEffect(() => { try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify(collapsed)); } catch { /* not stored */ } }, [collapsed]);
+  // Collapsed steps: only step 1 is open when the page loads.
+  const [collapsed, setCollapsed] = useState(START_COLLAPSED);
   const toggleStep = useCallback((id) => setCollapsed((c) => ({ ...c, [id]: !c[id] })), []);
   const openStep = useCallback((id) => setCollapsed((c) => (c[id] ? { ...c, [id]: false } : c)), []);
+  const closeStep = useCallback((id) => setCollapsed((c) => (c[id] ? c : { ...c, [id]: true })), []);
   const stepClass = (id) => 'panel' + (collapsed[id] ? ' collapsed' : '');
   // One action at a time, as before: a second click while one runs is ignored.
   const busyRef = useRef(false);
@@ -188,7 +208,7 @@ export default function App() {
     chosen, setChosen, duration, setDuration, script, setScript, voice, setVoice, style, setStyle, source, setSource,
     format, setFormat, spokespersonId, setSpokespersonId, approvedVoice, setApprovedVoice, approvedPreviews,
     sheetUrl, setSheetUrl, footage, setFootage, approve, setApprove, confirmCurrent, setConfirmCurrent,
-    captionJob, setCaptionJob, spokespersonPanelOpen, setSpokespersonPanelOpen, collapsed, toggleStep, openStep, stepClass,
+    captionJob, setCaptionJob, spokespersonPanelOpen, setSpokespersonPanelOpen, collapsed, toggleStep, openStep, closeStep, stepClass,
     busy, run, statuses, loadClients, loadInventory, loadJobs, loadSyncLog, refreshNarrations, showSpokespersons,
     clearVehicle, showClientData, defaultScript,
   };
