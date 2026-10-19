@@ -1,5 +1,5 @@
 // Step 1: the client (dealer) and its inventory. Each client has its own inventory, voice previews and videos.
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from './api.js';
 import { useStudio } from './App.jsx';
 import { miles, price } from './ui.jsx';
@@ -14,9 +14,12 @@ export default function VehicleStep() {
   const s = useStudio();
   const [, say] = s.statuses.vehicle;
   const c = s.client;
+  const hidden = (s.inventory?.vehicles ?? []).filter((v) => v.active === false).length;
   return (
     <section className="panel" id="stepVehicle">
-      <div className="step-head"><span className="step-num">1</span><div><h2>Choose a vehicle</h2><p id="syncTime">{inventoryLine(s.inventory)}</p></div></div>
+      <div className="step-head"><span className="step-num">1</span><div><h2>Choose a vehicle</h2><p id="syncTime">{inventoryLine(s.inventory)}</p></div>
+        {hidden > 0 && <p className="hidden-note">{hidden} vehicle{hidden > 1 ? 's' : ''} no longer listed {hidden > 1 ? 'are' : 'is'} hidden; {hidden > 1 ? 'their videos are' : 'its videos are'} kept.</p>}
+      </div>
       {c?.id === 'golden-auto' && <SyncLog />}
       <SyncButton say={say} />
       <Inventory say={say} />
@@ -196,8 +199,21 @@ function SyncButton({ say }) {
 
 function Inventory({ say }) {
   const s = useStudio();
-  const list = s.inventory?.vehicles ?? [];
-  const hidden = list.filter((v) => v.active === false).length;
+  const active = (s.inventory?.vehicles ?? []).filter((v) => v.active !== false);
+  // Three full rows of cars; the rest behind "Show all" (the number per row follows the screen width).
+  const listRef = useRef(null);
+  const [perRow, setPerRow] = useState(4);
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    const el = listRef.current;
+    if (!el) return undefined;
+    const measure = () => setPerRow(Math.max(1, getComputedStyle(el).gridTemplateColumns.split(' ').filter(Boolean).length));
+    measure();
+    const ro = new ResizeObserver(measure); ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  useEffect(() => { setExpanded(false); }, [s.clients.current]);
+  const limit = perRow * 3, shown = expanded ? active : active.slice(0, limit);
   const select = (stock) => s.run(async () => {
     say('Reading vehicle details and checking its highest listed price…');
     try {
@@ -213,9 +229,9 @@ function Inventory({ say }) {
     } catch (e) { say(e.message, true); }
   });
   return (
-    <div id="inventory" className="vehicle-list">
-      {hidden > 0 && <small>{hidden} vehicle{hidden > 1 ? 's' : ''} no longer in DealerCenter hidden; their videos are kept.</small>}
-      {list.filter((v) => v.active !== false).map((v) => (
+    <>
+    <div id="inventory" className="vehicle-list" ref={listRef}>
+      {shown.map((v) => (
         <button key={v.StockNumber} className={'vehicle' + (s.chosen?.StockNumber === v.StockNumber ? ' active' : '')} data-stock={v.StockNumber} onClick={() => select(v.StockNumber)}>
           {v.thumb ? <img className="thumb" src={v.thumb} alt="" loading="lazy" /> : <span className="thumb" aria-hidden="true" />}
           <span className="vehicle-text">
@@ -226,5 +242,11 @@ function Inventory({ say }) {
         </button>
       ))}
     </div>
+    {active.length > limit && (
+      <button type="button" className="secondary show-more" id="showAllCars" onClick={() => setExpanded(!expanded)}>
+        {expanded ? 'Show fewer' : `Show all ${active.length} cars`}
+      </button>
+    )}
+    </>
   );
 }
