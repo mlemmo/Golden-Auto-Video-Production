@@ -278,10 +278,10 @@ export default function App() {
         <span className="topbar-brand">{client ? client.name : 'Golden Auto'} · Video Studio</span>
         <div className="header-actions">
           <button type="button" className="secondary small" id="libraryOpen" aria-label="Video library" onClick={() => setLibraryOpen(true)}>▶<span className="label-long"> Library</span></button>
-          <Notifications />
           {!readOnly && <ToolsMenu />}
           {isAdmin && <AdminMenu />}
           <AccountMenu onSignOut={signOut} />
+          <Notifications />
         </div>
       </div>
       {boot.banner && <div className="staging-banner">{boot.banner}</div>}

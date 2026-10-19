@@ -18,7 +18,7 @@ export function useStatus(section) {
   const say = useCallback((text, kind = false) => {
     const id = 'status-' + section;
     if (!text) toast.dismiss(id);
-    else if (kind === 'warn') toast(text, { id, duration: 8000, icon: '⚠️', className: 'popup popup-warn' });
+    else if (kind === 'warn') { toast(text, { id, duration: 8000, icon: '⚠️', className: 'popup popup-warn' }); addNotice(section, text, renderNotice, 'warn'); }
     else if (kind) { toast.dismiss(id); addNotice(section, text, renderNotice); }
     else if (/…$/.test(text)) toast.loading(text, { id, duration: Infinity });
     else toast.success(text, { id, duration: 5000 });
@@ -60,9 +60,12 @@ export function Popups() {
 export function Notifications() {
   const notices = useNotices();
   const [open, setOpen] = useState(false);
+  // Green: nothing to review; yellow: warnings only; red: at least one failure.
+  const state = notices.some((n) => n.level === 'error') ? 'error' : notices.length ? 'warn' : 'clear';
+  const label = { error: 'Notifications: failures to review', warn: 'Notifications: warnings', clear: 'Notifications: all clear' }[state];
   return (
     <div className="notices">
-      <button type="button" className={'secondary small' + (notices.length ? ' has-notices' : '')} id="notifications" aria-label="Notifications" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <button type="button" className={'secondary small notices-' + state} id="notifications" aria-label={label} title={label} aria-expanded={open} onClick={() => setOpen(!open)}>
         <span aria-hidden="true" className="label-short">🔔</span><span className="label-long">Notifications</span>{notices.length ? <span className="notice-count">{notices.length}</span> : null}
       </button>
       {open && (
@@ -70,9 +73,9 @@ export function Notifications() {
           <div className="notices-head"><strong>Notifications</strong>
             {notices.length > 0 && <button type="button" className="secondary small" onClick={dismissAll}>Dismiss all</button>}
           </div>
-          {!notices.length && <p>No failures to review.</p>}
+          {!notices.length && <p>All clear: no failures or warnings.</p>}
           {notices.map((n) => (
-            <div key={n.id} className="notice-item">
+            <div key={n.id} className={'notice-item notice-' + (n.level ?? 'error')}>
               <small>{SECTION_NAME[n.section] ?? n.section} · {n.at.toLocaleTimeString()}{n.count > 1 ? ` · ×${n.count}` : ''}</small>
               <p>{n.text}</p>
               <button type="button" className="secondary small" onClick={() => dismissNotice(n.id)}>Dismiss</button>

@@ -183,3 +183,9 @@ a.button.secondary-link{background:#262d3a;color:#fff;border:1px solid var(--lin
 .share h1{font-size:28px;margin:0}.share-price{color:var(--gold);font-size:22px;font-weight:800;margin:0}
 .share video{width:100%;max-height:75vh;border-radius:14px;background:#000;box-shadow:0 20px 60px rgba(0,0,0,.5)}
 .share .actions{justify-content:center;margin-top:6px}
+/* Notifications button: green all clear, yellow warnings, red failures */
+#notifications.notices-clear{background:#1f3a24;border-color:#3f7a45;color:#c8f0c6}
+#notifications.notices-warn{background:#3a321b;border-color:#8a6a1f;color:#ffe2a0}
+#notifications.notices-error{background:#3a1f1f;border-color:#c0503f;color:#ffd7d2}
+#notifications.notices-warn .notice-count{background:#c98500;color:#151a23}
+.notice-item.notice-warn p{color:#ffe2a0}
