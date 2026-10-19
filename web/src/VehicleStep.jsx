@@ -96,23 +96,25 @@ function ClientBar() {
   );
 }
 
-/** "View-edit details": the client's import information (read only) and the dealer details used in scripts. */
+/** "View details": the client's import information and dealer details (read only), with Edit details inside. */
 function ClientDetails() {
   const s = useStudio();
   const [, say] = s.statuses.vehicle;
   const c = s.client, a = c.analysis || {}, d = c.script_details || {};
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
   const fromDetails = () => ({ name: d.name || '', city: d.city || '', website: d.website || '', website_spoken: d.website_spoken || '', phone: d.phone || '' });
   const [form, setForm] = useState(fromDetails);
-  useEffect(() => { if (!open) setForm(fromDetails()); }, [JSON.stringify(d), open]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!editing) setForm(fromDetails()); }, [JSON.stringify(d), editing]); // eslint-disable-line react-hooks/exhaustive-deps
   const field = (k) => ({ value: form[k], onChange: (e) => setForm({ ...form, [k]: e.target.value }) });
   const update = (client) => s.setClients((cl) => ({ ...cl, items: cl.items.map((x) => (x.id === client.id ? client : x)) }));
+  const toggle = () => { setOpen(!open); setEditing(false); };
   const save = (e) => {
     e.preventDefault();
     s.run(async () => {
       try {
         update((await api('client_details', form)).client);
-        setOpen(false);
+        setEditing(false);
         say('Dealer details saved. Reopen a vehicle to redraft its script with them.');
       } catch (err) { say(err.message, true); }
     });
@@ -124,10 +126,10 @@ function ClientDetails() {
   return (
     <>
       <div className="client-details-toggle">
-        <button type="button" className="secondary small" id="editDetails" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Close details' : 'View-edit details'}</button>
+        <button type="button" className="secondary small" id="viewDetails" aria-expanded={open} onClick={toggle}>{open ? 'Hide details' : 'View details'}</button>
       </div>
       {open && (
-        <form id="dealerForm" className="studio client-details-open" onSubmit={save}>
+        <div className="studio client-details-open" id="clientDetails">
           <dl className="client-facts">
             <dt>Website</dt><dd>{c.website.replace('https://', '')}</dd>
             <dt>Inventory import</dt><dd>{METHOD_TITLE[a.best] || 'not checked yet'}{a.note ? ' — ' + a.note : ''}</dd>
@@ -136,22 +138,33 @@ function ClientDetails() {
             {a.signals?.length > 0 && <><dt>What the website shows</dt><dd>{a.signals.join('; ')}</dd></>}
             {a.options?.length > 0 && <><dt>Import options</dt><dd>{a.options.map((o) => o.title).join(' · ')} <small>(best first)</small></dd></>}
             {a.checked_at && <><dt>Website checked</dt><dd>{new Date(a.checked_at).toLocaleString()}</dd></>}
+            <dt>In scripts</dt><dd id="dealerSummary">{`${d.name}${d.city ? ' in ' + d.city : ''} · ${d.website}`} <small>(said “{d.website_spoken}”)</small></dd>
+            <dt>Phone</dt><dd>{d.phone || <small>not set</small>}</dd>
           </dl>
-          <h3>Dealer details in scripts</h3>
-          <div className="import-grid">
-            <label>Dealer name in scripts<input name="name" maxLength={80} required autoComplete="off" {...field('name')} /></label>
-            <label>City<input name="city" maxLength={60} autoComplete="off" {...field('city')} /></label>
-            <label>Website as shown<input name="website" maxLength={100} required placeholder="example.com" autoComplete="off" {...field('website')} /></label>
-            <label>Website as spoken<input name="website_spoken" maxLength={120} placeholder="example dot com" autoComplete="off" {...field('website_spoken')} /></label>
-            <label>Phone (optional)<input name="phone" type="tel" maxLength={25} placeholder="925-555-1234" autoComplete="off" {...field('phone')} /></label>
-          </div>
-          <p className="hint">Scripts say “here at <i>name</i> in <i>city</i>” and “Book your test drive today at <i>website</i>”; the voice says the website as written in “as spoken”. The phone number is saved with the dealer for now; it is not used in scripts. Reopen a vehicle after saving to redraft its script.</p>
-          <div className="actions">
-            <button id="dealerSave" disabled={s.busy}>Save details</button>
-            <button type="button" className="secondary" id="dealerCancel" onClick={() => setOpen(false)}>Close</button>
-            {c.id !== 'golden-auto' && <button type="button" className="secondary" id="clientAnalyze" disabled={s.busy} onClick={analyze}>Analyze website again</button>}
-          </div>
-        </form>
+          {!editing && (
+            <div className="actions">
+              <button type="button" className="secondary small" id="editDetails" onClick={() => setEditing(true)}>Edit details</button>
+              {c.id !== 'golden-auto' && <button type="button" className="secondary small" id="clientAnalyze" disabled={s.busy} onClick={analyze}>Analyze website again</button>}
+            </div>
+          )}
+          {editing && (
+            <form id="dealerForm" onSubmit={save}>
+              <h3>Dealer details in scripts</h3>
+              <div className="import-grid">
+                <label>Dealer name in scripts<input name="name" maxLength={80} required autoComplete="off" {...field('name')} /></label>
+                <label>City<input name="city" maxLength={60} autoComplete="off" {...field('city')} /></label>
+                <label>Website as shown<input name="website" maxLength={100} required placeholder="example.com" autoComplete="off" {...field('website')} /></label>
+                <label>Website as spoken<input name="website_spoken" maxLength={120} placeholder="example dot com" autoComplete="off" {...field('website_spoken')} /></label>
+                <label>Phone (optional)<input name="phone" type="tel" maxLength={25} placeholder="925-555-1234" autoComplete="off" {...field('phone')} /></label>
+              </div>
+              <p className="hint">Scripts say “here at <i>name</i> in <i>city</i>” and “Book your test drive today at <i>website</i>”; the voice says the website as written in “as spoken”. The phone number is saved with the dealer for now; it is not used in scripts. Reopen a vehicle after saving to redraft its script.</p>
+              <div className="actions">
+                <button id="dealerSave" disabled={s.busy}>Save details</button>
+                <button type="button" className="secondary" id="dealerCancel" onClick={() => setEditing(false)}>Cancel</button>
+              </div>
+            </form>
+          )}
+        </div>
       )}
     </>
   );

@@ -106,9 +106,10 @@ button{font-size:15px}
 .step-continue label.check{margin:0;font-size:15px;color:#f4f4f5;font-weight:600}
 .step-continue label.check input{display:inline;width:auto;margin-right:8px}
 .selected-car{color:var(--gold)}
-/* Client panel: menu and "View-edit details"; the details open below across the panel */
+/* Client panel: menu and "View details"; the details open below across the panel */
 .client-details-toggle{display:flex;align-items:flex-end;height:100%}
 .client-panel .client-details-open{grid-column:1/-1;margin-top:14px}
 .client-details-open h3{margin:6px 0 0}
 @media(max-width:900px){.client-details-toggle{height:auto}}
 .client-details-open label:first-of-type{margin-top:17px}
+.client-details-open .client-facts{margin-bottom:12px}
