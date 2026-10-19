@@ -4,6 +4,7 @@ import { api, upload } from './api.js';
 import { useClientState, useStudio } from './App.jsx';
 import { DangerButton, Link } from './ui.jsx';
 import { PasswordTool, UsersTool } from './Accounts.jsx';
+import { UsageTool } from './Usage.jsx';
 
 // Everyday tools (Tools menu) and the admin's (Admin menu). Each opens in a full-page window.
 const TOOLS = [
@@ -11,6 +12,7 @@ const TOOLS = [
   ['lipsync', 'Lip-sync builder', 'Only for the “ElevenLabs narration + lip-sync” voice method'],
 ];
 const ADMIN_TOOLS = [
+  ['usage', 'Usage dashboard', 'Who did what, paid activity and estimated spend'],
   ['users', 'Manage users', 'Add accounts, set roles and which clients each person may use'],
   ['spokespersons', 'Manage spokespersons', 'Upload new spokesperson images and manage saved ones'],
 ];
@@ -69,6 +71,7 @@ export function ToolWindows() {
         <button type="button" className="secondary" id="toolsClose" onClick={close}>Close</button>
       </div>
       <div className="tool-window-body">
+        {s.isAdmin && <div hidden={s.tool !== 'usage'}><UsageTool active={s.tool === 'usage'} /></div>}
         {s.isAdmin && <div hidden={s.tool !== 'users'}><UsersTool active={s.tool === 'users'} /></div>}
         <div hidden={s.tool !== 'account'}><PasswordTool /></div>
         {s.isAdmin && <div hidden={s.tool !== 'spokespersons'}><Spokespersons /></div>}

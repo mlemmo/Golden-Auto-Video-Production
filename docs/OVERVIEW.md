@@ -32,7 +32,7 @@ people under Admin → Manage users and chooses their role and which clients the
 | User | Makes videos for their assigned clients, including paid steps |
 | Viewer | Sees cars and downloads finished videos for their clients; changes nothing |
 
-Every paid video and voice preview records who approved it. Each site (production, staging) has its own accounts;
+Every paid video and voice preview records who approved it. Admins see who did what under Admin → Usage dashboard (paid activity per day, estimated spend per user and client, sign-ins, recent activity). Each site (production, staging) has its own accounts;
 on a site with no accounts yet, the first sign-in with an email and the old shared dashboard password creates the
 first admin.
 

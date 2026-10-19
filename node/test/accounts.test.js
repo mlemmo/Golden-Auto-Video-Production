@@ -102,3 +102,28 @@ test('accounts: first admin, users and viewers, per-client access, management', 
     server.close(); closeDb(cfg); rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('usage: actions and sign-ins recorded; admin-only report with history', async () => {
+  const dir = mkdtempSync(tmpdir() + '/ga-use-');
+  const cfg = { data_dir: dir, public_base_url: 'https://site.example.com:4343', password_hash: bcrypt.hashSync('old shared password', 4) };
+  setConfig(cfg);
+  const db = openDb(cfg);
+  db.exec('CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, fingerprint TEXT UNIQUE, payload TEXT NOT NULL)');
+  db.prepare('INSERT INTO jobs VALUES (?,?,?)').run('J1', 'f1', JSON.stringify({ id: 'J1', created_at: new Date(Date.now() - 86400000).toISOString(), duration: 30, stock: 'S1', vehicle: 'OLD CAR' }));
+  const base = await listen(server);
+  try {
+    const admin = browser(base);
+    await admin.signIn('boss@example.com', 'old shared password');
+    await browser(base).signIn('boss@example.com', 'wrong password');
+    await admin.post('user_create', { email: 'v@example.com', password: 'viewer password', role: 'viewer', clients: ['golden-auto'] });
+    const r = (await admin.post('usage', { days: 30 })).body;
+    assert.equal(r.totals.generate, 1, 'video made before tracking is imported');
+    assert.equal(r.totals.cost, 9.71, '30-second video estimated at $9.71');
+    assert.ok(r.users.some((u) => u.email === 'before accounts' && u.generate === 1));
+    assert.deepEqual([r.totals.sign_ins, r.totals.failed_sign_ins], [1, 1]);
+    assert.ok(r.recent.some((x) => x.action === 'user_create' && x.detail.email === 'v@example.com' && !JSON.stringify(x).includes('viewer password')), 'no passwords in the log');
+    assert.equal(r.per_day.length, 31, 'every day in the period');
+    const viewer = browser(base); await viewer.signIn('v@example.com', 'viewer password');
+    assert.equal((await viewer.post('usage')).status, 403, 'admins only');
+  } finally { server.close(); closeDb(cfg); rmSync(dir, { recursive: true, force: true }); }
+});

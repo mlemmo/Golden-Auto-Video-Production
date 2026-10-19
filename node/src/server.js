@@ -17,6 +17,7 @@ import { CLIENT_DEFAULT, clientsLoad, clientFind, clientDetails, clientSpeechSit
 import { withSpeechSites } from './lib/speech.js';
 import { sessionStore, newSessionId, newCsrf, sameSecret, parseCookies, sessionCookie, clearedCookie, COOKIE } from './lib/session.js';
 import { loginPage, dashboardPage } from './lib/pages.js';
+import { recordActivity, usageReport } from './lib/activity.js';
 import { signIn, userById, userCount, publicUser, allowedClients, usersList, userCreate, userUpdate, userDelete, passwordChange } from './lib/users.js';
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
@@ -41,14 +42,29 @@ const sessionRoutes = {
   user_create: ({ db, user, body }) => ({ user: publicUser(userCreate(db, user, body)), message: 'Account created.' }),
   user_update: ({ db, user, body }) => ({ user: publicUser(userUpdate(db, user, body)), message: 'Account saved.' }),
   user_delete: ({ db, user, body }) => { userDelete(db, user, body.id); return { message: 'Account deleted.' }; },
+  // Admins: the Usage dashboard (days: 7, 30, 90 or 0 = all time; optional client and user).
+  usage: ({ db, cfg, body }) => usageReport(db, cfg, { days: Number(body.days ?? 30) || 0, client: String(body.client ?? ''), user: String(body.user ?? '') }),
 };
 
 // What each role may do. Viewers only read; admins alone manage users, clients and the shared spokesperson library;
 // users do everything else (including paid steps) for the clients assigned to them.
 const VIEWER_ACTIONS = new Set(['clients', 'client_select', 'inventory', 'sync_log', 'jobs', 'narration_list', 'spokesperson_list', 'detail', 'speech', 'logout', 'me', 'password_change']);
-const ADMIN_ACTIONS = new Set(['client_add', 'client_analyze', 'client_details', 'spokesperson_upload', 'spokesperson_default', 'spokesperson_delete', 'users_list', 'user_create', 'user_update', 'user_delete']);
+const ADMIN_ACTIONS = new Set(['usage', 'client_add', 'client_analyze', 'client_details', 'spokesperson_upload', 'spokesperson_default', 'spokesperson_delete', 'users_list', 'user_create', 'user_update', 'user_delete']);
 // Actions that need no current client (an account without clients can still use them).
-const NO_CLIENT = new Set(['clients', 'logout', 'me', 'password_change', 'users_list', 'user_create', 'user_update', 'user_delete', 'client_add']);
+const NO_CLIENT = new Set(['usage', 'clients', 'logout', 'me', 'password_change', 'users_list', 'user_create', 'user_update', 'user_delete', 'client_add']);
+// Actions recorded for the Usage dashboard (who, which client, what, when; never passwords).
+const TRACKED = new Set(['generate', 'narration_preview', 'narration_lipsync', 'footage_build', 'finish', 'narration_approve', 'job_delete',
+  'narration_delete', 'narration_lipsync_delete', 'sync', 'import', 'client_add', 'client_details', 'client_analyze', 'spokesperson_upload',
+  'spokesperson_default', 'spokesperson_delete', 'user_create', 'user_update', 'user_delete', 'password_change']);
+function activityDetail(name, body, out) {
+  const d = {};
+  for (const k of ['stock', 'duration', 'voice', 'format', 'id']) if (['string', 'number'].includes(typeof body[k]) && body[k] !== '') d[k] = body[k];
+  const v = out?.job?.vehicle ?? out?.vehicle; if (v) d.vehicle = v;
+  if (out?.job?.duration) d.duration = out.job.duration;
+  if (name.startsWith('user_')) { d.email = body.email ?? out?.user?.email; d.role = body.role; }
+  if (name === 'client_add') d.client_name = out?.client?.name;
+  return d;
+}
 function allowedFor(role, name) {
   if (role === 'admin') return true;
   if (ADMIN_ACTIONS.has(name)) return false;
@@ -139,6 +155,7 @@ async function runAction(name, req, res, cfg, store, session, https) {
     const dealer = client === null ? null : clientDetails(clientFind(db, client));
     const sites = client === null ? {} : clientSpeechSites(client, dealer);
     let out = await withSpeechSites(sites, () => handler({ cfg, db, client, dealer, body, files, req, session, user }));
+    if (TRACKED.has(name)) recordActivity(db, { user: user.email, client: client ?? '', action: name, detail: activityDetail(name, body, out) });
     // Accounts see only their own clients.
     if (name === 'clients') { const allowed = allowedClients(db, user); out = { ...out, items: out.items.filter((c) => allowed.includes(c.id)), current: client }; }
     send(res, 200, out, closeSession(store, session, https));
@@ -166,6 +183,7 @@ async function page(req, res, cfg, store, session, https) {
       else {
         let u = null;
         try { u = await signIn(openDb(cfg), cfg, form.get('email') ?? '', form.get('password')); } catch (e) { if (!userError(e)) throw e; error = e.message; }
+        recordActivity(openDb(cfg), { user: u ? u.email : String(form.get('email') ?? '').trim().toLowerCase().slice(0, 120), action: u ? 'sign_in' : 'sign_in_failed' });
         if (u) {
           // A new session id on sign-in.
           store.destroy(session.id); session.id = newSessionId(); session.fresh = true;
