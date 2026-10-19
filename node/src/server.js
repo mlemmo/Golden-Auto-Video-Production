@@ -13,7 +13,7 @@ import { narrationRoutes } from './routes/narrations.js';
 import { jobRoutes, MULTIPART } from './routes/jobs.js';
 import { finishingRoutes } from './routes/finishing.js';
 import { parseMultipart } from './lib/multipart.js';
-import { CLIENT_DEFAULT, clientsLoad, clientFind, clientDetails } from './lib/clients.js';
+import { CLIENT_DEFAULT, clientsLoad, clientFind, clientDetails, clientSpeechSites } from './lib/clients.js';
 import { withSpeechSites } from './lib/speech.js';
 import { sessionStore, newSessionId, newCsrf, sameSecret, parseCookies, sessionCookie, clearedCookie, COOKIE } from './lib/session.js';
 import { loginPage, dashboardPage, passwordVerify } from './lib/pages.js';
@@ -102,7 +102,7 @@ async function runAction(name, req, res, cfg, store, session, https) {
     } else body = await readJson(req);
     // Dealer named in scripts and speech for this client; its website is said as written in its details.
     const dealer = clientDetails(clientFind(db, client));
-    const sites = client !== CLIENT_DEFAULT ? { [dealer.website]: dealer.website_spoken } : {};
+    const sites = clientSpeechSites(client, dealer);
     const out = await withSpeechSites(sites, () => handler({ cfg, db, client, dealer, body, files, req, session }));
     send(res, 200, out, closeSession(store, session, https));
   } catch (e) {

@@ -66,9 +66,11 @@ test('actions: signed-in session, CSRF token, the session’s client, uploads', 
     assert.equal(list.current, 'golden-auto');
     assert.equal(list.items[0].id, 'golden-auto');
     assert.equal(list.items[0].script_details.website, 'mygoldenauto.net');
-    const bad = await b.post('client_details', { name: 'X', website: 'x.com' });
+    const bad = await b.post('client_details', { name: 'Golden Auto', website: 'not a site' });
     assert.equal(bad.status, 400);
-    assert.match((await bad.json()).error, /fixed/, 'a user-facing message');
+    assert.match((await bad.json()).error, /website/, 'a user-facing message');
+    const ga = await (await b.post('client_details', { name: 'Golden Auto', city: 'San Ramon', website: 'mygoldenauto.net', phone: '925-555-1234' })).json();
+    assert.equal(ga.client.script_details.phone, '925-555-1234', 'Golden Auto’s details are editable, with a phone number');
     assert.equal((await b.post('clients', '[1]')).status, 400, 'non-object JSON refused');
     // The session's client decides which inventory is read.
     save(openDb(cfg), 'clients', { items: [{ id: 'golden-auto', name: 'Golden Auto', website: 'https://www.mygoldenauto.net' }, { id: 'bay-motors', name: 'Bay Motors', website: 'https://bay.com' }] });

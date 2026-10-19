@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openMemoryDb } from '../src/lib/db.js';
-import { clientsLoad, clientFind, clientInventoryKey, clientInventory, clientAnalyze, clientAdd, clientReanalyze, clientDetails,
+import { clientSpeechSites, clientsLoad, clientFind, clientInventoryKey, clientInventory, clientAnalyze, clientAdd, clientReanalyze, clientDetails,
   clientWebsiteSpoken, clientSaveDetails, clientWebsite, isPublicIPv4, pinnedLookup } from '../src/lib/clients.js';
 import { script } from '../src/lib/scripts.js';
 import { speechScript, nativeSpeech, withSpeechSites } from '../src/lib/speech.js';
@@ -63,7 +63,8 @@ test('adding clients: ids, duplicates, private websites', async () => {
 test('dealer details in scripts and speech', async () => {
   const db = openMemoryDb();
   await clientAdd(db, 'Bay Motors', 'baymotors.com', dc);
-  assert.deepEqual(clientDetails(clientFind(db, 'golden-auto')), { name: 'Golden Auto', city: 'San Ramon', website: 'mygoldenauto.net', website_spoken: 'my golden auto dot net' });
+  assert.deepEqual(clientDetails(clientFind(db, 'golden-auto')), { name: 'Golden Auto', city: 'San Ramon', website: 'mygoldenauto.net', website_spoken: 'my golden auto dot net', phone: '' });
+  assert.deepEqual(clientSpeechSites('golden-auto', clientDetails(clientFind(db, 'golden-auto'))), {}, 'Golden Auto’s own website: the speech rules handle it');
   const bd = clientDetails(clientFind(db, 'bay-motors'));
   assert.deepEqual([bd.name, bd.city, bd.website, bd.website_spoken], ['Bay Motors', 'Oakland', 'baymotors.com', 'bay motors dot com']);
   assert.equal(clientWebsiteSpoken('eleasereturns.com', 'eLease Returns'), 'e lease returns dot com');
@@ -76,7 +77,15 @@ test('dealer details in scripts and speech', async () => {
     assert.ok(speechScript(s30).includes('at e lease returns dot com.'));
     assert.ok(nativeSpeech(s30).includes('e lease returns dot com'));
   });
-  assert.throws(() => clientSaveDetails(db, 'golden-auto', { name: 'X', website: 'x.com' }), /fixed/);
+  // Golden Auto's details are editable too; phone is optional and only saved.
+  const ga = clientDetails(clientSaveDetails(db, 'golden-auto', { name: 'Golden Auto', city: 'Dublin', website: 'mygoldenauto.net', website_spoken: '', phone: ' (925) 555-1234 ' }));
+  assert.deepEqual([ga.city, ga.website_spoken, ga.phone], ['Dublin', 'my golden auto dot net', '(925) 555-1234']);
+  assert.deepEqual(clientSpeechSites('golden-auto', ga), {});
+  assert.ok(script(car, 30, ga).includes('here at Golden Auto in Dublin.') && !script(car, 30, ga).includes('555'), 'phone not in scripts');
+  const moved = clientDetails(clientSaveDetails(db, 'golden-auto', { name: 'Golden Auto', city: 'San Ramon', website: 'goldenautocars.com', website_spoken: 'golden auto cars dot com' }));
+  assert.deepEqual(clientSpeechSites('golden-auto', moved), { 'goldenautocars.com': 'golden auto cars dot com' }, 'a changed website is said as written');
+  assert.equal(moved.phone, '', 'phone cleared when left empty');
+  for (const bad of ['12345', 'call me', '555-1234 ext 9 99999999999']) assert.throws(() => clientSaveDetails(db, 'golden-auto', { name: 'Golden Auto', website: 'mygoldenauto.net', phone: bad }), /phone/, bad);
   assert.throws(() => clientSaveDetails(db, 'bay-motors', { name: 'X', website: 'not a site' }), /website/);
 });
 

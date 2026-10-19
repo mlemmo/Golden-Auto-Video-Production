@@ -131,7 +131,7 @@ test('listing shorthand said as words; captions keep it', () => {
 test('each client is named in scripts and its website is said in words', async () => {
   const client = { id: 'elease', name: 'eLease Returns', website: 'https://www.eleasereturns.com', analysis: { dealer: { city: 'Hayward' } } };
   const dealer = clientDetails(client);
-  assert.deepEqual(dealer, { name: 'eLease Returns', city: 'Hayward', website: 'eleasereturns.com', website_spoken: 'e lease returns dot com' });
+  assert.deepEqual(dealer, { name: 'eLease Returns', city: 'Hayward', website: 'eleasereturns.com', website_spoken: 'e lease returns dot com', phone: '' });
   assert.equal(clientDetails({ id: 'golden-auto' }).website_spoken, 'my golden auto dot net');
   const v = { Year: 2019, Make: 'BMW', Model: 'X3', Drivetrain: 'AWD', price: 21500 };
   const s30 = script(v, 30, dealer);

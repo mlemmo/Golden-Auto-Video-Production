@@ -1,5 +1,5 @@
 // Step 1: the client (dealer) and its inventory. Each client has its own inventory, voice previews and videos.
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { api } from './api.js';
 import { useStudio } from './App.jsx';
 import { miles, price } from './ui.jsx';
@@ -18,7 +18,7 @@ export default function VehicleStep() {
     <section className="panel" id="stepVehicle">
       <ClientBar />
       {c && <ClientInfo key={'info-' + c.id} />}
-      {c && <DealerDetails key={'dealer-' + c.id + JSON.stringify(c.script_details)} />}
+      {c && <DealerDetails key={'dealer-' + c.id} />}
       <div className="step-head"><span className="step-num">1</span><div><h2>Choose a vehicle</h2><p id="syncTime">{inventoryLine(s.inventory)}</p></div></div>
       {c?.id === 'golden-auto' && <SyncLog />}
       <SyncButton say={say} />
@@ -117,8 +117,11 @@ function ClientInfo() {
 function DealerDetails() {
   const s = useStudio();
   const [, say] = s.statuses.vehicle;
-  const c = s.client, d = c.script_details || {}, fixed = c.id === 'golden-auto';
-  const [form, setForm] = useState({ name: d.name || '', city: d.city || '', website: d.website || '', website_spoken: d.website_spoken || '' });
+  const c = s.client, d = c.script_details || {};
+  const fromDetails = () => ({ name: d.name || '', city: d.city || '', website: d.website || '', website_spoken: d.website_spoken || '', phone: d.phone || '' });
+  const [form, setForm] = useState(fromDetails);
+  // Saved or re-analysed details refill the form; the panel stays as it is (open after saving).
+  useEffect(() => { setForm(fromDetails()); }, [JSON.stringify(d)]); // eslint-disable-line react-hooks/exhaustive-deps
   const field = (k) => ({ value: form[k], onChange: (e) => setForm({ ...form, [k]: e.target.value }) });
   const save = (e) => {
     e.preventDefault();
@@ -132,16 +135,16 @@ function DealerDetails() {
   };
   return (
     <details id="dealerInfo" className="sub">
-      <summary id="dealerSummary">{`Dealer details in scripts — ${d.name}${d.city ? ' in ' + d.city : ''} · ${d.website}`}</summary>
-      <p className="hint" id="dealerFixed" hidden={!fixed}>Golden Auto’s scripts say “Golden Auto in San Ramon” and mygoldenauto.net.</p>
-      <form id="dealerForm" hidden={fixed} onSubmit={save}>
+      <summary id="dealerSummary">{`Dealer details in scripts — ${d.name}${d.city ? ' in ' + d.city : ''} · ${d.website}${d.phone ? ' · ' + d.phone : ''}`}</summary>
+      <form id="dealerForm" onSubmit={save}>
         <div className="import-grid">
           <label>Dealer name in scripts<input name="name" maxLength={80} required {...field('name')} /></label>
           <label>City<input name="city" maxLength={60} {...field('city')} /></label>
           <label>Website as shown<input name="website" maxLength={100} required placeholder="example.com" {...field('website')} /></label>
           <label>Website as spoken<input name="website_spoken" maxLength={120} placeholder="example dot com" {...field('website_spoken')} /></label>
+          <label>Phone (optional)<input name="phone" type="tel" maxLength={25} placeholder="925-555-1234" {...field('phone')} /></label>
         </div>
-        <p className="hint">Scripts say “here at <i>name</i> in <i>city</i>” and “Book your test drive today at <i>website</i>”; the voice says the website as written in “as spoken”. Reopen a vehicle after saving to redraft its script.</p>
+        <p className="hint">Scripts say “here at <i>name</i> in <i>city</i>” and “Book your test drive today at <i>website</i>”; the voice says the website as written in “as spoken”. The phone number is saved with the dealer for now; it is not used in scripts. Reopen a vehicle after saving to redraft its script.</p>
         <button id="dealerSave" className="secondary" disabled={s.busy}>Save dealer details</button>
       </form>
     </details>

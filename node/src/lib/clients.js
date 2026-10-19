@@ -32,9 +32,15 @@ function urlHost(url) {
  * Dealer details used in scripts and speech: name, city, website as shown and as spoken. Golden Auto's are fixed;
  * other clients default to their client name, the city found on their website and the website they were added with.
  */
+const GOLDEN_SPOKEN = 'my golden auto dot net';
 export function clientDetails(client) {
-  if (client.id === CLIENT_DEFAULT) return { ...DEALER_DEFAULT, website_spoken: 'my golden auto dot net' };
   const d = client.details ?? {};
+  const phone = str(d.phone ?? '');
+  // Golden Auto: Golden Auto / San Ramon / mygoldenauto.net until its details are edited.
+  if (client.id === CLIENT_DEFAULT) {
+    return { name: str(d.name ?? DEALER_DEFAULT.name), city: str(d.city ?? DEALER_DEFAULT.city), website: str(d.website ?? DEALER_DEFAULT.website),
+      website_spoken: str(d.website_spoken ?? GOLDEN_SPOKEN), phone };
+  }
   const name = str(d.name ?? client.name);
   const website = str(d.website ?? str(urlHost(str(client.website))).replace(/^www\./, ''));
   return {
@@ -42,7 +48,16 @@ export function clientDetails(client) {
     city: str(d.city ?? client.dealer?.city ?? client.analysis?.dealer?.city ?? ''),
     website,
     website_spoken: str(d.website_spoken ?? clientWebsiteSpoken(website, name)),
+    phone,
   };
+}
+/**
+ * Websites the voice says as written in the dealer details ({shown: spoken}, see withSpeechSites). Golden Auto's own
+ * mygoldenauto.net is handled by the speech rules themselves unless its details changed the website or how it is said.
+ */
+export function clientSpeechSites(clientId, dealer) {
+  const own = clientId === CLIENT_DEFAULT && dealer.website === DEALER_DEFAULT.website && dealer.website_spoken === GOLDEN_SPOKEN;
+  return own ? {} : { [dealer.website]: dealer.website_spoken };
 }
 
 // ---- Storage ----------------------------------------------------------------------------------------------------
@@ -71,15 +86,17 @@ export function clientInventory(db, client) { return state(db, clientInventoryKe
 const ws = (s) => trim(s.replace(/[\t\n\v\f\r ]+/g, ' '));
 
 export function clientSaveDetails(db, id, input) {
-  if (id === CLIENT_DEFAULT) throw new Error('Golden Auto’s details are fixed.');
   const clean = (k) => ws(str(input?.[k] ?? ''));
-  const d = { name: clean('name'), city: clean('city'), website: lower(clean('website').replace(/^(https?:\/\/)?(www\.)?/i, '')), website_spoken: lower(clean('website_spoken')) };
+  const d = { name: clean('name'), city: clean('city'), website: lower(clean('website').replace(/^(https?:\/\/)?(www\.)?/i, '')), website_spoken: lower(clean('website_spoken')), phone: clean('phone') };
   d.website = d.website.replace(/\/+$/, '');
   if (d.name === '' || strlen(d.name) > 80) throw new Error('Enter the dealer name as it should be said and shown.');
   if (strlen(d.city) > 60 || /[<>"]/.test(d.name + d.city)) throw new Error('Check the city.');
   if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(d.website)) throw new Error('Enter the website as shown in ads, e.g. example.com.');
-  if (d.website_spoken === '') d.website_spoken = clientWebsiteSpoken(d.website, d.name);
+  if (d.website_spoken === '') d.website_spoken = id === CLIENT_DEFAULT && d.website === DEALER_DEFAULT.website ? GOLDEN_SPOKEN : clientWebsiteSpoken(d.website, d.name);
   if (strlen(d.website_spoken) > 120 || !/^[a-z0-9 .'-]+$/.test(d.website_spoken)) throw new Error('Write the spoken website in plain words, e.g. “example dot com”.');
+  // Phone is optional: digits with the usual separators, 7 to 15 digits.
+  const digits = d.phone.replace(/\D/g, '').length;
+  if (d.phone !== '' && (!/^\+?[0-9 ().-]+$/.test(d.phone) || digits < 7 || digits > 15)) throw new Error('Enter the phone number like 925-555-1234, or leave it empty.');
   const c = clientsLoad(db);
   for (const x of c.items) if (x.id === id) { x.details = d; save(db, 'clients', c); return x; }
   throw new Error('Client not found.');
