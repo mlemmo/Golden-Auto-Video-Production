@@ -100,7 +100,9 @@ export default function App() {
   const [confirmCurrent, setConfirmCurrent] = useState(false);
   const [captionJob, setCaptionJob] = useState(null);
   const [spokespersonPanelOpen, setSpokespersonPanelOpen] = useState(false);
-  const formStore = useRef({});   // per-client form values (useClientState, switchClient)
+  const formStore = useRef({});
+  // The Tools menu (spokespersons, ZIP import, lip-sync builder) slides in from the right.
+  const [toolsOpen, setToolsOpen] = useState(false);   // per-client form values (useClientState, switchClient)
   // Collapsed steps: only step 1 is open when the page loads.
   const [collapsed, setCollapsed] = useState(START_COLLAPSED);
   const toggleStep = useCallback((id) => setCollapsed((c) => ({ ...c, [id]: !c[id] })), []);
@@ -248,23 +250,28 @@ export default function App() {
     sheetUrl, setSheetUrl, footage, setFootage, approve, setApprove, confirmCurrent, setConfirmCurrent,
     captionJob, setCaptionJob, spokespersonPanelOpen, setSpokespersonPanelOpen, collapsed, toggleStep, openStep, closeStep, stepClass,
     busy, run, statuses, loadClients, loadInventory, loadJobs, loadSyncLog, refreshNarrations, showSpokespersons,
-    clearVehicle, switchClient, formStore, defaultScript,
+    clearVehicle, switchClient, formStore, defaultScript, setToolsOpen,
   };
 
   const signOut = async () => { try { await api('logout'); } finally { location.reload(); } };
   return (
     <Studio.Provider value={ctx}>
       <Popups />
+      {/* Top bar, pinned while scrolling: Notifications, the Tools menu and Sign out. */}
+      <div className="topbar">
+        <span className="topbar-brand">{client ? client.name : 'Golden Auto'} · Video Studio</span>
+        <div className="header-actions">
+          <Notifications />
+          <button type="button" className="secondary small" id="toolsMenu" aria-expanded={toolsOpen} aria-controls="tools" aria-label="Tools" onClick={() => setToolsOpen(!toolsOpen)}>☰<span className="label-long"> Tools</span></button>
+          <button type="button" className="secondary small" id="logout" onClick={signOut}>Sign out</button>
+        </div>
+      </div>
       {boot.banner && <div className="staging-banner">{boot.banner}</div>}
       <header>
         <div>
           <span className="eyebrow">{client ? client.name.toUpperCase() : 'GOLDEN AUTO / SAN RAMON'}</span>
           <h1>Inventory → video</h1>
           <p>Pick a car, approve the words, generate. The final captioned video is built for you.</p>
-        </div>
-        <div className="header-actions">
-          <Notifications />
-          <button className="secondary" id="logout" onClick={signOut}>Sign out</button>
         </div>
       </header>
       <nav className="steps" aria-label="Steps" onClick={(e) => { const a = e.target.closest('a[href^="#"]'); if (a) openStep(a.getAttribute('href').slice(1)); }}>
@@ -283,8 +290,8 @@ export default function App() {
           </div>
         </div>
         <Videos />
-        <Tools />
       </main>
+      <Tools open={toolsOpen} onClose={() => setToolsOpen(false)} />
     </Studio.Provider>
   );
 }

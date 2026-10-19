@@ -9,7 +9,7 @@ export default function LookStep() {
   const beats = s.style === 'dynamic' ? [['00–04', 'Low tracking hook'], ['04–09', 'Interior macro glide'], ['09–15', 'Drone pull-away + offer']]
     : narration ? [['Rear corner', 'Starts walking'], ['Near side', 'Walks and presents'], ['Front corner', 'Offer + test drive']]
       : [['Shot 1', 'Front corner, wide'], ['Shot 2', 'Side, walking'], ['Shot 3', 'Rear corner'], ['Shot 4', 'Front, price + call to action']];
-  const manage = () => { s.setSpokespersonPanelOpen(true); document.getElementById('spokespersonPanel')?.scrollIntoView({ behavior: 'smooth' }); };
+  const manage = () => { s.setSpokespersonPanelOpen(true); s.setToolsOpen(true); };
   return (
     <section className={s.stepClass('stepLook')} id="stepLook">
       <StepHead id="stepLook" num="4" title={<h2>Look</h2>} sub={<p>Spokesperson, style, format and the car photos the video is made from.</p>} />

@@ -4,15 +4,25 @@ import { api, upload } from './api.js';
 import { useClientState, useStudio } from './App.jsx';
 import { DangerButton, Link } from './ui.jsx';
 
-export default function Tools() {
+/** The Tools menu: a panel sliding in from the right (☰ Tools in the top bar); closes with ×, Esc or a click outside. */
+export default function Tools({ open, onClose }) {
   const s = useStudio();
+  useEffect(() => {
+    if (!open) return undefined;
+    const esc = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', esc);
+    return () => document.removeEventListener('keydown', esc);
+  }, [open, onClose]);
   return (
-    <section className="panel tools" id="tools">
-      <h2>Tools</h2>
+    <>
+    {open && <div className="drawer-backdrop" onClick={onClose} />}
+    <aside className={'drawer tools' + (open ? ' open' : '')} id="tools" aria-label="Tools" aria-hidden={!open}>
+      <div className="drawer-head"><h2>Tools</h2><button type="button" className="secondary small" id="toolsClose" onClick={onClose} aria-label="Close tools">×</button></div>
       <Spokespersons />
       <ZipImport key={'zip-' + (s.clients.current ?? '')} />
       <LipsyncBuilder />
-    </section>
+    </aside>
+    </>
   );
 }
 

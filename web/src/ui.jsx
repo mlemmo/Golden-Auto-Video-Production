@@ -61,8 +61,8 @@ export function Notifications() {
   const [open, setOpen] = useState(false);
   return (
     <div className="notices">
-      <button type="button" className={'secondary' + (notices.length ? ' has-notices' : '')} id="notifications" aria-expanded={open} onClick={() => setOpen(!open)}>
-        Notifications{notices.length ? <span className="notice-count">{notices.length}</span> : null}
+      <button type="button" className={'secondary small' + (notices.length ? ' has-notices' : '')} id="notifications" aria-label="Notifications" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <span aria-hidden="true" className="label-short">🔔</span><span className="label-long">Notifications</span>{notices.length ? <span className="notice-count">{notices.length}</span> : null}
       </button>
       {open && (
         <div className="notices-panel" role="dialog" aria-label="Notifications">

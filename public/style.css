@@ -8,12 +8,12 @@
 
 
 /* Step layout */
-.steps{position:sticky;top:0;z-index:5;display:flex;gap:6px;flex-wrap:wrap;max-width:1440px;margin:auto;padding:10px 28px;background:rgba(16,20,28,.92);backdrop-filter:blur(6px);border-bottom:1px solid var(--line)}
+.steps{position:sticky;top:var(--topbar-h);z-index:5;display:flex;gap:6px;flex-wrap:wrap;max-width:1440px;margin:auto;padding:10px 28px;background:rgba(16,20,28,.92);backdrop-filter:blur(6px);border-bottom:1px solid var(--line)}
 .steps a{color:var(--muted);text-decoration:none;font-size:15px;padding:6px 12px;border-radius:999px;border:1px solid var(--line)}
 .steps a:hover{color:#fff;border-color:var(--gold)}.steps b{color:var(--gold);margin-right:4px}
 .workspace{grid-template-columns:1fr;gap:18px}
 .steps-col{display:grid;gap:18px}
-.panel{background:#1b2230;border:1px solid var(--line);border-radius:16px;padding:22px;scroll-margin-top:70px}
+.panel{background:#1b2230;border:1px solid var(--line);border-radius:16px;padding:22px;scroll-margin-top:calc(var(--topbar-h) + 64px)}
 main>.panel{margin-top:24px}
 #stepVehicle .vehicle-list{margin-top:14px;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));max-height:none;overflow:visible}
 .step-head{display:flex;gap:14px;align-items:flex-start;margin-bottom:6px}.step-head h2{margin:0}.step-head p{margin:2px 0 0}
@@ -115,3 +115,17 @@ button{font-size:15px}
 .client-details-open .client-facts{margin-bottom:12px}
 .step-waiting{color:var(--muted)}
 .show-older{justify-self:start}
+/* Top bar: pinned while scrolling, with the steps bar pinned right under it */
+:root{--topbar-h:54px}
+.topbar{position:sticky;top:0;z-index:40;height:var(--topbar-h);display:flex;justify-content:space-between;align-items:center;gap:12px;padding:0 28px;background:#0c1017;border-bottom:1px solid var(--line)}
+.topbar-brand{font-weight:700;color:var(--gold);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.topbar .header-actions{gap:8px}
+/* Tools menu: slides in from the right */
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(620px,88vw);z-index:60;overflow:auto;padding:18px 22px;background:#141a25;border-left:1px solid var(--line);box-shadow:-12px 0 40px rgba(0,0,0,.5);transform:translateX(100%);transition:transform .2s ease,visibility .2s;visibility:hidden}
+.drawer.open{transform:none;visibility:visible}
+.drawer-backdrop{position:fixed;inset:0;z-index:55;background:rgba(0,0,0,.45)}
+.drawer-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.drawer-head h2{margin:0}
+.drawer .import-panel{background:#1b2230}
+@media(max-width:600px){.topbar{padding:0 12px}.topbar-brand{font-size:15px;max-width:34vw}.topbar .header-actions button,.topbar #notifications{padding:7px 9px}}
+.label-short{display:none}
+@media(max-width:600px){.topbar .label-long{display:none}.topbar .label-short{display:inline}.topbar .header-actions button{white-space:nowrap}}
