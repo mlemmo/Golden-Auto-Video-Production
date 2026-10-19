@@ -1,10 +1,11 @@
-// Tools: spokesperson images, DealerCenter media ZIP import, and the lip-sync builder (older two-step voice method).
+// Tools: spokesperson images, background settings, DealerCenter media ZIP import, and the lip-sync builder (older two-step voice method).
 import { useEffect, useRef, useState } from 'react';
 import { api, upload } from './api.js';
 import { useClientState, useStudio } from './App.jsx';
 import { DangerButton, Link } from './ui.jsx';
 import { PasswordTool, UsersTool } from './Accounts.jsx';
 import { UsageTool } from './Usage.jsx';
+import { SceneBlocks } from './LookStep.jsx';
 
 // Everyday tools (Tools menu) and the admin's (Admin menu). Each opens in a full-page window.
 const TOOLS = [
@@ -15,6 +16,7 @@ const ADMIN_TOOLS = [
   ['usage', 'Usage dashboard', 'Who did what, paid activity and estimated spend'],
   ['users', 'Manage users', 'Add accounts, set roles and which clients each person may use'],
   ['spokespersons', 'Manage spokespersons', 'Upload new spokesperson images and manage saved ones'],
+  ['scenes', 'Manage background settings', 'Where the car is filmed: choose, add, edit, or have Claude write one from an idea'],
 ];
 
 /** A top-bar dropdown of simple buttons, each opening its tool in a full-page window. */
@@ -75,6 +77,7 @@ export function ToolWindows() {
         {s.isAdmin && <div hidden={s.tool !== 'users'}><UsersTool active={s.tool === 'users'} /></div>}
         <div hidden={s.tool !== 'account'}><PasswordTool /></div>
         {s.isAdmin && <div hidden={s.tool !== 'spokespersons'}><Spokespersons /></div>}
+        {s.isAdmin && <div hidden={s.tool !== 'scenes'}><Scenes /></div>}
         <div hidden={s.tool !== 'import'}><ZipImport key={'zip-' + (s.clients.current ?? '')} /></div>
         <div hidden={s.tool !== 'lipsync'}><LipsyncBuilder /></div>
       </div>
@@ -128,6 +131,93 @@ function Spokespersons() {
         <label>Description used in the video prompt<textarea name="description" rows={2} maxLength={300} required placeholder="trustworthy friendly adult man age 35–40, navy blazer over open-collar shirt" /></label>
         <p className="hint">Use a clear, well-lit, front-facing photo of one person from the waist up on a plain background. Describe what the image shows (apparent age, look, outfit). <strong>Only upload people who have agreed to appear in your ads.</strong></p>
         <button id="spokespersonButton" disabled={s.busy}>Upload spokesperson</button>
+      </form>
+    </section>
+  );
+}
+
+const SCENE_BLOCKS = [
+  ['location', 'Location', 'Where the car is parked — a wide, open place', 'a wide scenic overlook above the Pacific coast'],
+  ['ground', 'Ground', 'What the car stands on — level and clean', 'level, clean paved asphalt'],
+  ['background', 'Background', 'Behind the car, softly out of focus', 'ocean and rugged cliffs'],
+  ['lighting', 'Lighting', 'Time of day and light — keep the car and spokesperson clearly lit', 'warm low golden-hour sunlight'],
+  ['atmosphere', 'Atmosphere', 'The mood in a few words', 'calm, premium, cinematic'],
+];
+const EMPTY_SCENE = { id: '', name: '', blocks: Object.fromEntries(SCENE_BLOCKS.map(([k]) => [k, ''])) };
+
+/** Background settings: Seedance's structured setting blocks; Claude can turn a plain-English idea into them. */
+function Scenes() {
+  const s = useStudio();
+  const [, say] = s.statuses.scenes;
+  const [form, setForm] = useState(EMPTY_SCENE);
+  const [idea, setIdea] = useState('');
+  const lib = s.scenes;
+  const editing = !!form.id;
+  const act = async (action, x, done) => {
+    try { s.showScenes(await api(action, { id: x.id })); say(done); } catch (e) { say(e.message, true); }
+  };
+  const edit = (x) => {
+    setForm({ id: x.id, name: x.name, blocks: x.blocks ? { ...x.blocks } : { ...EMPTY_SCENE.blocks, location: x.description } });
+    document.getElementById('sceneForm')?.scrollIntoView({ behavior: 'smooth' });
+  };
+  const setBlock = (k, v) => setForm((f) => ({ ...f, blocks: { ...f.blocks, [k]: v } }));
+  const write = () => s.run(async () => {
+    say('Claude is writing the setting blocks…');
+    try {
+      const r = await api('scene_suggest', { idea });
+      setForm((f) => ({ ...f, name: f.name || r.name, blocks: r.blocks }));
+      say('Setting written. Check the blocks, change anything you like, then save.');
+    } catch (e) { say(e.message, true); }
+  });
+  const submit = (e) => {
+    e.preventDefault();
+    s.run(async () => {
+      try {
+        const next = await api('scene_save', { id: form.id || undefined, name: form.name, blocks: form.blocks });
+        const saved = editing ? next.items.find((x) => x.id === form.id) : next.items[next.items.length - 1];
+        s.showScenes(next, saved?.id ?? null); setForm(EMPTY_SCENE); setIdea('');
+        say(editing ? 'Setting updated.' : 'Setting saved and selected for the next video.');
+      } catch (err) { say(err.message, true); }
+    });
+  };
+  return (
+    <section className="tool-section" id="scenePanel">
+      <p className="hint">The background setting is where Seedance films the car and the spokesperson. Each setting is written into the video prompt as structured blocks; the rules that keep the walkaround working (open space around the car, no other vehicles or people, no readable text) are always added.</p>
+      <div id="sceneList" className="scene-list">
+        {lib.items.map((x) => (
+          <div key={x.id} className="scene-card">
+            <strong>{x.name + (x.id === lib.default ? ' · default' : '')}</strong>
+            <SceneBlocks scene={x} />
+            <div className="actions">
+              <button className="secondary small" onClick={() => edit(x)}>Edit</button>
+              <button className="secondary small" disabled={x.id === lib.default} onClick={() => act('scene_default', x, 'Default setting set.')}>Make default</button>
+              <DangerButton label="Delete" what={`setting “${x.name}”`} detail="Videos already made are not affected." onConfirm={() => act('scene_delete', x, 'Setting deleted.')} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <form id="sceneForm" className="scene-form" onSubmit={submit}>
+        <h3>{editing ? 'Edit setting' : 'New setting'}</h3>
+        <div className="scene-idea">
+          <label>Your idea in plain English
+            <input value={idea} maxLength={200} onChange={(e) => setIdea(e.target.value)} placeholder="e.g. a beach boardwalk at sunset with palm trees" />
+          </label>
+          <button type="button" className="secondary" disabled={s.busy || idea.trim().length < 3} onClick={write}>Write it with Claude</button>
+        </div>
+        <p className="hint">Claude turns the idea into Seedance’s setting blocks below (about a cent). You can also fill them in yourself.</p>
+        <label>Name<input value={form.name} maxLength={60} required onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Beach boardwalk at sunset" /></label>
+        <div className="import-grid">
+          {SCENE_BLOCKS.map(([k, label, help, example]) => (
+            <label key={k} title={help}>{label}
+              <input value={form.blocks[k]} maxLength={160} required onChange={(e) => setBlock(k, e.target.value)} placeholder={example} />
+              <small>{help}</small>
+            </label>
+          ))}
+        </div>
+        <div className="actions">
+          <button disabled={s.busy}>{editing ? 'Save changes' : 'Save setting'}</button>
+          {(editing || form.name) && <button type="button" className="secondary" onClick={() => { setForm(EMPTY_SCENE); setIdea(''); }}>Cancel</button>}
+        </div>
       </form>
     </section>
   );

@@ -101,6 +101,8 @@ export default function App() {
   const [source, setSourceRaw] = useState('ai');
   const [format, setFormat] = useState('instagram_reels');
   const [spokespersonId, setSpokespersonId] = useState('');
+  const [scenes, setScenes] = useState({ items: [], default: null });
+  const [sceneId, setSceneId] = useState('');
   const [approvedVoice, setApprovedVoice] = useState('');
   const [sheetUrl, setSheetUrl] = useState('');
   const [footage, setFootage] = useState(null);
@@ -132,7 +134,7 @@ export default function App() {
   // Status messages, one pop-up per section (see useStatus).
   const statuses = {
     vehicle: useStatus('vehicle'), sheet: useStatus('sheet'), generate: useStatus('generate'), videos: useStatus('videos'), captions: useStatus('captions'),
-    studio: useStatus('studio'), builder: useStatus('builder'), spokesperson: useStatus('spokesperson'), import: useStatus('import'),
+    studio: useStatus('studio'), builder: useStatus('builder'), spokesperson: useStatus('spokesperson'), scenes: useStatus('scenes'), import: useStatus('import'),
   };
   const sayVehicle = statuses.vehicle[1];
 
@@ -159,6 +161,15 @@ export default function App() {
   const loadSpokespersons = useCallback(async () => {
     try { showSpokespersons(await api('spokesperson_list')); } catch (e) { saySpokesperson(e.message, true); }
   }, [saySpokesperson]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const loadScenes = useCallback(async () => {
+    try { showScenes(await api('scene_list')); } catch (e) { statuses.scenes[1](e.message, true); }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  /** A new background-setting library; keeps the current choice when it still exists, else the default. */
+  function showScenes(lib, select = null) {
+    setScenes(lib);
+    setSceneId((keep) => select ?? (lib.items.some((x) => x.id === keep) ? keep : lib.default || ''));
+  }
 
   /** A new spokesperson library; keeps the current choice when it still exists, else the default. */
   function showSpokespersons(lib, select = null) {
@@ -194,6 +205,7 @@ export default function App() {
 
   useEffect(() => {
     loadSpokespersons();
+    loadScenes();
     loadSyncLog();
     (async () => {
       try {
@@ -252,6 +264,7 @@ export default function App() {
   }
 
   const spokesperson = spokespersons.items.find((s) => s.id === spokespersonId) ?? null;
+  const scene = scenes.items.find((x) => x.id === sceneId) ?? null;
   // Approved, ready previews for this car and length: the choices for step 3's "approved voice preview".
   const approvedPreviews = chosen ? narr.previews.filter((p) => p.approved && p.status === 'ready' && p.stock === chosen.StockNumber && String(p.duration) === duration) : [];
   useEffect(() => {
@@ -260,7 +273,7 @@ export default function App() {
 
   const ctx = {
     me, isAdmin, readOnly,
-    boot, client, clients, setClients, inventory, setInventory, syncLog, jobs, narr, spokespersons, spokesperson,
+    boot, client, clients, setClients, inventory, setInventory, syncLog, jobs, narr, spokespersons, spokesperson, scenes, scene, sceneId, setSceneId, showScenes,
     chosen, setChosen, duration, setDuration, script, setScript, voice, setVoice, style, setStyle, source, setSource,
     format, setFormat, spokespersonId, setSpokespersonId, approvedVoice, setApprovedVoice, approvedPreviews,
     sheetUrl, setSheetUrl, footage, setFootage, approve, setApprove, confirmCurrent, setConfirmCurrent,

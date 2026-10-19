@@ -1,6 +1,6 @@
 // Seedance video prompts (promptNative, speechPronunciationGuide, prompt). The prompt text is part of each
 // generation's duplicate-request fingerprint, so any change to it makes earlier requests look new.
-import { trim, rtrim, lower, round } from './text.js';
+import { trim, rtrim, lower, round, str } from './text.js';
 import { seedanceRespell, SPEECH_PRONUNCIATION } from './speech.js';
 import { title } from './price.js';
 
@@ -20,7 +20,11 @@ export function speechPronunciationGuide(speech) {
  * beside it, speaking the script; a short approved narration ($speechSeconds) leaves pan shots of the car at the end.
  * voiceReference: false; true/'voice' = a sample of her voice; 'speech' = the exact approved narration.
  */
-export function promptNative(v, speech, duration = 30, presenter = SPOKESPERSON_DEFAULT_DESCRIPTION, voiceReference = false, speechSeconds = null, respell = {}) {
+/** The original background (the default setting); the scene library (src/lib/scenes.js) offers others. */
+export const SHOWROOM_SETTING = 'a bright, upscale modern showroom with polished floors, soft even lighting and tall windows, with open space all around the car, not a representation of the dealership’s actual building';
+const settingText = (setting) => rtrim(trim(str(setting ?? '') || SHOWROOM_SETTING), '.');
+
+export function promptNative(v, speech, duration = 30, presenter = SPOKESPERSON_DEFAULT_DESCRIPTION, voiceReference = false, speechSeconds = null, respell = {}, setting = SHOWROOM_SETTING) {
   presenter = rtrim(trim(presenter), '.');
   speech = trim(speech.replaceAll('"', "'").replace(/[\t\n\v\f\r ]+/g, ' '));
   if (speech === '') throw new Error('Write the script the spokesperson will say.');
@@ -46,7 +50,7 @@ export function promptNative(v, speech, duration = 30, presenter = SPOKESPERSON_
     (voiceReference === 'speech' ? 'Reference audio 1 is the exact recording of her speech for this video: she says exactly those words with that voice, at exactly the same pace and timing as the recording, starting at ' + num(speakFrom) + ' seconds; do not slow it down, stretch it or add pauses. Her lip movements follow that recording word for word. '
       : (voiceReference ? 'Reference audio 1 is the spokesperson\'s voice: match its timbre, accent, pitch and delivery exactly. ' : '')) +
     'Preserve the vehicle paint, trim, wheels, lamps and body exactly; do not invent equipment, badges or license plates, and do not repair cosmetic imperfections. The vehicle is parked and stationary throughout. ' +
-    'Setting: a bright, upscale modern showroom with polished floors, soft even lighting and tall windows, with open space all around the car, not a representation of the dealership’s actual building. ' +
+    'Setting: ' + settingText(setting) + '. ' +
     'Framing rules for every shot: the car is the main subject and in sharp focus, and the entire car is visible from bumper to bumper with space around it, never cropped. Use a wide lens with the camera about seven meters away at chest height. ' +
     (panShots.length ? 'In shots 1–4 the spokesperson' : 'The spokesperson') + ' (' + presenter + ') stands or walks right beside the car, about one step from its body, shown full length from head to shoes, roughly half the height of the frame. She is never closer to the camera than the car, never blocks the view of the car, and never stands behind it or on its far side. ' +
     'Shot 1 (0–' + t(0.25) + ' s): wide front three-quarter view of the whole car; she stands beside the front fender, facing the camera, and begins speaking. ' +
@@ -64,13 +68,13 @@ export function promptNative(v, speech, duration = 30, presenter = SPOKESPERSON_
 }
 
 /** Silent walkaround or dynamic sequence for the lip-sync method (no spoken script in the video). */
-export function prompt(v, spoken, style = 'dynamic', duration = 15, presenter = SPOKESPERSON_DEFAULT_DESCRIPTION) {
+export function prompt(v, spoken, style = 'dynamic', duration = 15, presenter = SPOKESPERSON_DEFAULT_DESCRIPTION, setting = SHOWROOM_SETTING) {
   presenter = rtrim(trim(presenter), '.');
   if (style === 'showroom') return 'Create a ' + duration + '-second dealership walkaround video. Reference image 1 is the exact vehicle asset sheet showing its front, sides and rear; reference image 2 is the spokesperson; match their face, hair, body and outfit exactly. Preserve the vehicle paint, trim, wheels, lamps and body exactly; do not invent equipment or repair cosmetic imperfections. The vehicle is parked throughout. ' +
     'The spokesperson (' + presenter + ') begins at the rear three-quarter corner of the car on the side nearest the camera and walks slowly forward along that side to the front three-quarter corner, presenting the car. Never behind the car, never on its far side, never hidden by it. ' +
     'Throughout, the spokesperson is fully visible from head to at least the knees, faces the camera most of the time, and talks to the viewer continuously with natural mouth movement, warm expressions and open hand gestures toward the car. ' +
     'The stabilized camera tracks alongside at walking pace, slightly ahead of the spokesperson, keeping the face clearly visible, evenly lit and reasonably large in frame while the car stays recognizable beside them. One smooth continuous move; no hard cuts, no racing or drone shots. ' +
-    'Use a bright, modern illustrative showroom, not a representation of the dealership’s actual building. Leave space at the bottom of the frame for captions added in post-production. ' +
+    (settingText(setting) === SHOWROOM_SETTING ? 'Use a bright, modern illustrative showroom, not a representation of the dealership’s actual building. ' : 'Setting: ' + settingText(setting) + '. ') + 'Leave space at the bottom of the frame for captions added in post-production. ' +
     'No on-screen text of any kind: no watermark, no website address, no logo, no signage text, no license-plate text.';
   return 'Create a polished 15-second vehicle advertisement with energetic Hyper Motion style choreography. ' +
     'Reference image 1 is the vehicle asset sheet, the authoritative visual identity. Reference image 2 is the recurring spokesperson. ' +

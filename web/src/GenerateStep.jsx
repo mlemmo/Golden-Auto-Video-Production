@@ -17,6 +17,7 @@ export default function GenerateStep() {
     ['Vehicle', c ? `${vehicleName(c)} · ${price(c)}` : 'not selected', !!c],
     ['Voice', voiceText + (s.voice === 'elevenlabs' ? (approved ? ' · preview chosen' : ' · no approved preview yet') : ''), !!approved],
     footage ? ['Footage', s.footage?.name || 'no video chosen yet', !!s.footage] : ['Spokesperson', s.spokesperson?.name || 'none', !!s.spokesperson],
+    ...(footage ? [] : [['Setting', s.scene?.name || 'default', true]]),
     ['Video', `${s.duration} s · ${FORMAT_NAME[s.format]} · ${footage ? 'your footage' : s.style === 'showroom' ? 'walkaround' : 'dynamic'}`, true],
   ];
 
@@ -27,7 +28,7 @@ export default function GenerateStep() {
       say('Checking current availability and submitting one paid generation…');
       try {
         await api('generate', { stock: c.StockNumber, format: s.format, style: s.style, voice: s.voice, narration_id: s.approvedVoice, duration: Number(s.duration),
-          script: s.script, sheet: s.sheetUrl, spokesperson: s.spokespersonId, approve_spend: s.approve, confirm_current: s.confirmCurrent });
+          script: s.script, sheet: s.sheetUrl, spokesperson: s.spokespersonId, scene: s.sceneId, approve_spend: s.approve, confirm_current: s.confirmCurrent });
         s.setApprove(false);
         say('Generation submitted. It takes a few minutes — follow it under Videos below.');
         await s.loadJobs(); s.openStep('videos'); showVideos();
@@ -57,7 +58,7 @@ export default function GenerateStep() {
   });
   const downloadBrief = () => {
     const brief = { vehicle: c, format: s.format, duration: Number(s.duration), style: s.style, voice: s.voice, script: s.script,
-      reference_images: { car_asset_sheet: s.sheetUrl, spokesperson: s.spokesperson?.url || '' }, spokesperson: s.spokesperson?.name || '', avatar_profile: s.spokesperson?.description || '', model: 'Seedance 2.5',
+      reference_images: { car_asset_sheet: s.sheetUrl, spokesperson: s.spokesperson?.url || '' }, spokesperson: s.spokesperson?.name || '', avatar_profile: s.spokesperson?.description || '', setting: s.scene ? { name: s.scene.name, blocks: s.scene.blocks ?? null, description: s.scene.description } : null, model: 'Seedance 2.5',
       shots: s.style === 'showroom' ? [{ shot: 1, direction: 'Wide front three-quarter; spokesperson beside the front fender' }, { shot: 2, direction: 'Wide side profile; she walks along the side' }, { shot: 3, direction: 'Wide rear three-quarter; she stands at the rear corner' }, { shot: 4, direction: 'Wide front from the other side; price and call to action' }]
         : [{ seconds: '0–4', direction: 'Ultra-low stabilized tracking' }, { seconds: '4–9', direction: 'Interior macro glide' }, { seconds: '9–15', direction: 'Drone dolly-out plus offer' }],
       finishing: 'Captions burned in as white text on black boxes; whole car in frame in every shot.' };

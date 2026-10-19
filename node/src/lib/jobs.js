@@ -23,6 +23,7 @@ import { narrationTables, narrationLoad, narrationCheckAudio } from './narration
 import { nativeSpeech, speechScript } from './speech.js';
 import { promptNative, prompt } from './prompts.js';
 import { spokespersonFind } from './spokespersons.js';
+import { sceneFind } from './scenes.js';
 
 const UPLOADER = fileURLToPath(new URL('../../../private/reference_http.py', import.meta.url));
 const sha256 = (s) => createHash('sha256').update(s).digest('hex');
@@ -250,13 +251,15 @@ export async function generateJob(db, cfg, client, inp, { transport = uploadHttp
     if (voiceRef !== '' && !/^https:\/\/[^\t\n\v\f\r ?#]+\.(mp3|wav|m4a)\n?$/i.test(voiceRef)) throw new Error('voice_reference_url in private/config.json must be a public https link to an MP3, WAV or M4A file.');
   }
   const respell = cfg.respell && typeof cfg.respell === 'object' && !Array.isArray(cfg.respell) ? cfg.respell : {};
+  // Background setting from the scene library (none chosen: the library's default; the showroom words are unchanged).
+  const scene = sceneFind(db, inp.scene);
   const promptText = voice === 'elevenlabs'
-    ? promptNative(fresh, str(approvedVoice.text), duration, presenter.description, 'speech', approvedVoice.audio_duration != null ? toFloat(approvedVoice.audio_duration) : null, respell)
-    : voice === 'native' ? promptNative(fresh, nativeSpeech(spoken), duration, presenter.description, voiceRef !== '', null, respell)
-      : prompt(fresh, spoken, style, duration, presenter.description);
+    ? promptNative(fresh, str(approvedVoice.text), duration, presenter.description, 'speech', approvedVoice.audio_duration != null ? toFloat(approvedVoice.audio_duration) : null, respell, scene.description)
+    : voice === 'native' ? promptNative(fresh, nativeSpeech(spoken), duration, presenter.description, voiceRef !== '', null, respell, scene.description)
+      : prompt(fresh, spoken, style, duration, presenter.description, scene.description);
   const fingerprint = jobFingerprint(v, spoken, sheet, avatar, presenter.description, format, style, duration, voice, promptText, voiceRef);
   const id = random(12).toString('hex');
-  const job = { id, client, stock: v.StockNumber, vehicle: title(v), spokesperson_id: presenter.id, spokesperson: presenter.name, format, style, duration,
+  const job = { id, client, stock: v.StockNumber, vehicle: title(v), spokesperson_id: presenter.id, spokesperson: presenter.name, scene_id: scene.id, scene: scene.name, format, style, duration,
     status: 'preparing_references', created_at: gmdateC(), approved_by: str(inp.approved_by ?? ''), script: spoken, speech_script: voice === 'native' ? nativeSpeech(spoken) : speechScript(spoken), price: v.price ?? null, voice };
   // Native voice: one approval builds the final video (captions timed from the video's own audio).
   if (voice !== 'narration') job.auto_build = true;

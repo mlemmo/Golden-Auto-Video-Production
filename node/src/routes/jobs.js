@@ -13,6 +13,7 @@ import { enrich, referenceImageUrl, uploadReference, generateJob, pollJob, jobsF
 import { withThumbs } from '../lib/thumbs.js';
 import { syncLogKey } from '../lib/dealercenter.js';
 import { vehicleIntro } from '../lib/intros.js';
+import { sceneApi, sceneSuggest } from '../lib/scenes.js';
 
 const sha256 = (s) => createHash('sha256').update(s).digest('hex');
 const SPOKESPERSON = ['spokesperson_list', 'spokesperson_upload', 'spokesperson_default', 'spokesperson_delete'];
@@ -20,6 +21,9 @@ const SPOKESPERSON = ['spokesperson_list', 'spokesperson_upload', 'spokesperson_
 export const MULTIPART = new Set(['import', 'spokesperson_upload', 'footage_build']);
 
 export const jobRoutes = {
+  // Background settings: everyone lists them; admins add, edit, delete, set the default, and ask Claude to write one.
+  ...Object.fromEntries(['scene_list', 'scene_save', 'scene_delete', 'scene_default'].map((a) => [a, ({ db, body }) => sceneApi(a, body, db)])),
+  scene_suggest: async ({ cfg, body }) => sceneSuggest(cfg, body.idea),
   ...Object.fromEntries(SPOKESPERSON.map((a) => [a, ({ cfg, db, client, body, files }) => spokespersonApi(a, { ...body, client }, cfg, db, files)])),
 
   detail: async ({ cfg, db, client, body, dealer }) => {

@@ -1,4 +1,4 @@
-// Step 4: video source, spokesperson, style, publish format and the car photos sent to the video model.
+// Step 4: video source, spokesperson, background setting, style, publish format and the car photos sent to the video model.
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
 import { StepContinue, StepHead, useStudio, Editable } from './App.jsx';
@@ -37,6 +37,13 @@ export default function LookStep() {
           {s.spokesperson && <><img src={s.spokesperson.url} alt={s.spokesperson.name} /><p>{s.spokesperson.description}</p></>}
         </div>
         <button type="button" className="secondary small" id="manageSpokespersons" onClick={manage}>Add or manage spokespersons</button>
+        <label>Background setting
+          <select id="scene" value={s.sceneId} onChange={(e) => s.setSceneId(e.target.value)}>
+            {s.scenes.items.map((x) => <option key={x.id} value={x.id}>{x.name + (x.id === s.scenes.default ? ' (default)' : '')}</option>)}
+          </select>
+        </label>
+        {s.scene && <SceneBlocks scene={s.scene} />}
+        {s.isAdmin && <button type="button" className="secondary small" id="manageScenes" onClick={() => s.setTool('scenes')}>Add or manage background settings</button>}
         <label>Video style
           <select id="style" value={s.style} onChange={(e) => s.setStyle(e.target.value)}>
             <option value="showroom">Showroom walkaround — spokesperson walks around the car</option>
@@ -63,6 +70,16 @@ export default function LookStep() {
         waiting={!s.chosen ? 'Choose a vehicle in step 1 first' : footage ? 'Choose the car video first' : 'Choose a spokesperson first'} />
       </Editable>
     </section>
+  );
+}
+
+/** A setting's Seedance blocks (or its free-text description) as shown under the choice. */
+export function SceneBlocks({ scene }) {
+  if (!scene.blocks) return <p className="hint scene-text">{scene.description}</p>;
+  return (
+    <dl className="scene-blocks">
+      {Object.entries(scene.blocks).map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}
+    </dl>
   );
 }
 
