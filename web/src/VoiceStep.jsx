@@ -117,7 +117,7 @@ function VoiceStudio({ hidden }) {
       <label className="check note-important"><input type="checkbox" id="nPreviewSpend" checked={spend} onChange={(e) => setSpend(e.target.checked)} />I approve <b>one paid ElevenLabs voice preview</b> at my account’s current rate.</label>
       <label className="check"><input type="checkbox" id="nNewTake" checked={newTake} onChange={(e) => setNewTake(e.target.checked)} />Make another take even if an identical preview already exists.</label>
       <div className="actions">
-        <button type="button" id="nCreatePreview" disabled={pending} onClick={createPreview}>Create voice preview</button>
+        <button type="button" id="nCreatePreview" disabled={pending || !spend} title={spend ? undefined : 'Tick the paid voice preview approval first'} onClick={createPreview}>Create voice preview</button>
         <button type="button" id="nRefresh" className="secondary" disabled={pending} onClick={() => s.refreshNarrations().then(() => say('Previews refreshed.')).catch((e) => say(e.message, true))}>Refresh previews</button>
       </div>
       <div id="nPreviews" className="list">
@@ -148,7 +148,7 @@ function Preview({ p, act }) {
       )}
       <div className="actions">
         {p.status === 'ready' && p.audio_url && !p.too_long && !p.approved && (
-          <button type="button" className="small" onClick={() => act('narration_approve', { id: p.id, reviewed })}>Approve this voice</button>
+          <button type="button" className="small" disabled={!reviewed} title={reviewed ? undefined : 'Tick “I listened to the whole preview” first'} onClick={() => act('narration_approve', { id: p.id, reviewed })}>Approve this voice</button>
         )}
         {p.status !== 'submitting' && (
           <DangerButton label="Delete preview" what={`this voice preview for ${p.vehicle}`} detail="Its audio file is removed. Previews used by a finished video cannot be deleted."

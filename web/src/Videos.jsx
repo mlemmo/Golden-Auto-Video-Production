@@ -94,7 +94,7 @@ function CaptionEditor({ draft, setDraft }) {
       <textarea id="captionSrt" rows={14} value={draft.srt} onChange={(e) => setDraft({ ...draft, srt: e.target.value })} />
       <label className="check"><input id="captionReviewed" type="checkbox" checked={draft.reviewed} onChange={(e) => setDraft({ ...draft, reviewed: e.target.checked })} />I checked the captions against the video.</label>
       <div className="actions">
-        <button id="renderCaptions" disabled={rendering} onClick={render}>Render captioned video</button>
+        <button id="renderCaptions" disabled={rendering || !draft.reviewed} title={draft.reviewed ? undefined : 'Tick “I checked the captions against the video” first'} onClick={render}>Render captioned video</button>
         <button type="button" className="secondary" id="closeCaptions" onClick={() => s.setCaptionJob(null)}>Close</button>
       </div>
     </section>

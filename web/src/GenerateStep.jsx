@@ -74,8 +74,8 @@ export default function GenerateStep() {
       <label className="check note-important" id="approveLabel" hidden={footage}><input type="checkbox" id="approve" checked={s.approve} onChange={(e) => s.setApprove(e.target.checked)} />I reviewed the vehicle facts and script and approve <b>one paid Higgsfield generation</b> at my account’s current rate.</label>
       <label className="check note-important"><input type="checkbox" id="confirmCurrent" checked={s.confirmCurrent} onChange={(e) => s.setConfirmCurrent(e.target.checked)} />I confirm the vehicle is <b>available</b> and its advertised <b>price is current</b>.</label>
       <div className="actions">
-        <button id="buildFootage" hidden={!footage} disabled={!c || s.busy} onClick={buildFootage}>Build video from my footage</button>
-        <button id="generate" hidden={footage} disabled={!c || s.busy} onClick={generate}>Generate video</button>
+        <button id="buildFootage" hidden={!footage} disabled={!c || s.busy || !s.confirmCurrent} title={s.confirmCurrent ? undefined : 'Tick “vehicle is available and price is current” first'} onClick={buildFootage}>Build video from my footage</button>
+        <button id="generate" hidden={footage} disabled={!c || s.busy || !s.approve || !s.confirmCurrent} title={s.approve && s.confirmCurrent ? undefined : 'Tick both boxes above first'} onClick={generate}>Generate video</button>
         <button className="secondary" id="checkReferences" hidden={footage} disabled={s.busy} onClick={checkReferences}>Check reference uploads</button>
         <button className="secondary" id="brief" hidden={footage} disabled={!c} onClick={downloadBrief}>Download production brief</button>
       </div>

@@ -200,7 +200,7 @@ function LipsyncBuilder() {
       </label>
       <label className="check note-important"><input type="checkbox" id="nCurrent" checked={current} onChange={(e) => setCurrent(e.target.checked)} />I confirm this vehicle is <b>available</b> and the advertised <b>price is current</b>.</label>
       <label className="check note-important"><input type="checkbox" id="nSyncSpend" checked={spend} onChange={(e) => setSpend(e.target.checked)} />I approve <b>one paid fal Sync Lipsync request</b> at my account’s current rate; captions and the final render then run automatically.</label>
-      <button type="button" id="nSubmitSync" disabled={pending} onClick={submit}>Build final video with lip-sync</button>
+      <button type="button" id="nSubmitSync" disabled={pending || !current || !spend} title={current && spend ? undefined : 'Tick both boxes above first'} onClick={submit}>Build final video with lip-sync</button>
       <div id="nSyncJobs" className="list">
         {r.lipsync.map((job) => {
           const auto = job.auto_build && (['submitting', 'queued', 'in_progress', 'unknown'].includes(job.status) || (job.final && ['waiting', 'queued', 'rendering'].includes(job.final.status)));
