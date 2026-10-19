@@ -419,3 +419,16 @@ export function footageLocalPath(cfg, job) {
   if (!existsSync(path)) throw new Error('The uploaded footage was deleted. Upload it again.');
   return path;
 }
+
+/** Finished, captioned videos of the given clients, newest first (the Library page). */
+export function libraryVideos(db, clientIds) {
+  const out = [];
+  for (const { payload } of db.prepare('SELECT payload FROM jobs').all()) {
+    let j; try { j = JSON.parse(payload); } catch { continue; }
+    const client = j.client ?? CLIENT_DEFAULT;
+    if (!clientIds.includes(client) || j.finish_status !== 'completed' || !String(j.captioned_url ?? '').startsWith('https://')) continue;
+    out.push({ id: j.id, client, vehicle: str(j.vehicle), stock: str(j.stock), price: j.price ?? null, duration: j.duration ?? null, format: str(j.format),
+      url: j.captioned_url, created_at: j.finish_completed_at ?? j.created_at ?? '', approved_by: str(j.approved_by ?? '') });
+  }
+  return out.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+}

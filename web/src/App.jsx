@@ -5,6 +5,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { api, boot } from './api.js';
 import { Notifications, Popups, useStatus, vehicleName } from './ui.jsx';
 import { AccountMenu } from './Accounts.jsx';
+import { Library } from './Library.jsx';
 import VehicleStep, { ClientPanel } from './VehicleStep.jsx';
 import ScriptStep from './ScriptStep.jsx';
 import VoiceStep from './VoiceStep.jsx';
@@ -113,6 +114,7 @@ export default function App() {
   const formStore = useRef({});   // per-client form values (useClientState, switchClient)
   // Tools: a dropdown in the top bar; each tool opens in a full-page window (null = none open).
   const [tool, setTool] = useState(null);
+  const [libraryOpen, setLibraryOpen] = useState(false);
   // Collapsed steps: only step 1 is open when the page loads.
   const [collapsed, setCollapsed] = useState(START_COLLAPSED);
   const toggleStep = useCallback((id) => setCollapsed((c) => ({ ...c, [id]: !c[id] })), []);
@@ -275,6 +277,7 @@ export default function App() {
       <div className="topbar">
         <span className="topbar-brand">{client ? client.name : 'Golden Auto'} · Video Studio</span>
         <div className="header-actions">
+          <button type="button" className="secondary small" id="libraryOpen" aria-label="Video library" onClick={() => setLibraryOpen(true)}>▶<span className="label-long"> Library</span></button>
           <Notifications />
           {!readOnly && <ToolsMenu />}
           {isAdmin && <AdminMenu />}
@@ -310,6 +313,7 @@ export default function App() {
         </>}
       </main>
       <ToolWindows />
+      <Library open={libraryOpen} onClose={() => setLibraryOpen(false)} />
     </Studio.Provider>
   );
 }

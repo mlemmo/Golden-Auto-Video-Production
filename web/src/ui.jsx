@@ -5,7 +5,7 @@ import { addNotice, dismissAll, dismissNotice, useNotices } from './notices.js';
 
 export const SECTION_NAME = { vehicle: 'Clients & vehicles', sheet: 'Car photos', generate: 'Generate', videos: 'Videos', captions: 'Captions',
   studio: 'Voice previews', builder: 'Lip-sync builder', spokesperson: 'Spokespersons', import: 'ZIP import',
-  users: 'Users', account: 'Your account', usage: 'Usage' };
+  users: 'Users', account: 'Your account', usage: 'Usage', library: 'Library' };
 
 /**
  * A section's status messages, shown as pop-ups (react-hot-toast): [null, say(text, kind)].

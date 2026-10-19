@@ -18,6 +18,7 @@ import { withSpeechSites } from './lib/speech.js';
 import { sessionStore, newSessionId, newCsrf, sameSecret, parseCookies, sessionCookie, clearedCookie, COOKIE } from './lib/session.js';
 import { loginPage, dashboardPage } from './lib/pages.js';
 import { recordActivity, usageReport } from './lib/activity.js';
+import { libraryVideos } from './lib/jobs.js';
 import { signIn, userById, userCount, publicUser, allowedClients, usersList, userCreate, userUpdate, userDelete, passwordChange } from './lib/users.js';
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
@@ -36,6 +37,8 @@ const sessionRoutes = {
   },
   logout: ({ session }) => { session.destroyed = true; return {}; },
   me: ({ db, user }) => ({ user: publicUser(user), clients: allowedClients(db, user) }),
+  // The Library page: every finished video of the clients this account may use.
+  library: ({ db, user }) => { const ids = allowedClients(db, user); return { videos: libraryVideos(db, ids), clients: clientsLoad(db).items.filter((c) => ids.includes(c.id)).map((c) => ({ id: c.id, name: c.name })) }; },
   password_change: async ({ db, user, body }) => { await passwordChange(db, user, body.current, body.password); return { message: 'Password changed.' }; },
   // Admins: accounts.
   users_list: ({ db }) => ({ users: usersList(db).map(publicUser), clients: clientsLoad(db).items.map((c) => ({ id: c.id, name: c.name })) }),
@@ -48,10 +51,10 @@ const sessionRoutes = {
 
 // What each role may do. Viewers only read; admins alone manage users, clients and the shared spokesperson library;
 // users do everything else (including paid steps) for the clients assigned to them.
-const VIEWER_ACTIONS = new Set(['clients', 'client_select', 'inventory', 'sync_log', 'jobs', 'narration_list', 'spokesperson_list', 'detail', 'speech', 'logout', 'me', 'password_change']);
+const VIEWER_ACTIONS = new Set(['library', 'clients', 'client_select', 'inventory', 'sync_log', 'jobs', 'narration_list', 'spokesperson_list', 'detail', 'speech', 'logout', 'me', 'password_change']);
 const ADMIN_ACTIONS = new Set(['usage', 'client_add', 'client_analyze', 'client_details', 'spokesperson_upload', 'spokesperson_default', 'spokesperson_delete', 'users_list', 'user_create', 'user_update', 'user_delete']);
 // Actions that need no current client (an account without clients can still use them).
-const NO_CLIENT = new Set(['usage', 'clients', 'logout', 'me', 'password_change', 'users_list', 'user_create', 'user_update', 'user_delete', 'client_add']);
+const NO_CLIENT = new Set(['library', 'usage', 'clients', 'logout', 'me', 'password_change', 'users_list', 'user_create', 'user_update', 'user_delete', 'client_add']);
 // Actions recorded for the Usage dashboard (who, which client, what, when; never passwords).
 const TRACKED = new Set(['generate', 'narration_preview', 'narration_lipsync', 'footage_build', 'finish', 'narration_approve', 'job_delete',
   'narration_delete', 'narration_lipsync_delete', 'sync', 'import', 'client_add', 'client_details', 'client_analyze', 'spokesperson_upload',

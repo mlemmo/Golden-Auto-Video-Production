@@ -69,6 +69,11 @@ test('accounts: first admin, users and viewers, per-client access, management', 
     assert.equal(await viewer.signIn('v@example.com', 'viewer password'), 303);
     assert.equal((await viewer.post('inventory')).body.vehicles[0].StockNumber, 'G1');
     assert.equal((await viewer.post('jobs')).status, 200);
+    const jdb = openDb(cfg);
+    jdb.exec('CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, fingerprint TEXT UNIQUE, payload TEXT NOT NULL)');
+    for (const [id, client, done] of [['L1', undefined, true], ['L2', 'bay-motors', true], ['L3', undefined, false]]) jdb.prepare('INSERT INTO jobs VALUES (?,?,?)').run(id, id, JSON.stringify({ id, client, vehicle: 'CAR ' + id, finish_status: done ? 'completed' : 'rendering', captioned_url: 'https://site.example.com:4343/assets/' + id + '.mp4', created_at: '2026-10-1' + id.slice(1) + 'T00:00:00Z' }));
+    assert.deepEqual((await viewer.post('library')).body.videos.map((v) => v.id), ['L1'], 'library: finished videos of the viewer\'s clients only');
+    assert.deepEqual((await admin.post('library')).body.videos.map((v) => v.id), ['L2', 'L1'], 'admin: all clients, newest first');
     for (const a of ['generate', 'narration_preview', 'job_delete', 'sync', 'import', 'finish', 'footage_build']) {
       const r = await viewer.post(a); assert.equal(r.status, 403, a); assert.match(r.body.error, /view/);
     }
