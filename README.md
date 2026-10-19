@@ -1,5 +1,7 @@
 # Golden Auto AI Car Videos
 
+New here? Read [docs/OVERVIEW.md](docs/OVERVIEW.md) first: what the website is for, who uses it and how a video is made.
+
 Golden Auto Video Studio: a private dashboard that turns a car dealer's inventory (Golden Auto, San Ramon, CA, and other client dealers) into 9:16 walk-around ads for Instagram and Facebook. A Node service with a React dashboard, a few Python helpers, SQLite, FFmpeg and whisper.cpp.
 
 **Pipeline:** inventory (website refresh, DealerCenter sync or ZIP import; SFTP XML later) → asset sheet of real car photos → approve the script and an ElevenLabs voice preview → Higgsfield Seedance 2.5 renders a spokesperson walkaround (one paid approval) → the caption worker burns in captions timed from the video's own speech (local whisper.cpp + FFmpeg) → Ready.
