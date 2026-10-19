@@ -4,6 +4,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { api, boot } from './api.js';
 import { Notifications, Popups, useStatus, vehicleName } from './ui.jsx';
+import { AccountMenu } from './Accounts.jsx';
 import VehicleStep, { ClientPanel } from './VehicleStep.jsx';
 import ScriptStep from './ScriptStep.jsx';
 import VoiceStep from './VoiceStep.jsx';
@@ -56,6 +57,12 @@ export function useClientState(name, initial) {
   return [value, set];
 }
 
+/** A step's contents, read-only for viewers (every control inside is disabled; links still work). */
+export function Editable({ children }) {
+  const s = useStudio();
+  return <fieldset className="editable" disabled={s.readOnly}>{children}</fieldset>;
+}
+
 export function StepContinue({ from, to, label, check, ready = true, waiting = '' }) {
   const s = useStudio();
   const [ok, setOk] = useState(false);
@@ -99,6 +106,10 @@ export default function App() {
   const [approve, setApprove] = useState(false);
   const [confirmCurrent, setConfirmCurrent] = useState(false);
   const [captionJob, setCaptionJob] = useState(null);
+  // The signed-in account (from the page) and what it may do.
+  const me = boot.user ?? { email: '', role: 'viewer' };
+  const isAdmin = me.role === 'admin', readOnly = me.role === 'viewer';
+  const [noClients, setNoClients] = useState(false);
   const formStore = useRef({});   // per-client form values (useClientState, switchClient)
   // Tools: a dropdown in the top bar; each tool opens in a full-page window (null = none open).
   const [tool, setTool] = useState(null);
@@ -183,9 +194,13 @@ export default function App() {
     loadSpokespersons();
     loadSyncLog();
     (async () => {
-      try { await loadClients(); await loadInventory(); await loadJobs(); } catch (e) { sayVehicle(e.message, true); }
+      try {
+        const cl = await loadClients();
+        if (!cl.items.length) { setNoClients(true); return; }
+        await loadInventory(); await loadJobs();
+      } catch (e) { sayVehicle(e.message, true); }
     })();
-    refreshNarrations().catch((e) => statuses.studio[1](e.message, true));
+    refreshNarrations().catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // While a website import is still copying photos, re-read the inventory every 20 seconds (same client only).
@@ -242,6 +257,7 @@ export default function App() {
   }, [narr, chosen?.StockNumber, duration]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ctx = {
+    me, isAdmin, readOnly,
     boot, client, clients, setClients, inventory, setInventory, syncLog, jobs, narr, spokespersons, spokesperson,
     chosen, setChosen, duration, setDuration, script, setScript, voice, setVoice, style, setStyle, source, setSource,
     format, setFormat, spokespersonId, setSpokespersonId, approvedVoice, setApprovedVoice, approvedPreviews,
@@ -260,8 +276,8 @@ export default function App() {
         <span className="topbar-brand">{client ? client.name : 'Golden Auto'} · Video Studio</span>
         <div className="header-actions">
           <Notifications />
-          <ToolsMenu />
-          <button type="button" className="secondary small" id="logout" onClick={signOut}>Sign out</button>
+          {!readOnly && <ToolsMenu />}
+          <AccountMenu onSignOut={signOut} />
         </div>
       </div>
       {boot.banner && <div className="staging-banner">{boot.banner}</div>}
@@ -277,6 +293,8 @@ export default function App() {
         <a href="#stepLook"><b>4</b> Look</a><a href="#stepGenerate"><b>5</b> Generate</a><a href="#videos"><b>✓</b> Videos</a>
       </nav>
       <main>
+        {readOnly && <p className="note-important view-only">View-only account: you can see the cars and download finished videos; ask an admin to make changes.</p>}
+        {noClients ? <section className="panel"><h2>No clients yet</h2><p>No clients are assigned to your account yet. Ask an admin to give you access.</p></section> : <>
         <ClientPanel />
         <div className="workspace">
           <VehicleStep />
@@ -288,6 +306,7 @@ export default function App() {
           </div>
         </div>
         <Videos />
+        </>}
       </main>
       <ToolWindows />
     </Studio.Provider>

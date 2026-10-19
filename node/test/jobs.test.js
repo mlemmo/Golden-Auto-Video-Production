@@ -128,7 +128,8 @@ test('"My footage" jobs', () => {
     assert.throws(() => build(inp, { ...file, size: 70 * 1024 * 1024 }, probe(40)), /64 MB/);
     assert.throws(() => build(inp, { ...file, error: 1 }, probe(40)), /Upload failed/);
     assert.ok(count(db) === 0 && (!existsSync(`${dir}/assets/footage`) || readdirSync(`${dir}/assets/footage`).length === 0), 'nothing saved when checks fail');
-    const job = build(inp, file, probe(41.7));
+    const job = build({ ...inp, approved_by: 'sawyer@example.com' }, file, probe(41.7));
+    assert.equal(job.approved_by, 'sawyer@example.com', 'the record says who approved it');
     assert.ok(job.provider === 'footage' && job.status === 'completed' && job.finish_status === 'queued' && job.audio_swap === true && job.captions_from_audio === true);
     assert.ok(job.script === 'Caption words.' && job.narration_id === 'N1' && job.duration === 30);
     assert.ok(/^[a-f0-9]{32}\.mov$/.test(job.footage_file) && existsSync(footageLocalPath(cfg, job)));

@@ -3,9 +3,11 @@ import { useEffect, useRef, useState } from 'react';
 import { api, upload } from './api.js';
 import { useClientState, useStudio } from './App.jsx';
 import { DangerButton, Link } from './ui.jsx';
+import { PasswordTool, UsersTool } from './Accounts.jsx';
 
 const TOOLS = [
-  ['spokespersons', 'Manage spokespersons', 'Upload new spokesperson images and manage saved ones'],
+  ['users', 'Manage users', 'Add accounts, set roles and which clients each person may use', 'admin'],
+  ['spokespersons', 'Manage spokespersons', 'Upload new spokesperson images and manage saved ones', 'admin'],
   ['import', 'Import a vehicle (DealerCenter ZIP)', 'For cars not on the website yet'],
   ['lipsync', 'Lip-sync builder', 'Only for the “ElevenLabs narration + lip-sync” voice method'],
 ];
@@ -27,7 +29,7 @@ export function ToolsMenu() {
       <button type="button" className="secondary small" id="toolsMenu" aria-haspopup="menu" aria-expanded={open} aria-label="Tools" onClick={() => setOpen(!open)}>☰<span className="label-long"> Tools</span></button>
       {open && (
         <div className="menu-list" role="menu">
-          {TOOLS.map(([key, label, hint]) => (
+          {TOOLS.filter(([, , , only]) => !only || s.isAdmin).map(([key, label, hint]) => (
             <button key={key} type="button" role="menuitem" className="menu-item" id={'tool-' + key} onClick={() => { setOpen(false); s.setTool(key); }}>
               <strong>{label}</strong><small>{hint}</small>
             </button>
@@ -52,7 +54,7 @@ export function ToolWindows() {
     document.body.style.overflow = 'hidden';
     return () => { document.removeEventListener('keydown', esc); document.body.style.overflow = ''; };
   }, [s.tool]); // eslint-disable-line react-hooks/exhaustive-deps
-  const title = TOOLS.find(([key]) => key === s.tool)?.[1] ?? '';
+  const title = s.tool === 'account' ? 'Change password' : TOOLS.find(([key]) => key === s.tool)?.[1] ?? '';
   return (
     <div className="tool-window" id="tools" role="dialog" aria-modal="true" aria-label={title} hidden={!s.tool}>
       <div className="tool-window-head">
@@ -60,7 +62,9 @@ export function ToolWindows() {
         <button type="button" className="secondary" id="toolsClose" onClick={close}>Close</button>
       </div>
       <div className="tool-window-body">
-        <div hidden={s.tool !== 'spokespersons'}><Spokespersons /></div>
+        {s.isAdmin && <div hidden={s.tool !== 'users'}><UsersTool active={s.tool === 'users'} /></div>}
+        <div hidden={s.tool !== 'account'}><PasswordTool /></div>
+        {s.isAdmin && <div hidden={s.tool !== 'spokespersons'}><Spokespersons /></div>}
         <div hidden={s.tool !== 'import'}><ZipImport key={'zip-' + (s.clients.current ?? '')} /></div>
         <div hidden={s.tool !== 'lipsync'}><LipsyncBuilder /></div>
       </div>

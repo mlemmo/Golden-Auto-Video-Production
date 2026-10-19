@@ -1,7 +1,7 @@
 // Step 5: one paid generation (or a free build from the dealer's own footage). The captioned final video is then
 // built on the server and appears under Videos.
 import { api, upload } from './api.js';
-import { StepHead, useStudio } from './App.jsx';
+import { StepHead, useStudio, Editable } from './App.jsx';
 import { price, vehicleName } from './ui.jsx';
 
 const FORMAT_NAME = { instagram_reels: 'Instagram Reels', facebook_reels: 'Facebook Reels', facebook_feed: 'Facebook Feed', square: 'Instagram / Facebook Square' };
@@ -68,6 +68,7 @@ export default function GenerateStep() {
   return (
     <section className={s.stepClass('stepGenerate')} id="stepGenerate">
       <StepHead id="stepGenerate" num="5" title={<h2>Generate</h2>} sub={<p>One paid generation. The captioned final video is then built automatically and appears under Videos.</p>} />
+      <Editable>
       <ul className="summary" id="summary">
         {rows.map(([k, v, ok]) => <li key={k} className={ok ? 'ok' : 'todo'}><b>{k}</b><span>{v}</span></li>)}
       </ul>
@@ -79,6 +80,7 @@ export default function GenerateStep() {
         <button className="secondary" id="checkReferences" hidden={footage} disabled={s.busy} onClick={checkReferences}>Check reference uploads</button>
         <button className="secondary" id="brief" hidden={footage} disabled={!c} onClick={downloadBrief}>Download production brief</button>
       </div>
+      </Editable>
     </section>
   );
 }

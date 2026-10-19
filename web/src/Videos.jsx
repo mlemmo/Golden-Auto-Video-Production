@@ -2,7 +2,7 @@
 // one is being made; plus the caption editor (review or correct the captions and render again, free).
 import { useState } from 'react';
 import { api } from './api.js';
-import { GENERATING, StepHead, useStudio } from './App.jsx';
+import { GENERATING, StepHead, useStudio, Editable } from './App.jsx';
 import { DangerButton, LatestFirst, Link, newestFirst } from './ui.jsx';
 
 function stage(j) {
@@ -35,12 +35,14 @@ export default function Videos() {
   return (
     <section className={s.stepClass('videos')} id="videos">
       <StepHead id="videos" num="✓" title={<h2>Videos</h2>} sub={<p>Generation takes a few minutes; this list refreshes itself while a video is being made. Download finished videos promptly.</p>} />
+      <Editable>
       <div className="actions"><button type="button" className="secondary" id="refreshJobs" onClick={async () => { await s.loadJobs(); say('List refreshed.'); }}>Refresh list</button></div>
       <div id="jobs" className="list">
         {s.jobs && !rows.length && <p>No videos yet. Generate one in step 5.</p>}
         <LatestFirst key={s.clients.current ?? ''} items={rows} noun="video" render={(j) => <Job key={j.id} j={j} say={say} openCaptions={openCaptions} />} />
       </div>
       {s.captionJob && <CaptionEditor draft={draft} setDraft={setDraft} />}
+      </Editable>
     </section>
   );
 }
@@ -56,7 +58,7 @@ function Job({ j, say, openCaptions }) {
   const remove = async () => {
     try { say((await api('job_delete', { id: j.id })).message); await s.loadJobs(); } catch (e) { say(e.message, true); }
   };
-  const details = [j.spokesperson, j.format?.replace('_', ' '), j.duration ? j.duration + ' s' : '', VOICE[j.voice] || '', j.created_at ? new Date(j.created_at).toLocaleString() : ''].filter(Boolean).join(' · ');
+  const details = [j.spokesperson, j.format?.replace('_', ' '), j.duration ? j.duration + ' s' : '', VOICE[j.voice] || '', j.created_at ? new Date(j.created_at).toLocaleString() : '', j.approved_by ? 'approved by ' + j.approved_by : ''].filter(Boolean).join(' · ');
   return (
     <div className="job">
       <div className="job-head"><strong>{j.vehicle}</strong><span className={'badge ' + tone}>{label}</span></div>

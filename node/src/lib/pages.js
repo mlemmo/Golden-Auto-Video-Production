@@ -21,20 +21,22 @@ export function envBits(cfg) {
   const test = ['staging', 'node'].includes(env), label = env === 'node' ? 'NODE TEST' : 'STAGING';
   return { env, test, label, prefix: test ? label + ' • ' : '' };
 }
-export function loginPage(cfg, csrf, error = '') {
+/** firstRun: no accounts yet — the old dashboard password creates the first admin for the email entered. */
+export function loginPage(cfg, csrf, error = '', firstRun = false) {
   const html = readFileSync(new URL('../templates/login.html', import.meta.url), 'utf8');
-  return fill(html, { TITLE_PREFIX: esc(envBits(cfg).prefix), CSRF: esc(csrf), ERROR: esc(error) });
+  const note = firstRun ? '<p class="note-important">First sign-in: enter your email and the current dashboard password. This creates your admin account; after that, admins add everyone else.</p>' : '';
+  return fill(html, { TITLE_PREFIX: esc(envBits(cfg).prefix), CSRF: esc(csrf), ERROR: esc(error), NOTE: note });
 }
 
 /**
  * The React dashboard (built by `npm run build` in web/). Its index.html carries <!--GA_BOOT--> where this browser's
  * CSRF token and the site's banner go; null when the front end has not been built.
  */
-export function dashboardPage(cfg, csrf, root = ROOT) {
+export function dashboardPage(cfg, csrf, root = ROOT, user = null) {
   let html;
   try { html = readFileSync(root + '/public/app/index.html', 'utf8'); } catch { return null; }
   const { env, test, label, prefix } = envBits(cfg);
-  const boot = { csrf, env, banner: test ? label + ' — test copy. Paid generations here cost real money; production is video.mygoldenauto.net.' : '' };
+  const boot = { csrf, env, user, banner: test ? label + ' — test copy. Paid generations here cost real money; production is video.mygoldenauto.net.' : '' };
   // JSON inside <script>: "<" escaped so no value can close the tag.
   const script = '<script>window.GA=' + JSON.stringify(boot).replace(/</g, '\\u003c') + ';</script>';
   return html.replace('<!--GA_BOOT-->', script).replace(/<title>([^<]*)<\/title>/, (_, t) => '<title>' + esc(prefix) + t + '</title>');

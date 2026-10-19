@@ -1,7 +1,7 @@
 // Step 4: video source, spokesperson, style, publish format and the car photos sent to the video model.
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
-import { StepContinue, StepHead, useStudio } from './App.jsx';
+import { StepContinue, StepHead, useStudio, Editable } from './App.jsx';
 
 export default function LookStep() {
   const s = useStudio();
@@ -13,6 +13,7 @@ export default function LookStep() {
   return (
     <section className={s.stepClass('stepLook')} id="stepLook">
       <StepHead id="stepLook" num="4" title={<h2>Look</h2>} sub={<p>Spokesperson, style, format and the car photos the video is made from.</p>} />
+      <Editable>
       <label>Video source
         <select id="source" value={s.source} onChange={(e) => s.setSource(e.target.value)}>
           <option value="ai">AI showroom video — Seedance films the car and the spokesperson</option>
@@ -60,6 +61,7 @@ export default function LookStep() {
         check={footage ? 'Footage video chosen' : 'Spokesperson, format and photos confirmed'}
         ready={!!s.chosen && (!footage || !!s.footage) && (footage || !!s.spokesperson)}
         waiting={!s.chosen ? 'Choose a vehicle in step 1 first' : footage ? 'Choose the car video first' : 'Choose a spokesperson first'} />
+      </Editable>
     </section>
   );
 }

@@ -257,7 +257,7 @@ export async function generateJob(db, cfg, client, inp, { transport = uploadHttp
   const fingerprint = jobFingerprint(v, spoken, sheet, avatar, presenter.description, format, style, duration, voice, promptText, voiceRef);
   const id = random(12).toString('hex');
   const job = { id, client, stock: v.StockNumber, vehicle: title(v), spokesperson_id: presenter.id, spokesperson: presenter.name, format, style, duration,
-    status: 'preparing_references', created_at: gmdateC(), script: spoken, speech_script: voice === 'native' ? nativeSpeech(spoken) : speechScript(spoken), price: v.price ?? null, voice };
+    status: 'preparing_references', created_at: gmdateC(), approved_by: str(inp.approved_by ?? ''), script: spoken, speech_script: voice === 'native' ? nativeSpeech(spoken) : speechScript(spoken), price: v.price ?? null, voice };
   // Native voice: one approval builds the final video (captions timed from the video's own audio).
   if (voice !== 'narration') job.auto_build = true;
   if (voice === 'elevenlabs') { job.narration_id = approvedVoice.id; job.speech_script = str(approvedVoice.text); }
@@ -402,7 +402,7 @@ export function goldenFootageBuild(db, cfg, inp, file, { probe = (p) => footageP
 
   const id = random(12).toString('hex');
   const job = { id, client, stock: v.StockNumber, vehicle: title(v), spokesperson: '', format, style: 'footage',
-    duration: Math.trunc(Math.min(duration, Math.floor(facts.duration))), status: 'completed', provider: 'footage', created_at: gmdateC(),
+    duration: Math.trunc(Math.min(duration, Math.floor(facts.duration))), status: 'completed', provider: 'footage', created_at: gmdateC(), approved_by: str(inp.approved_by ?? ''),
     script: str(voice.caption_script), speech_script: str(voice.text), price: v.price ?? null, voice: 'elevenlabs',
     narration_id: voice.id, audio_swap: true, captions_from_audio: true, footage_file: name,
     video_url: str(cfg.public_base_url).replace(/\/+$/, '') + '/assets/footage/' + name,

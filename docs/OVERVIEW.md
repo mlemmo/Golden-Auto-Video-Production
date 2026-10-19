@@ -20,11 +20,21 @@ Auto only so far.
 
 ## Who uses it
 
-- **The dealership team** (Golden Auto staff, Sawyer, Mark): sign in with the dashboard password, make and download
-  videos, post them on social media.
+- **The dealership team** (Golden Auto staff, Sawyer, Mark): make and download videos, post them on social media.
 - **Developers** (the team, with Claude Code) keep the code running on the company's Ubuntu server.
 
-There are no customer accounts: the site is private, behind a single password.
+**Accounts.** Everyone signs in with their own email and password. There is no registration page: an admin adds
+people under Tools → Manage users and chooses their role and which clients they may use:
+
+| Role | Can do |
+| --- | --- |
+| Admin | Everything, plus managing users, clients and the shared spokesperson library |
+| User | Makes videos for their assigned clients, including paid steps |
+| Viewer | Sees cars and downloads finished videos for their clients; changes nothing |
+
+Every paid video and voice preview records who approved it. Each site (production, staging) has its own accounts;
+on a site with no accounts yet, the first sign-in with an email and the old shared dashboard password creates the
+first admin.
 
 ## The two websites
 

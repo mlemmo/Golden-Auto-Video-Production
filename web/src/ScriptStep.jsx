@@ -1,7 +1,7 @@
 // Step 2: the script the spokesperson says, drafted from the listing, and its spoken length.
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
-import { StepContinue, StepHead, useStudio } from './App.jsx';
+import { StepContinue, StepHead, useStudio, Editable } from './App.jsx';
 import { miles, price, vehicleName } from './ui.jsx';
 
 export default function ScriptStep() {
@@ -11,6 +11,7 @@ export default function ScriptStep() {
   return (
     <section className={s.stepClass('stepScript')} id="stepScript">
       <StepHead id="stepScript" num="2" title={<h2>Script</h2>} sub={<p>{c ? `${c.Year} ${c.Make} ${c.Model} · ` : ''}What the spokesperson says. It is drafted from the listing; edit it freely.</p>} />
+      <Editable>
       <span className="eyebrow">SELECTED VEHICLE</span>
       <h3 id="selected">{c ? vehicleName(c) : 'Select a vehicle in step 1'}</h3>
       <div id="facts" className="facts">{c ? `${c.Trim} · ${price(c)} · ${miles(c)} miles · #${c.StockNumber}` : ''}</div>
@@ -26,6 +27,7 @@ export default function ScriptStep() {
       <SpokenLength />
       <StepContinue from="stepScript" to="stepVoice" label="Continue to step 3: Voice" check="Script approved"
         ready={!!c && s.script.trim() !== ''} waiting={!c ? 'Choose a vehicle in step 1 first' : 'Write the script first'} />
+      </Editable>
     </section>
   );
 }

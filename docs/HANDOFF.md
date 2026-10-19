@@ -32,6 +32,11 @@ the work (Mark started it).
 - Staging's photo URLs pointed at production (copied data, so asset-sheet rebuilds failed); rewritten to
   staging.mygoldenauto.net in staging's database only (backup `private/data/agent.sqlite.bak-before-photo-urls`).
 
+## Accounts (2026-10-18)
+Email sign-in with admin / user / viewer roles and per-client access; no registration page (Tools → Manage users).
+Each site has its own accounts: the first sign-in on a site (email + the old shared dashboard password) creates its
+first admin. Paid records say who approved them (`approved_by`).
+
 ## Open items (next steps)
 1. **Golden Auto's website blocks the server** (Cloudflare, HTTP 403), so the dashboard has no "Refresh inventory" button
    for Golden Auto (removed 2026-10-18). Its cars come from the DealerCenter sync:

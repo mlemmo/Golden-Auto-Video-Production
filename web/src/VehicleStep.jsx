@@ -81,7 +81,7 @@ function ClientBar() {
             {s.clients.items.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </label>
-        <button type="button" className="secondary small" id="addClientToggle" onClick={() => setAdding(!adding)}>Add client</button>
+        {s.isAdmin && <button type="button" className="secondary small" id="addClientToggle" onClick={() => setAdding(!adding)}>Add client</button>}
       </div>
       <form id="clientForm" className="studio" hidden={!adding} onSubmit={add}>
         <div className="import-grid">
@@ -142,8 +142,8 @@ function ClientDetails() {
           </dl>
           {!editing && (
             <div className="actions">
-              <button type="button" className="secondary small" id="editDetails" onClick={() => setEditing(true)}>Edit details</button>
-              {c.id !== 'golden-auto' && <button type="button" className="secondary small" id="clientAnalyze" disabled={s.busy} onClick={analyze}>Analyze website again</button>}
+              {s.isAdmin && <button type="button" className="secondary small" id="editDetails" onClick={() => setEditing(true)}>Edit details</button>}
+              {s.isAdmin && c.id !== 'golden-auto' && <button type="button" className="secondary small" id="clientAnalyze" disabled={s.busy} onClick={analyze}>Analyze website again</button>}
             </div>
           )}
           {editing && (

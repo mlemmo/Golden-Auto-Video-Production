@@ -2,7 +2,7 @@
 // listens to all of it and approves it; Seedance then follows that voice, wording and pace.
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
-import { StepContinue, StepHead, useClientState, useStudio } from './App.jsx';
+import { StepContinue, StepHead, useClientState, useStudio, Editable } from './App.jsx';
 import { DangerButton, LatestFirst, newestFirst } from './ui.jsx';
 
 export default function VoiceStep() {
@@ -11,6 +11,7 @@ export default function VoiceStep() {
   return (
     <section className={s.stepClass('stepVoice')} id="stepVoice">
       <StepHead id="stepVoice" num="3" title={<h2>Voice</h2>} sub={<p>Choose how the spokesperson's voice is made.</p>} />
+      <Editable>
       <label>Voice
         <select id="voice" value={s.voice} disabled={s.source === 'footage'} onChange={(e) => s.setVoice(e.target.value)}>
           <option value="elevenlabs">Approved ElevenLabs voice — guides the voice and words (recommended)</option>
@@ -33,6 +34,7 @@ export default function VoiceStep() {
         check={{ elevenlabs: 'Approved voice selected', native: 'Seedance voice chosen', narration: 'Voice preview approved for lip-sync' }[s.voice]}
         ready={!!s.chosen && (s.voice !== 'elevenlabs' || !!s.approvedVoice)}
         waiting={!s.chosen ? 'Choose a vehicle in step 1 first' : 'Choose an approved voice preview first'} />
+      </Editable>
     </section>
   );
 }
@@ -72,7 +74,7 @@ function VoiceStudio({ hidden }) {
       if (!automatic) say(bella ? 'Voices loaded. Bella is selected by default.' : 'Voices loaded. Choose a voice.');
     } catch (e) { say(e.message, true); }
   }
-  useEffect(() => { loadVoices(true); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!s.readOnly) loadVoices(true); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 1. Copy the script from step 2 (spoken form for the voice, normal spelling for captions).
   async function copyScript() {
@@ -137,6 +139,7 @@ function Preview({ p, act }) {
         <strong>{`${p.vehicle} · ${p.duration}s${p.audio_duration ? ' · ' + p.audio_duration.toFixed(1) + 's of speech' : ''}`}</strong>
         <span className={'badge ' + state[1]}>{state[0]}</span>
       </div>
+      {p.approved_by && <small>Made by {p.approved_by}</small>}
       <p>Spoken: {p.text}</p>
       <p>Captions: {p.caption_script}</p>
       {p.text_mismatch?.length > 0 && <p className="mismatch">{'Caption text and spoken text differ: ' + p.text_mismatch.slice(0, 5).join('; ') + '. Captions show the caption text, so fix one of them if they should match.'}</p>}

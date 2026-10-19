@@ -42,9 +42,9 @@ function browser(base) {
   };
   const form = (o) => ({ method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(o).toString() });
   const b = { jar, go, form, csrf: null };
-  b.signIn = async (password = 'correct horse') => {
+  b.signIn = async (password = 'correct horse', email = 'admin@example.com') => {
     b.csrf = (await (await go('/')).text()).match(/name="csrf" value="([a-f0-9]{48})"/)[1];
-    return go('/', form({ csrf: b.csrf, password }));
+    return go('/', form({ csrf: b.csrf, email, password }));
   };
   b.post = (action, body, token) => go('/api/node/' + action, { method: 'POST', headers: { 'content-type': 'application/json', 'x-csrf-token': token ?? b.csrf }, body: typeof body === 'string' ? body : JSON.stringify(body) });
   return b;
@@ -111,16 +111,17 @@ test('sign-in, the React dashboard page, static files, sign-out', async () => {
     let html = await r.text();
     assert.ok(r.headers.get('set-cookie').includes('HttpOnly; SameSite=Strict') && html.includes('STAGING • Golden Auto • Sign in'));
     const csrf = html.match(/name="csrf" value="([a-f0-9]{48})"/)[1];
-    assert.equal((await b.go('/', b.form({ csrf: 'bad', password: 'x' }))).status, 403, 'sign-in form needs its CSRF token');
-    assert.ok((await (await b.go('/', b.form({ csrf, password: 'wrong' }))).text()).includes('Incorrect password.'));
+    assert.ok(html.includes('First sign-in'), 'first sign-in note while there are no accounts');
+    assert.equal((await b.go('/', b.form({ csrf: 'bad', email: 'a@b.co', password: 'x' }))).status, 403, 'sign-in form needs its CSRF token');
+    assert.ok((await (await b.go('/', b.form({ csrf, email: 'admin@example.com', password: 'wrong' }))).text()).includes('Incorrect email or password.'));
     const before = b.jar.ga_sid;
-    r = await b.go('/', b.form({ csrf, password: 'correct horse' }));
+    r = await b.go('/', b.form({ csrf, email: 'admin@example.com', password: 'correct horse' }));
     assert.equal(r.status, 303, 'sign-in redirects (no form resend on reload)');
     assert.equal(r.headers.get('location'), '/');
     assert.notEqual(b.jar.ga_sid, before, 'new session id after sign-in');
     html = await (await b.go('/')).text();
     const boot = JSON.parse(html.match(/window\.GA=(.*?);<\/script>/)[1]);
-    assert.deepEqual([boot.csrf, boot.env], [csrf, 'staging'], 'session values put in the page');
+    assert.deepEqual([boot.csrf, boot.env, boot.user.email, boot.user.role], [csrf, 'staging', 'admin@example.com', 'admin'], 'session values put in the page');
     assert.match(boot.banner, /^STAGING — test copy/);
     assert.ok(html.includes('<title>STAGING • Golden Auto • Video Studio</title>') && html.includes('<div id="root">'), 'the React page');
     b.csrf = csrf;
@@ -138,8 +139,8 @@ test('sign-in, the React dashboard page, static files, sign-out', async () => {
     assert.ok((await (await b.go('/')).text()).includes('Sign in'), 'signed out');
     // Five wrong passwords in five minutes lock the form.
     const c2 = (await (await b.go('/')).text()).match(/name="csrf" value="([a-f0-9]{48})"/)[1];
-    for (let i = 0; i < 5; i++) await b.go('/', b.form({ csrf: c2, password: 'no' }));
-    assert.ok((await (await b.go('/', b.form({ csrf: c2, password: 'correct horse' }))).text()).includes('Too many attempts'));
+    for (let i = 0; i < 5; i++) await b.go('/', b.form({ csrf: c2, email: 'admin@example.com', password: 'no' }));
+    assert.ok((await (await b.go('/', b.form({ csrf: c2, email: 'admin@example.com', password: 'correct horse' }))).text()).includes('Too many attempts'));
     assert.equal((await b.go('/', { headers: { 'x-forwarded-proto': 'http' } })).status, 403, 'plain http refused');
     // Not built yet: a clear message instead of a broken page.
     rmSync(root + '/public/app/index.html');

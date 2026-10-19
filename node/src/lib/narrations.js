@@ -214,7 +214,7 @@ export async function narrationApi(action, inp, cfg, db, { bridge: helper = narr
     let fingerprint = createHash('sha256').update(jsonEncode([v.StockNumber, v.price, voice, text, captions, duration, settings])).digest('hex');
     if (inp.new_take) fingerprint = createHash('sha256').update(Buffer.concat([Buffer.from(fingerprint), random(16)])).digest('hex');
     const record = { id: random(16).toString('hex'), stock: v.StockNumber, vehicle: title(v), price: v.price, client: clientOf(inp), voice_id: voice, text,
-      caption_script: captions, duration, speed: settings.speed ?? 1.0, status: 'submitting', created_at: gmdateC() };
+      caption_script: captions, duration, speed: settings.speed ?? 1.0, status: 'submitting', created_at: gmdateC(), approved_by: str(inp.approved_by ?? '') };
     narrationReserve(db, 'narrations', record, fingerprint);
     let code = 0;
     try {
@@ -271,7 +271,7 @@ export async function narrationApi(action, inp, cfg, db, { bridge: helper = narr
     writeFileSync(wavPath, wav); chmodSync(wavPath, 0o644);
     const audioUrl = validateAppBase(cfg) + '/assets/narrations/' + wavName;
     const record = { id: random(16).toString('hex'), stock: audio.stock, vehicle: audio.vehicle, client: audio.client ?? CLIENT_DEFAULT, narration_id: audio.id,
-      source_video_id: source.id, audio_file: wavName, auto_build: !!inp.auto_build, status: 'submitting', created_at: gmdateC() };
+      source_video_id: source.id, audio_file: wavName, auto_build: !!inp.auto_build, status: 'submitting', created_at: gmdateC(), approved_by: str(inp.approved_by ?? '') };
     narrationReserve(db, 'narration_lipsync', record, createHash('sha256').update(audio.audio_hash + '|' + source.id).digest('hex'));
     let code = 0;
     try {
@@ -314,7 +314,7 @@ export async function narrationApi(action, inp, cfg, db, { bridge: helper = narr
         // A fresh completed job for the caption workflow; the original video stays as it is.
         const job = { id: record.id, stock: source.stock, vehicle: source.vehicle, price: source.price, format: source.format, style: source.style ?? 'showroom',
           duration: source.duration ?? 15, status: 'completed', video_url: url, script: audio.caption_script, speech_script: audio.text, created_at: gmdateC(),
-          provider: 'fal_lipsync', client: audio.client ?? CLIENT_DEFAULT, narration_id: audio.id, source_video_id: source.id, auto_build: !!record.auto_build };
+          provider: 'fal_lipsync', client: audio.client ?? CLIENT_DEFAULT, narration_id: audio.id, source_video_id: source.id, auto_build: !!record.auto_build, approved_by: str(record.approved_by ?? '') };
         db.prepare('INSERT OR IGNORE INTO jobs (id,fingerprint,payload) VALUES (?,NULL,?)').run(job.id, jsonEncode(job));
         record.status = 'completed'; record.video_url = url; record.completed_at = gmdateC();
       }
