@@ -16,13 +16,25 @@ export default function VehicleStep() {
   const c = s.client;
   return (
     <section className="panel" id="stepVehicle">
-      <ClientBar />
-      {c && <ClientInfo key={'info-' + c.id} />}
-      {c && <DealerDetails key={'dealer-' + c.id} />}
       <div className="step-head"><span className="step-num">1</span><div><h2>Choose a vehicle</h2><p id="syncTime">{inventoryLine(s.inventory)}</p></div></div>
       {c?.id === 'golden-auto' && <SyncLog />}
       <SyncButton say={say} />
       <Inventory say={say} />
+    </section>
+  );
+}
+
+/** The client (dealer) the studio is working for: menu, add a client, import details and dealer details in scripts. */
+export function ClientPanel() {
+  const s = useStudio();
+  const c = s.client;
+  return (
+    <section className="panel client-panel" id="clientPanel" aria-label="Client">
+      <ClientBar />
+      <div className="client-details">
+        {c && <ClientInfo key={'info-' + c.id} />}
+        {c && <DealerDetails key={'dealer-' + c.id} />}
+      </div>
     </section>
   );
 }
@@ -63,7 +75,7 @@ function ClientBar() {
     });
   };
   return (
-    <>
+    <div className="client-picker">
       <div className="client-bar">
         <label>Client
           <select id="client" value={s.clients.current ?? ''} disabled={switching} onChange={(e) => change(e.target.value)}>
@@ -81,7 +93,7 @@ function ClientBar() {
         <p className="hint">After adding, the studio looks at the website (a few free page requests) and recommends the best way to import its inventory.</p>
         <button id="clientAdd" disabled={s.busy}>Add client and analyze website</button>
       </form>
-    </>
+    </div>
   );
 }
 

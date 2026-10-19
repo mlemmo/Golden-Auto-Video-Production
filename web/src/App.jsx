@@ -4,7 +4,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { api, boot } from './api.js';
 import { Notifications, Popups, useStatus, vehicleName } from './ui.jsx';
-import VehicleStep from './VehicleStep.jsx';
+import VehicleStep, { ClientPanel } from './VehicleStep.jsx';
 import ScriptStep from './ScriptStep.jsx';
 import VoiceStep from './VoiceStep.jsx';
 import LookStep from './LookStep.jsx';
@@ -187,6 +187,7 @@ export default function App() {
         <a href="#stepLook"><b>4</b> Look</a><a href="#stepGenerate"><b>5</b> Generate</a><a href="#videos"><b>✓</b> Videos</a>
       </nav>
       <main>
+        <ClientPanel />
         <div className="workspace">
           <VehicleStep />
           <div className="steps-col">
