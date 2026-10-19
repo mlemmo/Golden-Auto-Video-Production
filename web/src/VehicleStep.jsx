@@ -96,15 +96,15 @@ function ClientBar() {
   );
 }
 
-/** The client's import and script details as plain text, with Edit details (and Analyze website again). */
+/** "View-edit details": the client's import information (read only) and the dealer details used in scripts. */
 function ClientDetails() {
   const s = useStudio();
   const [, say] = s.statuses.vehicle;
   const c = s.client, a = c.analysis || {}, d = c.script_details || {};
-  const [editing, setEditing] = useState(false);
+  const [open, setOpen] = useState(false);
   const fromDetails = () => ({ name: d.name || '', city: d.city || '', website: d.website || '', website_spoken: d.website_spoken || '', phone: d.phone || '' });
   const [form, setForm] = useState(fromDetails);
-  useEffect(() => { if (!editing) setForm(fromDetails()); }, [JSON.stringify(d), editing]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (!open) setForm(fromDetails()); }, [JSON.stringify(d), open]); // eslint-disable-line react-hooks/exhaustive-deps
   const field = (k) => ({ value: form[k], onChange: (e) => setForm({ ...form, [k]: e.target.value }) });
   const update = (client) => s.setClients((cl) => ({ ...cl, items: cl.items.map((x) => (x.id === client.id ? client : x)) }));
   const save = (e) => {
@@ -112,7 +112,7 @@ function ClientDetails() {
     s.run(async () => {
       try {
         update((await api('client_details', form)).client);
-        setEditing(false);
+        setOpen(false);
         say('Dealer details saved. Reopen a vehicle to redraft its script with them.');
       } catch (err) { say(err.message, true); }
     });
@@ -122,26 +122,22 @@ function ClientDetails() {
     try { update((await api('client_analyze', { id: c.id })).client); say('Website analyzed.'); } catch (e) { say(e.message, true); }
   });
   return (
-    <div className="client-details" id="clientDetails">
-      <dl className="client-facts">
-        <dt>Website</dt><dd>{c.website.replace('https://', '')}</dd>
-        <dt>Inventory import</dt><dd>{METHOD_TITLE[a.best] || 'not checked yet'}{a.note ? ' — ' + a.note : ''}</dd>
-        {a.platform && <><dt>Website platform</dt><dd>{a.platform}</dd></>}
-        {a.dealer && <><dt>Found on the website</dt><dd>{Object.values(a.dealer).join(', ')}</dd></>}
-        {a.signals?.length > 0 && <><dt>What the website shows</dt><dd>{a.signals.join('; ')}</dd></>}
-        {a.options?.length > 0 && <><dt>Import options</dt><dd>{a.options.map((o) => o.title).join(' · ')} <small>(best first)</small></dd></>}
-        <dt>In scripts</dt><dd id="dealerSummary">{`${d.name}${d.city ? ' in ' + d.city : ''} · ${d.website}`} <small>(said “{d.website_spoken}”)</small></dd>
-        <dt>Phone</dt><dd>{d.phone || <small>not set</small>}</dd>
-        {a.checked_at && <><dt>Website checked</dt><dd>{new Date(a.checked_at).toLocaleString()}</dd></>}
-      </dl>
-      {!editing && (
-        <div className="actions">
-          <button type="button" className="secondary small" id="editDetails" onClick={() => setEditing(true)}>Edit details</button>
-          {c.id !== 'golden-auto' && <button type="button" className="secondary small" id="clientAnalyze" disabled={s.busy} onClick={analyze}>Analyze website again</button>}
-        </div>
-      )}
-      {editing && (
-        <form id="dealerForm" className="studio" onSubmit={save}>
+    <>
+      <div className="client-details-toggle">
+        <button type="button" className="secondary" id="editDetails" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Close details' : 'View-edit details'}</button>
+      </div>
+      {open && (
+        <form id="dealerForm" className="studio client-details-open" onSubmit={save}>
+          <dl className="client-facts">
+            <dt>Website</dt><dd>{c.website.replace('https://', '')}</dd>
+            <dt>Inventory import</dt><dd>{METHOD_TITLE[a.best] || 'not checked yet'}{a.note ? ' — ' + a.note : ''}</dd>
+            {a.platform && <><dt>Website platform</dt><dd>{a.platform}</dd></>}
+            {a.dealer && <><dt>Found on the website</dt><dd>{Object.values(a.dealer).join(', ')}</dd></>}
+            {a.signals?.length > 0 && <><dt>What the website shows</dt><dd>{a.signals.join('; ')}</dd></>}
+            {a.options?.length > 0 && <><dt>Import options</dt><dd>{a.options.map((o) => o.title).join(' · ')} <small>(best first)</small></dd></>}
+            {a.checked_at && <><dt>Website checked</dt><dd>{new Date(a.checked_at).toLocaleString()}</dd></>}
+          </dl>
+          <h3>Dealer details in scripts</h3>
           <div className="import-grid">
             <label>Dealer name in scripts<input name="name" maxLength={80} required autoComplete="off" {...field('name')} /></label>
             <label>City<input name="city" maxLength={60} autoComplete="off" {...field('city')} /></label>
@@ -152,11 +148,12 @@ function ClientDetails() {
           <p className="hint">Scripts say “here at <i>name</i> in <i>city</i>” and “Book your test drive today at <i>website</i>”; the voice says the website as written in “as spoken”. The phone number is saved with the dealer for now; it is not used in scripts. Reopen a vehicle after saving to redraft its script.</p>
           <div className="actions">
             <button id="dealerSave" disabled={s.busy}>Save details</button>
-            <button type="button" className="secondary" id="dealerCancel" onClick={() => setEditing(false)}>Cancel</button>
+            <button type="button" className="secondary" id="dealerCancel" onClick={() => setOpen(false)}>Close</button>
+            {c.id !== 'golden-auto' && <button type="button" className="secondary" id="clientAnalyze" disabled={s.busy} onClick={analyze}>Analyze website again</button>}
           </div>
         </form>
       )}
-    </div>
+    </>
   );
 }
 
