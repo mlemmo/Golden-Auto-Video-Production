@@ -124,7 +124,7 @@ function ClientDetails() {
   return (
     <>
       <div className="client-details-toggle">
-        <button type="button" className="secondary" id="editDetails" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Close details' : 'View-edit details'}</button>
+        <button type="button" className="secondary small" id="editDetails" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? 'Close details' : 'View-edit details'}</button>
       </div>
       {open && (
         <form id="dealerForm" className="studio client-details-open" onSubmit={save}>
