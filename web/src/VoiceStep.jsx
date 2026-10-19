@@ -2,15 +2,15 @@
 // listens to all of it and approves it; Seedance then follows that voice, wording and pace.
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
-import { useStudio } from './App.jsx';
+import { StepHead, useStudio } from './App.jsx';
 import { DangerButton } from './ui.jsx';
 
 export default function VoiceStep() {
   const s = useStudio();
   const eleven = s.voice === 'elevenlabs';
   return (
-    <section className="panel" id="stepVoice">
-      <div className="step-head"><span className="step-num">3</span><div><h2>Voice</h2><p>Choose how the spokesperson's voice is made.</p></div></div>
+    <section className={s.stepClass('stepVoice')} id="stepVoice">
+      <StepHead id="stepVoice" num="3" title={<h2>Voice</h2>} sub={<p>Choose how the spokesperson's voice is made.</p>} />
       <label>Voice
         <select id="voice" value={s.voice} disabled={s.source === 'footage'} onChange={(e) => s.setVoice(e.target.value)}>
           <option value="elevenlabs">Approved ElevenLabs voice — guides the voice and words (recommended)</option>

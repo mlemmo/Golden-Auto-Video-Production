@@ -1,7 +1,7 @@
 // Step 4: video source, spokesperson, style, publish format and the car photos sent to the video model.
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
-import { useStudio } from './App.jsx';
+import { StepHead, useStudio } from './App.jsx';
 
 export default function LookStep() {
   const s = useStudio();
@@ -11,8 +11,8 @@ export default function LookStep() {
       : [['Shot 1', 'Front corner, wide'], ['Shot 2', 'Side, walking'], ['Shot 3', 'Rear corner'], ['Shot 4', 'Front, price + call to action']];
   const manage = () => { s.setSpokespersonPanelOpen(true); document.getElementById('spokespersonPanel')?.scrollIntoView({ behavior: 'smooth' }); };
   return (
-    <section className="panel" id="stepLook">
-      <div className="step-head"><span className="step-num">4</span><div><h2>Look</h2><p>Spokesperson, style, format and the car photos the video is made from.</p></div></div>
+    <section className={s.stepClass('stepLook')} id="stepLook">
+      <StepHead id="stepLook" num="4" title={<h2>Look</h2>} sub={<p>Spokesperson, style, format and the car photos the video is made from.</p>} />
       <label>Video source
         <select id="source" value={s.source} onChange={(e) => s.setSource(e.target.value)}>
           <option value="ai">AI showroom video — Seedance films the car and the spokesperson</option>

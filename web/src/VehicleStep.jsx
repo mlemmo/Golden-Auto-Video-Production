@@ -1,7 +1,7 @@
 // Step 1: the client (dealer) and its inventory. Each client has its own inventory, voice previews and videos.
 import { useEffect, useRef, useState } from 'react';
 import { api } from './api.js';
-import { useStudio } from './App.jsx';
+import { StepHead, useStudio } from './App.jsx';
 import { miles, price } from './ui.jsx';
 
 const METHOD_TITLE = { feed: 'Daily inventory feed', website_dealercenter: 'Website reader', website_structured: 'Website import',
@@ -16,10 +16,9 @@ export default function VehicleStep() {
   const c = s.client;
   const hidden = (s.inventory?.vehicles ?? []).filter((v) => v.active === false).length;
   return (
-    <section className="panel" id="stepVehicle">
-      <div className="step-head"><span className="step-num">1</span><div><h2>Choose a vehicle</h2><p id="syncTime">{inventoryLine(s.inventory)}</p></div>
-        {hidden > 0 && <p className="hidden-note">{hidden} vehicle{hidden > 1 ? 's' : ''} no longer listed {hidden > 1 ? 'are' : 'is'} hidden; {hidden > 1 ? 'their videos are' : 'its videos are'} kept.</p>}
-      </div>
+    <section className={s.stepClass('stepVehicle')} id="stepVehicle">
+      <StepHead id="stepVehicle" num="1" title={<h2>Choose a vehicle</h2>} sub={<p id="syncTime">{inventoryLine(s.inventory)}</p>}
+        aside={hidden > 0 && <p className="hidden-note">{hidden} vehicle{hidden > 1 ? 's' : ''} no longer listed {hidden > 1 ? 'are' : 'is'} hidden; {hidden > 1 ? 'their videos are' : 'its videos are'} kept.</p>} />
       {c?.id === 'golden-auto' && <SyncLog />}
       <SyncButton say={say} />
       <Inventory say={say} />
@@ -225,6 +224,7 @@ function Inventory({ say }) {
       s.refreshNarrations().catch((e) => s.statuses.studio[1](e.message, true));
       say(v.sheet_error || `${v.Year} ${v.Make} ${v.Model} selected. Continue with the script in step 2.`);
       // Steps are stacked: bring step 2 into view once the car is loaded.
+      s.openStep('stepScript');
       setTimeout(() => document.getElementById('stepScript')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
     } catch (e) { say(e.message, true); }
   });

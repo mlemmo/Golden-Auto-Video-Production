@@ -94,3 +94,10 @@ button{font-size:15px}
 #stepVehicle .step-head .hidden-note{margin:4px 0 0 auto;max-width:560px;text-align:right;color:var(--muted)}
 .show-more{display:block;margin:14px auto 0}
 @media(max-width:700px){#stepVehicle .step-head{flex-wrap:wrap}#stepVehicle .step-head .hidden-note{margin-left:48px;text-align:left}}
+/* Collapsible steps: the title bar toggles; a collapsed step shows only its title bar */
+.step-head-toggle{cursor:pointer}
+.step-head .step-toggle{margin-left:auto;flex:none;align-self:center}
+.step-head .hidden-note + .step-toggle{margin-left:16px}
+.panel.collapsed > :not(.step-head){display:none!important}
+.panel.collapsed .step-head{margin-bottom:0}
+@media(max-width:700px){.step-head .step-toggle{margin-left:auto}}

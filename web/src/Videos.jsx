@@ -2,7 +2,7 @@
 // one is being made; plus the caption editor (review or correct the captions and render again, free).
 import { useState } from 'react';
 import { api } from './api.js';
-import { GENERATING, useStudio } from './App.jsx';
+import { GENERATING, StepHead, useStudio } from './App.jsx';
 import { DangerButton, Link } from './ui.jsx';
 
 function stage(j) {
@@ -33,8 +33,8 @@ export default function Videos() {
   };
   const rows = s.jobs ?? [];
   return (
-    <section className="panel" id="videos">
-      <div className="step-head"><span className="step-num">✓</span><div><h2>Videos</h2><p>Generation takes a few minutes; this list refreshes itself while a video is being made. Download finished videos promptly.</p></div></div>
+    <section className={s.stepClass('videos')} id="videos">
+      <StepHead id="videos" num="✓" title={<h2>Videos</h2>} sub={<p>Generation takes a few minutes; this list refreshes itself while a video is being made. Download finished videos promptly.</p>} />
       <div className="actions"><button type="button" className="secondary" id="refreshJobs" onClick={async () => { await s.loadJobs(); say('List refreshed.'); }}>Refresh list</button></div>
       <div id="jobs" className="list">
         {s.jobs && !rows.length && <p>No videos yet. Generate one in step 5.</p>}

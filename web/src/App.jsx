@@ -17,6 +17,27 @@ export const useStudio = () => useContext(Studio);
 
 export const GENERATING = ['preparing_references', 'submitting', 'queued', 'in_progress'];
 
+/**
+ * A step's title bar with its Collapse / Expand toggle (the whole bar is clickable). A collapsed step shows only this
+ * bar; what was typed or picked inside is kept.
+ */
+export function StepHead({ id, num, title, sub, aside }) {
+  const s = useStudio();
+  const open = !s.collapsed[id];
+  const toggle = (e) => { if (e.target.closest('a, input, select, textarea, button:not(.step-toggle)')) return; s.toggleStep(id); };
+  return (
+    <div className="step-head step-head-toggle" onClick={toggle}>
+      <span className="step-num">{num}</span>
+      <div>{title}{sub}</div>
+      {aside}
+      <button type="button" className="step-toggle secondary small" aria-expanded={open} aria-label={(open ? 'Collapse ' : 'Expand ') + id}>
+        {open ? 'Collapse ▴' : 'Expand ▾'}
+      </button>
+    </div>
+  );
+}
+const COLLAPSED_KEY = 'ga-collapsed-steps';
+
 export default function App() {
   // Server data.
   const [clients, setClients] = useState({ items: [], current: null });
@@ -41,6 +62,12 @@ export default function App() {
   const [confirmCurrent, setConfirmCurrent] = useState(false);
   const [captionJob, setCaptionJob] = useState(null);
   const [spokespersonPanelOpen, setSpokespersonPanelOpen] = useState(false);
+  // Collapsed steps, remembered in this browser (a convenience; everything works without it).
+  const [collapsed, setCollapsed] = useState(() => { try { return JSON.parse(localStorage.getItem(COLLAPSED_KEY)) || {}; } catch { return {}; } });
+  useEffect(() => { try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify(collapsed)); } catch { /* not stored */ } }, [collapsed]);
+  const toggleStep = useCallback((id) => setCollapsed((c) => ({ ...c, [id]: !c[id] })), []);
+  const openStep = useCallback((id) => setCollapsed((c) => (c[id] ? { ...c, [id]: false } : c)), []);
+  const stepClass = (id) => 'panel' + (collapsed[id] ? ' collapsed' : '');
   // One action at a time, as before: a second click while one runs is ignored.
   const busyRef = useRef(false);
   const [busy, setBusy] = useState(false);
@@ -161,7 +188,7 @@ export default function App() {
     chosen, setChosen, duration, setDuration, script, setScript, voice, setVoice, style, setStyle, source, setSource,
     format, setFormat, spokespersonId, setSpokespersonId, approvedVoice, setApprovedVoice, approvedPreviews,
     sheetUrl, setSheetUrl, footage, setFootage, approve, setApprove, confirmCurrent, setConfirmCurrent,
-    captionJob, setCaptionJob, spokespersonPanelOpen, setSpokespersonPanelOpen,
+    captionJob, setCaptionJob, spokespersonPanelOpen, setSpokespersonPanelOpen, collapsed, toggleStep, openStep, stepClass,
     busy, run, statuses, loadClients, loadInventory, loadJobs, loadSyncLog, refreshNarrations, showSpokespersons,
     clearVehicle, showClientData, defaultScript,
   };
@@ -182,7 +209,7 @@ export default function App() {
           <button className="secondary" id="logout" onClick={signOut}>Sign out</button>
         </div>
       </header>
-      <nav className="steps" aria-label="Steps">
+      <nav className="steps" aria-label="Steps" onClick={(e) => { const a = e.target.closest('a[href^="#"]'); if (a) openStep(a.getAttribute('href').slice(1)); }}>
         <a href="#stepVehicle"><b>1</b> Vehicle</a><a href="#stepScript"><b>2</b> Script</a><a href="#stepVoice"><b>3</b> Voice</a>
         <a href="#stepLook"><b>4</b> Look</a><a href="#stepGenerate"><b>5</b> Generate</a><a href="#videos"><b>✓</b> Videos</a>
       </nav>

@@ -1,11 +1,11 @@
 // Step 5: one paid generation (or a free build from the dealer's own footage). The captioned final video is then
 // built on the server and appears under Videos.
 import { api, upload } from './api.js';
-import { useStudio } from './App.jsx';
+import { StepHead, useStudio } from './App.jsx';
 import { price, vehicleName } from './ui.jsx';
 
 const FORMAT_NAME = { instagram_reels: 'Instagram Reels', facebook_reels: 'Facebook Reels', facebook_feed: 'Facebook Feed', square: 'Instagram / Facebook Square' };
-const showVideos = () => document.getElementById('videos')?.scrollIntoView({ behavior: 'smooth' });
+const showVideos = () => setTimeout(() => document.getElementById('videos')?.scrollIntoView({ behavior: 'smooth' }), 0);
 
 export default function GenerateStep() {
   const s = useStudio();
@@ -30,7 +30,7 @@ export default function GenerateStep() {
           script: s.script, sheet: s.sheetUrl, spokesperson: s.spokespersonId, approve_spend: s.approve, confirm_current: s.confirmCurrent });
         s.setApprove(false);
         say('Generation submitted. It takes a few minutes — follow it under Videos below.');
-        await s.loadJobs(); showVideos();
+        await s.loadJobs(); s.openStep('videos'); showVideos();
       } catch (e) { say(e.message, true); }
     });
   };
@@ -47,7 +47,7 @@ export default function GenerateStep() {
         if (s.confirmCurrent) form.append('confirm_current', '1');
         form.append('footage', s.footage);
         say((await upload('footage_build', form)).message);
-        await s.loadJobs(); showVideos();
+        await s.loadJobs(); s.openStep('videos'); showVideos();
       } catch (e) { say(e.message, true); }
     });
   };
@@ -66,8 +66,8 @@ export default function GenerateStep() {
   };
 
   return (
-    <section className="panel" id="stepGenerate">
-      <div className="step-head"><span className="step-num">5</span><div><h2>Generate</h2><p>One paid generation. The captioned final video is then built automatically and appears under Videos.</p></div></div>
+    <section className={s.stepClass('stepGenerate')} id="stepGenerate">
+      <StepHead id="stepGenerate" num="5" title={<h2>Generate</h2>} sub={<p>One paid generation. The captioned final video is then built automatically and appears under Videos.</p>} />
       <ul className="summary" id="summary">
         {rows.map(([k, v, ok]) => <li key={k} className={ok ? 'ok' : 'todo'}><b>{k}</b><span>{v}</span></li>)}
       </ul>
