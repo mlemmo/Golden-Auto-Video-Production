@@ -14,5 +14,8 @@
   "whisper_cli": "",
   "whisper_model": "",
   "whisper_threads": 4,
-  "source": "https://www.mygoldenauto.net"
+  "source": "https://www.mygoldenauto.net",
+  "anthropic_key": "",
+  "anthropic_workspace_id": "",
+  "intro_model": "claude-opus-5-5"
 }

@@ -5,13 +5,14 @@ import { state, save } from '../lib/db.js';
 import { clientInventoryKey } from '../lib/clients.js';
 import { trim, str } from '../lib/text.js';
 import { jsonEncode } from '../lib/storedjson.js';
-import { script } from '../lib/scripts.js';
+import { script, introBudget } from '../lib/scripts.js';
 import { speechScript, speechWordCount } from '../lib/speech.js';
 import { assetSheet, importMediaZip } from '../lib/media.js';
 import { spokespersonApi, spokespersonFind } from '../lib/spokespersons.js';
 import { enrich, referenceImageUrl, uploadReference, generateJob, pollJob, jobsForClient, goldenJobDelete, goldenFootageBuild } from '../lib/jobs.js';
 import { withThumbs } from '../lib/thumbs.js';
 import { syncLogKey } from '../lib/dealercenter.js';
+import { vehicleIntro } from '../lib/intros.js';
 
 const sha256 = (s) => createHash('sha256').update(s).digest('hex');
 const SPOKESPERSON = ['spokesperson_list', 'spokesperson_upload', 'spokesperson_default', 'spokesperson_delete'];
@@ -27,7 +28,9 @@ export const jobRoutes = {
     for (const [i, v] of (a.vehicles ?? []).entries()) if (v.StockNumber === (body.stock ?? '')) { a.vehicles[i] = await enrich(v); out = { ...a.vehicles[i] }; break; }
     if (!out) throw new Error('Vehicle not found. Refresh inventory first.');
     save(db, key, a);
-    out.script = script(out, 15, dealer); out.scripts = { 15: out.script, 30: script(out, 30, dealer) };
+    // The 30-second script opens with lines fitted to this vehicle (Claude when configured, else rules).
+    const intro = await vehicleIntro(db, cfg, client, out, introBudget(out, dealer));
+    out.script = script(out, 15, dealer); out.scripts = { 15: out.script, 30: script(out, 30, dealer, intro) }; out.intro_source = intro.source;
     const existing = state(db, 'sheet:' + (out.Vin ?? ''));
     if (existing && (existing.gallery_hash ?? '') === sha256(jsonEncode(out.photos ?? null))) out.asset_sheet = existing;
     else try { out.asset_sheet = await assetSheet(out, cfg); save(db, 'sheet:' + (out.Vin ?? ''), out.asset_sheet); } catch (e) { out.sheet_error = e.message; }
