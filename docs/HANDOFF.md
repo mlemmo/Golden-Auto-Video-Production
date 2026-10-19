@@ -33,7 +33,8 @@ the work (Mark started it).
   staging.mygoldenauto.net in staging's database only (backup `private/data/agent.sqlite.bak-before-photo-urls`).
 
 ## Open items (next steps)
-1. **"Refresh inventory" for Golden Auto returns 403**: mygoldenauto.net blocks the server via Cloudflare. Workaround:
+1. **Golden Auto's website blocks the server** (Cloudflare, HTTP 403), so the dashboard has no "Refresh inventory" button
+   for Golden Auto (removed 2026-10-18). Its cars come from the DealerCenter sync:
    read the DealerCenter snapshot from the public website in a browser and run
    `node node/src/cli/dealercenter-sync.js snapshot.json [zip-dir]` (photos download fine from imagescf.dealercenter.net).
 2. **DealerCenter SFTP XML import** (needs host/credentials and a sample XML).

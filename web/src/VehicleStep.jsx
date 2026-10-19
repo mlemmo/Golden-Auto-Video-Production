@@ -168,8 +168,9 @@ function SyncLog() {
 function SyncButton({ say }) {
   const s = useStudio();
   const c = s.client, a = c?.analysis || {};
-  // Website refresh: Golden Auto's reader, or a client whose site the importer supports (Dealer Car Search).
-  if (!c || !(c.id === 'golden-auto' || (a.platform === 'Dealer Car Search' && a.reachable))) return null;
+  // Website import for clients whose site the importer supports (Dealer Car Search). Golden Auto has no button: its
+  // website blocks this server (Cloudflare), so its cars come from the DealerCenter sync instead.
+  if (!c || c.id === 'golden-auto' || !(a.platform === 'Dealer Car Search' && a.reachable)) return null;
   const sync = () => s.run(async () => {
     say('Refreshing current inventory…');
     try {
@@ -180,7 +181,7 @@ function SyncButton({ say }) {
         : 'Inventory refreshed. Select a vehicle.', !!rep?.errors.length);
     } catch (e) { say(e.message, true); }
   });
-  return <button id="sync" className="secondary" disabled={s.busy} onClick={sync}>{c.id === 'golden-auto' ? 'Refresh inventory' : 'Import inventory from website'}</button>;
+  return <button id="sync" className="secondary" disabled={s.busy} onClick={sync}>Import inventory from website</button>;
 }
 
 function Inventory({ say }) {

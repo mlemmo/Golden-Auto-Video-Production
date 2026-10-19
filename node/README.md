@@ -43,7 +43,8 @@ data in `data_dir/node-sessions.sqlite`, 24 minutes idle. Without that header on
 
 ## Gotchas
 
-- Golden Auto's "Refresh inventory" returns 403: mygoldenauto.net blocks the server via Cloudflare. Use the manual
+- mygoldenauto.net blocks the server via Cloudflare (403), so the dashboard has no refresh button for Golden Auto (the
+  `sync` action still exists and would report that error). Use the manual
   DealerCenter sync (`node src/cli/dealercenter-sync.js snapshot.json [zip-dir]`) instead.
 - Photo URLs in a copied database point at the site they were copied from; staging's were rewritten to
   staging.mygoldenauto.net (backup `private/data/agent.sqlite.bak-before-photo-urls`), or asset sheets fail.
