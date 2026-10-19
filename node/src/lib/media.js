@@ -105,9 +105,11 @@ export function importMediaZip(path, fields, cfg) {
   return importMedia(images, fields, cfg);
 }
 
-/** downloadPhotos(): DealerCenter CDN photos only, in parallel; index → bytes for the ones that arrived (200, ≤4 MB). */
+/** Vehicle photo hosts the server downloads from: DealerCenter and Dealer.com image servers (neither blocks it). */
+export const PHOTO_HOSTS = ['imagescf.dealercenter.net', 'pictures.dealer.com'];
+/** downloadPhotos(): vehicle photos from PHOTO_HOSTS only, in parallel; index → bytes for the ones that arrived (200, ≤4 MB). */
 export async function downloadPhotos(urls) {
-  for (const url of urls) if ((parseUrl(url) || {}).host !== 'imagescf.dealercenter.net' || !String(url).startsWith('https://')) throw new Error('Photo is not from the vehicle image provider.');
+  for (const url of urls) if (!PHOTO_HOSTS.includes((parseUrl(url) || {}).host) || !String(url).startsWith('https://')) throw new Error('Photo is not from the vehicle image provider.');
   const out = {};
   await Promise.all(urls.map(async (url, i) => {
     try {

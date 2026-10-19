@@ -1,5 +1,6 @@
-// DealerCenter inventory tracking for Golden Auto. Input: a snapshot of the
-// DealerCenter active list (no costs). Photos come from each item's photo_urls (imagescf.dealercenter.net, downloaded
+// Snapshot inventory tracking: Golden Auto's DealerCenter list, or another client's website read in a browser (a
+// site that blocks this server). Input: a snapshot of the active list (no costs). Photos come from each item's
+// photo_urls (imagescf.dealercenter.net or pictures.dealer.com, downloaded
 // server-to-server; the URL set is tracked so replaced photos are noticed) or, as a fallback, from ZIPs named
 // <stock>.zip with photo_count. Compares with saved inventory, records a change log in state row "sync_log", marks
 // vehicles missing from the snapshot inactive (kept, never deleted). Downloaded photos are imported directly and
@@ -9,6 +10,7 @@ import { existsSync, unlinkSync } from 'node:fs';
 import { trim, upper, str, filterValidateInt, isNumeric, toFloat, gmdateC, parseUrl, U_SPACE } from './text.js';
 import { money, title } from './price.js';
 import { state, save } from './db.js';
+import { CLIENT_DEFAULT, clientFind, clientInventoryKey } from './clients.js';
 import { importMedia, importMediaZip, downloadPhotos, assetSheet, mbSafeText } from './media.js';
 
 const isList = Array.isArray;
@@ -22,6 +24,16 @@ export function dcCleanDescription(s) {
   s = s.replace(new RegExp('Total price does not include State Sales Tax or Registration fees,?' + U_SPACE + '*please call us for the total price\\.?', 'giu'), '');
   return mbSafeText(s.replace(new RegExp('^' + U_SPACE + '+', 'u'), ''));
 }
+
+/** A snapshot photo URL → its stable id: "<document>.jpg" (DealerCenter, as before) or "pictures.dealer.com/<path>". */
+export function dcPhotoId(u) {
+  const dc = u.match(/^https:\/\/imagescf\.dealercenter\.net\/(?:[0-9]+\/[0-9]+\/)?(?:[A-Za-z0-9-]+\/)?([A-Za-z0-9-]+\.jpg)$/);
+  if (dc) return dc[1];
+  const ddc = u.match(/^https:\/\/pictures\.dealer\.com\/([a-z0-9]\/[A-Za-z0-9_-]{1,80}\/[0-9]{1,8}\/[A-Za-z0-9_-]{1,100}\.(?:jpe?g|png|webp))(?:\?[^#\s]*)?$/i);
+  return ddc ? 'pictures.dealer.com/' + ddc[1] : null;
+}
+/** The download URL for a photo id (DealerCenter's 1600×1200 size, Dealer.com's original). */
+export const dcPhotoUrl = (id) => (id.startsWith('pictures.dealer.com/') ? 'https://' + id : 'https://imagescf.dealercenter.net/1600/1200/' + id);
 
 export function dcNormalize(raw) {
   const s = isMap(raw) ? raw : isList(raw) ? Object.fromEntries(raw.map((v, i) => [String(i), v])) : { 0: raw };
@@ -40,17 +52,19 @@ export function dcNormalize(raw) {
   let urls = null, key = null, count = s.photo_count;
   if (s.photo_urls !== undefined && s.photo_urls !== null) {
     if (!isList(s.photo_urls) || s.photo_urls.length > 100) throw new Error(`Stock ${stock}: photo_urls must be a list of up to 100 URLs.`);
-    // CDN paths are /W/H/[overlay-folder/]document.jpg; only the document id is kept (the folder-less original,
-    // without the website's logo/phone overlay), so the photo key stays stable if the overlay is toggled.
+    // Two photo hosts: DealerCenter (imagescf.dealercenter.net; CDN paths are /W/H/[overlay-folder/]document.jpg and
+    // only the document id is kept — the folder-less original without the website's logo/phone overlay — so the
+    // photo key stays stable if the overlay is toggled) and Dealer.com (pictures.dealer.com/<x>/<dealer>/<n>/<id>.jpg;
+    // resize parameters are dropped so the original is downloaded).
     let ids = [];
     for (const u of s.photo_urls) {
-      const m = typeof u === 'string' ? u.match(/^https:\/\/imagescf\.dealercenter\.net\/(?:[0-9]+\/[0-9]+\/)?(?:[A-Za-z0-9-]+\/)?([A-Za-z0-9-]+\.jpg)$/) : null;
-      if (!m) throw new Error(`Stock ${stock}: photos must come from imagescf.dealercenter.net.`);
-      ids.push(m[1]);
+      const id = typeof u === 'string' ? dcPhotoId(u) : null;
+      if (!id) throw new Error(`Stock ${stock}: photos must come from imagescf.dealercenter.net or pictures.dealer.com.`);
+      ids.push(id);
     }
     ids = [...new Set(ids)];
     key = createHash('sha256').update(ids.join('\n')).digest('hex');
-    urls = ids.map((id) => 'https://imagescf.dealercenter.net/1600/1200/' + id);
+    urls = ids.map(dcPhotoUrl);
     count = urls.length;
   }
   const photos = filterValidateInt(count ?? null);
@@ -82,12 +96,12 @@ export function dcLocalPhotos(v, cfg) {
   }
   return out;
 }
-export function dcApplyFields(v, s) {
+export function dcApplyFields(v, s, feed = 'dealercenter') {
   v = { ...v };
   v.Vin = s.vin || (v.Vin ?? 'stock:' + s.stock); v.Year = s.year; v.Make = s.make; v.Model = s.model; v.Trim = s.trim;
   v.Drivetrain = s.drivetrain; v.ExteriorColor = s.color; v.Odometer = s.mileage; v.VehiclePrice = s.price ?? 0; v.price = s.price;
   if (s.description !== '') v.description = s.description;
-  v.feed = 'dealercenter'; v.active = true; delete v.removed_at; v.dc_checked_at = gmdateC();
+  v.feed = feed; v.active = true; delete v.removed_at; v.dc_checked_at = gmdateC();
   return v;
 }
 
@@ -102,12 +116,21 @@ async function dcPhotosFromUrls(urls, download) {
   return urls.map((_, i) => ({ name: 'photo_' + String(i + 1).padStart(3, '0') + '.jpg', bytes: got[i] }));
 }
 
-export async function dcSync(db, cfg, snapshot, zipDir = null, download = downloadPhotos) {
+/** The change-log state row: "sync_log" for Golden Auto, "sync_log:<client>" for others. */
+export const syncLogKey = (client) => (client === CLIENT_DEFAULT ? 'sync_log' : 'sync_log:' + clientInventoryKey(client).slice('inventory:'.length));
+
+/**
+ * client: whose inventory the snapshot is (default Golden Auto). Other clients' snapshots come from their website read
+ * in a browser (e.g. a Dealer.com site that blocks this server); the same rules apply to their inventory and log.
+ */
+export async function dcSync(db, cfg, snapshot, zipDir = null, download = downloadPhotos, client = CLIENT_DEFAULT) {
+  clientFind(db, client);
+  const invKey = clientInventoryKey(client), logKey = syncLogKey(client), feed = client === CLIENT_DEFAULT ? 'dealercenter' : 'snapshot';
   if (!isList(snapshot) || !snapshot.length) throw new Error('Snapshot must be a non-empty list of vehicles.');
   const items = new Map();
   for (const raw of snapshot) { const s = dcNormalize(raw); if (items.has(s.stock)) throw new Error('Duplicate stock ' + s.stock + ' in snapshot.'); items.set(s.stock, s); }
   const before = new Map();
-  for (const v of state(db, 'inventory')?.vehicles ?? []) before.set(str(v.StockNumber), v);
+  for (const v of state(db, invKey)?.vehicles ?? []) before.set(str(v.StockNumber), v);
 
   // Phase 1 (no DB lock): import photos for vehicles that are new or whose photo set changed.
   const imported = new Map(); let created = [];
@@ -129,22 +152,22 @@ export async function dcSync(db, cfg, snapshot, zipDir = null, download = downlo
   } catch (e) { created.forEach(unlinkQuiet); throw e; }
 
   // Phase 2 (short transaction): re-read inventory and apply all changes.
-  const log = { at: gmdateC(), source: 'dealercenter', active_count: items.size, added: [], photos_updated: [], price_changed: [], updated: [], returned: [], removed: [], waiting_photos: [], sheet_views: [] };
+  const log = { at: gmdateC(), source: feed, active_count: items.size, added: [], photos_updated: [], price_changed: [], updated: [], returned: [], removed: [], waiting_photos: [], sheet_views: [] };
   let stale = []; const rebuild = new Set(); let byStock;
   db.exec('BEGIN');
   try {
-    const inv = state(db, 'inventory') ?? { vehicles: [] };
+    const inv = state(db, invKey) ?? { vehicles: [] };
     byStock = new Map();
     for (const v of inv.vehicles) byStock.set(str(v.StockNumber), v);
     for (const [stock, s] of items) {
       const cur = byStock.get(stock) ?? null, label = stock + ' ' + trim(s.year + ' ' + s.make + ' ' + s.model);
       let v;
       if (imported.has(stock)) {
-        v = dcApplyFields(imported.get(stock), s); v.imported_at = imported.get(stock).imported_at;
+        v = dcApplyFields(imported.get(stock), s, feed); v.imported_at = imported.get(stock).imported_at;
         if (cur) { const keep = dcLocalPhotos(v, cfg); stale = stale.concat(dcLocalPhotos(cur, cfg).filter((f) => !keep.includes(f))); log.photos_updated.push(label + ' (' + v.photos.length + ' photos)'); }
         else log.added.push(label + ' (' + v.photos.length + ' photos)');
       } else if (cur) {
-        v = dcApplyFields(cur, s);
+        v = dcApplyFields(cur, s, feed);
         if (dcPhotosChanged(cur, s)) log.waiting_photos.push(label + ' (photo count ' + str(cur.dc_photo_count ?? 'unknown') + ' → ' + s.photo_count + ')');
       } else { log.waiting_photos.push(label + ' (new, ' + s.photo_count + ' photos)'); continue; }
       if (cur) {
@@ -163,10 +186,10 @@ export async function dcSync(db, cfg, snapshot, zipDir = null, download = downlo
       if (items.has(stock) || (v.source ?? '') !== 'zip' || (v.active ?? true) === false) continue;
       byStock.set(stock, { ...v, active: false, removed_at: gmdateC() }); log.removed.push(stock + ' ' + title(v));
     }
-    inv.vehicles = [...byStock.values()]; inv.dealercenter_checked_at = gmdateC(); save(db, 'inventory', inv);
-    for (const stock of imported.keys()) save(db, 'import:' + stock, byStock.get(stock));
-    const history = state(db, 'sync_log') ?? { entries: [] };
-    history.entries = [log, ...(history.entries ?? [])].slice(0, 30); save(db, 'sync_log', history);
+    inv.vehicles = [...byStock.values()]; inv.dealercenter_checked_at = gmdateC(); save(db, invKey, inv);
+    for (const stock of imported.keys()) save(db, 'import:' + (client === CLIENT_DEFAULT ? '' : client + ':') + stock, byStock.get(stock));
+    const history = state(db, logKey) ?? { entries: [] };
+    history.entries = [log, ...(history.entries ?? [])].slice(0, 30); save(db, logKey, history);
     db.exec('COMMIT');
   } catch (e) { try { db.exec('ROLLBACK'); } catch { /* not in a transaction */ } created.forEach(unlinkQuiet); throw e; }
   for (const f of stale) if (existsSync(f)) unlinkQuiet(f);

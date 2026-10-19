@@ -11,6 +11,7 @@ import { assetSheet, importMediaZip } from '../lib/media.js';
 import { spokespersonApi, spokespersonFind } from '../lib/spokespersons.js';
 import { enrich, referenceImageUrl, uploadReference, generateJob, pollJob, jobsForClient, goldenJobDelete, goldenFootageBuild } from '../lib/jobs.js';
 import { withThumbs } from '../lib/thumbs.js';
+import { syncLogKey } from '../lib/dealercenter.js';
 
 const sha256 = (s) => createHash('sha256').update(s).digest('hex');
 const SPOKESPERSON = ['spokesperson_list', 'spokesperson_upload', 'spokesperson_default', 'spokesperson_delete'];
@@ -45,7 +46,7 @@ export const jobRoutes = {
     return sheet;
   },
   speech: ({ body }) => ({ speech: speechScript(str(body.script ?? '')), words: speechWordCount(str(body.script ?? '')) }),
-  sync_log: ({ db }) => state(db, 'sync_log') ?? { entries: [] },
+  sync_log: ({ db, client }) => state(db, syncLogKey(client)) ?? { entries: [] },
   import: async ({ cfg, db, client, body, files }) => {
     const file = files.media ?? null;
     if (!file || file.error !== 0) throw new Error('Upload failed. The file may be too large or the upload was interrupted.');

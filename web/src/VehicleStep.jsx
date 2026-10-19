@@ -19,7 +19,7 @@ export default function VehicleStep() {
     <section className={s.stepClass('stepVehicle')} id="stepVehicle">
       <StepHead id="stepVehicle" num="1" title={<h2>Choose a vehicle</h2>} sub={<p id="syncTime">{s.chosen ? <b className="selected-car">Selected: {s.chosen.Year} {s.chosen.Make} {s.chosen.Model} · </b> : null}{inventoryLine(s.inventory)}</p>}
         aside={hidden > 0 && <p className="hidden-note">{hidden} vehicle{hidden > 1 ? 's' : ''} no longer listed {hidden > 1 ? 'are' : 'is'} hidden; {hidden > 1 ? 'their videos are' : 'its videos are'} kept.</p>} />
-      {c?.id === 'golden-auto' && <SyncLog />}
+      {(c?.id === 'golden-auto' || s.syncLog?.entries?.length > 0) && <SyncLog />}
       <SyncButton say={say} />
       <Inventory say={say} />
     </section>
@@ -177,7 +177,7 @@ function SyncLog() {
   const changes = sections.reduce((n, [key]) => n + last[key].length, 0);
   return (
     <details id="syncLogPanel" className="sub">
-      <summary id="syncLogSummary">{`Inventory changes — DealerCenter synced ${new Date(last.at).toLocaleString()} · ${last.active_count} active · ${changes} change${changes === 1 ? '' : 's'}`}</summary>
+      <summary id="syncLogSummary">{`Inventory changes — ${last.source === 'snapshot' ? 'website snapshot' : 'DealerCenter'} synced ${new Date(last.at).toLocaleString()} · ${last.active_count} active · ${changes} change${changes === 1 ? '' : 's'}`}</summary>
       <div id="syncLog">
         {sections.map(([key, label]) => <div key={key}><strong>{label} ({last[key].length})</strong><ul>{last[key].map((x, i) => <li key={i}>{x}</li>)}</ul></div>)}
         {!changes && <p>No changes since the previous sync.</p>}
