@@ -56,7 +56,10 @@ export default function LookStep() {
       </label>
       <p className="hint" id="formatHint">{s.format === 'facebook_feed' ? 'Seedance renders a 3:4 video; it is cropped to 4:5 when finished.' : 'Generated in this shape directly. Check captions and face placement before posting.'}</p>
       <div id="aiSheet" hidden={footage}><AssetSheet /></div>
-      <StepContinue from="stepLook" to="stepGenerate" label="Continue to step 5: Generate" ready={!!s.chosen} />
+      <StepContinue from="stepLook" to="stepGenerate" label="Continue to step 5: Generate"
+        check={footage ? 'Footage video chosen' : 'Spokesperson, format and photos confirmed'}
+        ready={!!s.chosen && (!footage || !!s.footage) && (footage || !!s.spokesperson)}
+        waiting={!s.chosen ? 'Choose a vehicle in step 1 first' : footage ? 'Choose the car video first' : 'Choose a spokesperson first'} />
     </section>
   );
 }

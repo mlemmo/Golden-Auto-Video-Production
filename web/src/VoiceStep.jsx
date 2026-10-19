@@ -29,7 +29,10 @@ export default function VoiceStep() {
           {s.approvedPreviews.map((p) => <option key={p.id} value={p.id}>{`${p.duration}s · ${(p.text || '').slice(0, 70)}… · ${p.id.slice(0, 8)}`}</option>)}
         </select>
       </label>
-      <StepContinue from="stepVoice" to="stepLook" label="Continue to step 4: Look" ready={!!s.chosen} />
+      <StepContinue from="stepVoice" to="stepLook" label="Continue to step 4: Look"
+        check={{ elevenlabs: 'Approved voice selected', native: 'Seedance voice chosen', narration: 'Voice preview approved for lip-sync' }[s.voice]}
+        ready={!!s.chosen && (s.voice !== 'elevenlabs' || !!s.approvedVoice)}
+        waiting={!s.chosen ? 'Choose a vehicle in step 1 first' : 'Choose an approved voice preview first'} />
     </section>
   );
 }

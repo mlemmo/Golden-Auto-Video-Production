@@ -24,7 +24,8 @@ export default function ScriptStep() {
         <textarea id="script" rows={5} maxLength={600} placeholder="Choose a vehicle to draft its script." value={s.script} onChange={(e) => s.setScript(e.target.value)} />
       </label>
       <SpokenLength />
-      <StepContinue from="stepScript" to="stepVoice" label="Continue to step 3: Voice" ready={!!c && s.script.trim() !== ''} />
+      <StepContinue from="stepScript" to="stepVoice" label="Continue to step 3: Voice" check="Script approved"
+        ready={!!c && s.script.trim() !== ''} waiting={!c ? 'Choose a vehicle in step 1 first' : 'Write the script first'} />
     </section>
   );
 }

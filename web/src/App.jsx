@@ -37,20 +37,23 @@ export function StepHead({ id, num, title, sub, aside }) {
   );
 }
 /**
- * End of a step without its own final button: "Looks good" and Continue, which closes this step and opens the next.
- * ready: false while the step cannot be confirmed yet (e.g. no car chosen).
+ * End of a step without its own final button: a confirmation (check: what is confirmed, e.g. "Approved voice
+ * selected") and Continue, which closes this step and opens the next. ready: false while the confirmation would not
+ * be true yet; waiting: why, shown beside it.
  */
-export function StepContinue({ from, to, label, ready = true }) {
+export function StepContinue({ from, to, label, check, ready = true, waiting = '' }) {
   const s = useStudio();
   const [ok, setOk] = useState(false);
-  useEffect(() => { setOk(false); }, [s.chosen?.StockNumber]);
+  useEffect(() => { setOk(false); }, [s.chosen?.StockNumber, check]);
+  useEffect(() => { if (!ready) setOk(false); }, [ready]);
   const go = () => {
     s.closeStep(from); s.openStep(to);
     setTimeout(() => document.getElementById(to)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
   };
   return (
     <div className="step-continue">
-      <label className="check"><input type="checkbox" checked={ok} disabled={!ready} onChange={(e) => setOk(e.target.checked)} />Looks good</label>
+      {!ready && waiting && <span className="step-waiting">{waiting}</span>}
+      <label className="check"><input type="checkbox" checked={ok} disabled={!ready} onChange={(e) => setOk(e.target.checked)} />{check}</label>
       <button type="button" disabled={!ready || !ok} onClick={go}>{label}</button>
     </div>
   );

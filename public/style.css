@@ -113,3 +113,4 @@ button{font-size:15px}
 @media(max-width:900px){.client-details-toggle{height:auto}}
 .client-details-open label:first-of-type{margin-top:17px}
 .client-details-open .client-facts{margin-bottom:12px}
+.step-waiting{color:var(--muted)}
