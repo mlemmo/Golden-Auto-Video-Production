@@ -75,3 +75,7 @@ main>.client-panel{margin-top:0}
 .client-panel .client-details details.sub{margin:4px 0 8px}
 .client-panel #clientForm{margin-top:12px}
 @media(max-width:900px){.client-panel{grid-template-columns:1fr}}
+.client-facts{display:grid;grid-template-columns:max-content 1fr;gap:4px 16px;margin:0 0 10px;font-size:14px}
+.client-facts dt{color:var(--muted)}.client-facts dd{margin:0}.client-facts small{color:var(--muted)}
+.client-details .studio{margin-top:6px}
+@media(max-width:600px){.client-facts{grid-template-columns:1fr;gap:0}.client-facts dd{margin-bottom:6px}}
