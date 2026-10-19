@@ -20,6 +20,12 @@ export function speechPronunciationGuide(speech) {
  * beside it, speaking the script; a short approved narration ($speechSeconds) leaves pan shots of the car at the end.
  * voiceReference: false; true/'voice' = a sample of her voice; 'speech' = the exact approved narration.
  */
+/**
+ * How she talks on camera. Asking for lips that match "every word exactly" made Seedance over-articulate (user feedback
+ * 2026-10-19: exaggerated lip sync); this asks for sync with small, relaxed mouth movement instead.
+ */
+export const NATURAL_TALKING = 'The talking looks natural and relaxed, like a real person in conversation: the lips stay in sync with the words, but mouth and jaw movements are small and soft, never exaggerated or over-articulated; the face stays relaxed with warm, natural expressions and only small, natural head movements. Gestures toward the car are occasional, calm and open-handed, not constant. ';
+
 /** The original background (the default setting); the scene library (src/lib/scenes.js) offers others. */
 export const SHOWROOM_SETTING = 'a bright, upscale modern showroom with polished floors, soft even lighting and tall windows, with open space all around the car, not a representation of the dealership’s actual building';
 const settingText = (setting) => rtrim(trim(str(setting ?? '') || SHOWROOM_SETTING), '.');
@@ -47,7 +53,7 @@ export function promptNative(v, speech, duration = 30, presenter = SPOKESPERSON_
   const count = ['', 'one', 'two'][panShots.length];
   return 'Create a ' + duration + '-second dealership walkaround video made of four wide shots, with synchronized spoken dialogue' + (panShots.length ? ', followed by ' + count + ' slow camera-only pan shot' + (panShots.length > 1 ? 's' : '') + ' of the car with no one speaking' : '') + '. ' +
     'Reference image 1 is the exact vehicle asset sheet showing its front, sides and rear; reference image 2 is the spokesperson; match their face, hair, body and outfit exactly. ' +
-    (voiceReference === 'speech' ? 'Reference audio 1 is the exact recording of her speech for this video: she says exactly those words with that voice, at exactly the same pace and timing as the recording, starting at ' + num(speakFrom) + ' seconds; do not slow it down, stretch it or add pauses. Her lip movements follow that recording word for word. '
+    (voiceReference === 'speech' ? 'Reference audio 1 is the exact recording of her speech for this video: she says exactly those words with that voice, at exactly the same pace and timing as the recording, starting at ' + num(speakFrom) + ' seconds; do not slow it down, stretch it or add pauses. Her mouth stays in sync with that recording. '
       : (voiceReference ? 'Reference audio 1 is the spokesperson\'s voice: match its timbre, accent, pitch and delivery exactly. ' : '')) +
     'Preserve the vehicle paint, trim, wheels, lamps and body exactly; do not invent equipment, badges or license plates, and do not repair cosmetic imperfections. The vehicle is parked and stationary throughout. ' +
     'Setting: ' + settingText(setting) + '. ' +
@@ -59,7 +65,7 @@ export function promptNative(v, speech, duration = 30, presenter = SPOKESPERSON_
     'Shot 4 (' + t(0.75) + '–' + talkEnd + ' s): wide front three-quarter view of the whole car from the other side; she has walked around to the front corner and finishes speaking to the camera with a warm smile. ' +
     panShots.map((x, k) => 'Shot ' + (5 + k) + ' ' + x).join('') +
     'Clean cuts between shots; the camera is steady or moves slowly within each shot. ' +
-    'Speech: she speaks to the camera' + (voiceReference === 'speech' ? ' while the recording plays, in that same voice and pace,' : ' throughout, in a warm, clear, natural, friendly American English voice, relaxed and unhurried, with a brief natural pause between sentences,') + ' like a real salesperson talking to one customer, not an announcer. Her lip movements match every word exactly, and her open-hand gestures toward the car match what she is saying. Her speech continues seamlessly across the cuts and finishes by ' + num(speakUntil) + ' seconds. ' + silentAfter +
+    'Speech: she speaks to the camera' + (voiceReference === 'speech' ? ' while the recording plays, in that same voice and pace,' : ' throughout, in a warm, clear, natural, friendly American English voice, relaxed and unhurried, with a brief natural pause between sentences,') + ' like a real salesperson talking to one customer, not an announcer. ' + NATURAL_TALKING + 'Her speech continues seamlessly across the cuts and finishes by ' + num(speakUntil) + ' seconds. ' + silentAfter +
     'She says exactly this, word for word, and nothing else: "' + seedanceRespell(speech, respell) + '" ' +
     'She says each sentence exactly once, in this order, and then stops: she never repeats a sentence, the price or the website, and never adds words of her own. ' +
     speechPronunciationGuide(speech) +
@@ -72,7 +78,7 @@ export function prompt(v, spoken, style = 'dynamic', duration = 15, presenter = 
   presenter = rtrim(trim(presenter), '.');
   if (style === 'showroom') return 'Create a ' + duration + '-second dealership walkaround video. Reference image 1 is the exact vehicle asset sheet showing its front, sides and rear; reference image 2 is the spokesperson; match their face, hair, body and outfit exactly. Preserve the vehicle paint, trim, wheels, lamps and body exactly; do not invent equipment or repair cosmetic imperfections. The vehicle is parked throughout. ' +
     'The spokesperson (' + presenter + ') begins at the rear three-quarter corner of the car on the side nearest the camera and walks slowly forward along that side to the front three-quarter corner, presenting the car. Never behind the car, never on its far side, never hidden by it. ' +
-    'Throughout, the spokesperson is fully visible from head to at least the knees, faces the camera most of the time, and talks to the viewer continuously with natural mouth movement, warm expressions and open hand gestures toward the car. ' +
+    'Throughout, the spokesperson is fully visible from head to at least the knees, faces the camera most of the time, and talks to the viewer continuously. ' + NATURAL_TALKING +
     'The stabilized camera tracks alongside at walking pace, slightly ahead of the spokesperson, keeping the face clearly visible, evenly lit and reasonably large in frame while the car stays recognizable beside them. One smooth continuous move; no hard cuts, no racing or drone shots. ' +
     (settingText(setting) === SHOWROOM_SETTING ? 'Use a bright, modern illustrative showroom, not a representation of the dealership’s actual building. ' : 'Setting: ' + settingText(setting) + '. ') + 'Leave space at the bottom of the frame for captions added in post-production. ' +
     'No on-screen text of any kind: no watermark, no website address, no logo, no signage text, no license-plate text.';
