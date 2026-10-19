@@ -208,6 +208,8 @@ function Inventory({ say }) {
       s.setApprove(false); s.setConfirmCurrent(false);
       s.refreshNarrations().catch((e) => s.statuses.studio[1](e.message, true));
       say(v.sheet_error || `${v.Year} ${v.Make} ${v.Model} selected. Continue with the script in step 2.`);
+      // Steps are stacked: bring step 2 into view once the car is loaded.
+      setTimeout(() => document.getElementById('stepScript')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
     } catch (e) { say(e.message, true); }
   });
   return (
