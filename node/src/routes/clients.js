@@ -3,10 +3,13 @@ import { clientsLoad, clientFind, clientAdd, clientReanalyze, clientSaveDetails,
 import { state } from '../lib/db.js';
 import { syncInventory } from '../lib/website.js';
 import { withThumbs } from '../lib/thumbs.js';
+import { snapshotImportStart } from '../lib/dealercenter.js';
 
 const withDetails = (c) => ({ ...c, script_details: clientDetails(c) });
 
 export const clientRoutes = {
+  // Admin: a website snapshot read in the browser (a site that blocks this server), imported in the background.
+  snapshot_import: ({ db, cfg, body }) => snapshotImportStart(db, cfg, String(body.client ?? ''), body.snapshot),
   clients: ({ db, client }) => ({ items: clientsLoad(db).items.map(withDetails), current: client }),
   client_add: async ({ db, body }) => ({ client: await clientAdd(db, String(body.name ?? ''), String(body.website ?? '')) }),
   client_analyze: async ({ db, body, client }) => ({ client: withDetails(await clientReanalyze(db, String(body.id ?? client))) }),

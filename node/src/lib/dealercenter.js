@@ -6,7 +6,9 @@
 // vehicles missing from the snapshot inactive (kept, never deleted). Downloaded photos are imported directly and
 // images are made with FFmpeg.
 import { createHash } from 'node:crypto';
-import { existsSync, unlinkSync } from 'node:fs';
+import { existsSync, unlinkSync, mkdirSync, writeFileSync, statSync, rmSync, openSync, closeSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { trim, upper, str, filterValidateInt, isNumeric, toFloat, gmdateC, parseUrl, U_SPACE } from './text.js';
 import { money, title } from './price.js';
 import { state, save } from './db.js';
@@ -204,4 +206,36 @@ export async function dcSync(db, cfg, snapshot, zipDir = null, download = downlo
     if (/^[a-f0-9]{40}\.jpg$/.test(oldFile) && oldFile !== fresh.url.split('/').pop()) unlinkQuiet(String(cfg.asset_dir) + '/' + oldFile);
   }
   return log;
+}
+
+/**
+ * A snapshot sent from the dashboard (admin; read in the browser from a site that blocks this server): checked now,
+ * saved under data_dir/snapshots and imported in the background by the sync CLI (downloads and asset sheets take
+ * minutes). One import per client at a time (lock folder, taken over after 30 minutes). run(file, lock) is
+ * replaceable in tests.
+ */
+export function snapshotImportStart(db, cfg, client, snapshot, run = null) {
+  clientFind(db, client);
+  if (!isList(snapshot) || !snapshot.length || snapshot.length > 500) throw new Error('Send a list of 1–500 vehicles.');
+  const stocks = new Set();
+  for (const raw of snapshot) { const s = dcNormalize(raw); if (stocks.has(s.stock)) throw new Error('Duplicate stock ' + s.stock + ' in snapshot.'); stocks.add(s.stock); }
+  const dir = String(cfg.data_dir) + '/snapshots', lock = String(cfg.data_dir) + '/snapshot-' + client + '.lock.d';
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  try { mkdirSync(lock); }
+  catch {
+    if (Date.now() - statSync(lock).mtimeMs < 30 * 60 * 1000) throw new Error('An import for this client is still running. Wait for it to finish (see Inventory changes).');
+    rmSync(lock, { recursive: true, force: true }); mkdirSync(lock);
+  }
+  const file = dir + '/' + client + '-' + new Date().toISOString().replace(/[:.]/g, '-') + '.json';
+  writeFileSync(file, JSON.stringify(snapshot), { mode: 0o600 });
+  (run ?? snapshotImportRun)(cfg, client, file, lock);
+  return { message: `Snapshot of ${snapshot.length} vehicles received. The import runs in the background (photos and asset sheets take a few minutes); reload the inventory to see the cars.`, vehicles: snapshot.length };
+}
+function snapshotImportRun(cfg, client, file, lock) {
+  const cli = fileURLToPath(new URL('../cli/dealercenter-sync.js', import.meta.url));
+  const out = openSync(String(cfg.data_dir) + '/snapshot-sync.log', 'a');
+  // Arguments are passed as positional parameters, never pasted into the shell text.
+  const p = spawn('/bin/sh', ['-c', 'echo "$(date -u +%FT%TZ) $2 $3"; "$0" "$1" --client "$2" "$3"; rm -rf "$4"', process.execPath, cli, client, file, lock],
+    { detached: true, stdio: ['ignore', out, out] });
+  p.unref(); closeSync(out);
 }

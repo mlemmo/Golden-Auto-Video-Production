@@ -2,10 +2,10 @@
 // No network: photo downloads are faked.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { openMemoryDb, save, state } from '../src/lib/db.js';
-import { dcNormalize, dcPhotoId, dcSync, syncLogKey } from '../src/lib/dealercenter.js';
+import { dcNormalize, dcPhotoId, dcSync, syncLogKey, snapshotImportStart } from '../src/lib/dealercenter.js';
 import { downloadPhotos } from '../src/lib/media.js';
 import { JPEG_1800x900 } from './fixtures/images.js';
 
@@ -52,5 +52,26 @@ test('a client snapshot fills that client’s inventory and log, not Golden Auto
     const next = await dcSync(db, cfg, [car('E1', [ddc('p1', '?w=320'), ddc('p2')], { prices: [41914] })], null, download, 'eastbay-motorcars');
     assert.deepEqual([next.price_changed.length, next.removed, asked.length], [1, ['E2 2022 LEXUS RX 350'], 0]);
     await assert.rejects(dcSync(db, cfg, [car('X', [ddc('p9')])], null, download, 'nobody'), /client/i);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('snapshot from the dashboard: checked, saved, one import per client at a time', () => {
+  const dir = mkdtempSync(tmpdir() + '/ga-snap-');
+  const cfg = { asset_dir: dir, data_dir: dir };
+  const db = openMemoryDb();
+  save(db, 'clients', { items: [{ id: 'golden-auto', name: 'Golden Auto', website: 'https://www.mygoldenauto.net' }, { id: 'eastbay-motorcars', name: 'Eastbay Motorcars', website: 'https://www.eastbaymotorcars.net' }] });
+  const runs = [];
+  const run = (c, client, file, lock) => runs.push({ client, file, lock });
+  try {
+    assert.throws(() => snapshotImportStart(db, cfg, 'nobody', [car('E1', [ddc('p1')])], run), /client/i);
+    assert.throws(() => snapshotImportStart(db, cfg, 'eastbay-motorcars', [], run), /1–500/);
+    assert.throws(() => snapshotImportStart(db, cfg, 'eastbay-motorcars', [car('E1', ['https://evil.com/a.jpg'])], run), /photos must come from/);
+    assert.equal(runs.length, 0, 'nothing started for a bad snapshot');
+    const r = snapshotImportStart(db, cfg, 'eastbay-motorcars', [car('E1', [ddc('p1')]), car('E2', [ddc('p2')])], run);
+    assert.ok(r.message.includes('2 vehicles') && runs.length === 1 && JSON.parse(readFileSync(runs[0].file, 'utf8')).length === 2);
+    assert.throws(() => snapshotImportStart(db, cfg, 'eastbay-motorcars', [car('E1', [ddc('p1')])], run), /still running/);
+    rmSync(runs[0].lock, { recursive: true });
+    snapshotImportStart(db, cfg, 'eastbay-motorcars', [car('E1', [ddc('p1')])], run);
+    assert.equal(runs.length, 2, 'next import once the previous one finished');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

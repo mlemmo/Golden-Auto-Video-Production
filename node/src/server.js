@@ -52,7 +52,7 @@ const sessionRoutes = {
 // What each role may do. Viewers only read; admins alone manage users, clients and the shared spokesperson library;
 // users do everything else (including paid steps) for the clients assigned to them.
 const VIEWER_ACTIONS = new Set(['library', 'clients', 'client_select', 'inventory', 'sync_log', 'jobs', 'narration_list', 'spokesperson_list', 'detail', 'speech', 'logout', 'me', 'password_change']);
-const ADMIN_ACTIONS = new Set(['usage', 'client_add', 'client_analyze', 'client_details', 'spokesperson_upload', 'spokesperson_default', 'spokesperson_delete', 'users_list', 'user_create', 'user_update', 'user_delete']);
+const ADMIN_ACTIONS = new Set(['usage', 'snapshot_import', 'client_add', 'client_analyze', 'client_details', 'spokesperson_upload', 'spokesperson_default', 'spokesperson_delete', 'users_list', 'user_create', 'user_update', 'user_delete']);
 // Actions that need no current client (an account without clients can still use them).
 const NO_CLIENT = new Set(['library', 'usage', 'clients', 'logout', 'me', 'password_change', 'users_list', 'user_create', 'user_update', 'user_delete', 'client_add']);
 // Actions recorded for the Usage dashboard (who, which client, what, when; never passwords).
