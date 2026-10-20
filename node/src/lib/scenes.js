@@ -1,10 +1,12 @@
 // Background settings for AI videos: where the car is parked while the spokesperson walks around it. A library in
 // state row "scenes" ({ items: [{ id, name, blocks?, description, builtin? }], default }), seeded with ready-made
-// settings; admins add, edit, delete and pick the default; step 4 chooses one per video. Settings are Seedance's
-// structured blocks (location, ground, background, lighting, atmosphere) plus fixed rules, written into the video prompt
-// as one "Setting: …" block. The modern showroom is the original free-text setting, word for word, so videos made with
-// it are prompted exactly as before. scene_suggest asks Claude (config anthropic_key) to turn a plain-English idea into
-// the blocks; the admin reviews and edits them before saving.
+// settings (builtin = unedited, kept up to date with SCENE_PRESETS); admins add, edit, delete and pick the default;
+// step 4 chooses one per video. Settings are Seedance's structured blocks (location, ground, background, lighting,
+// atmosphere) plus fixed rules, written into the video prompt as one "Setting: …" block, all in the style of the
+// estate driveway that worked in testing: a specific, wide, fictional place, spotless level ground, a detailed
+// background softly out of focus, the car and spokesperson evenly lit. The modern showroom is the original free-text
+// setting, word for word, so videos made with it are prompted exactly as before. scene_suggest asks Claude (config
+// anthropic_key) to turn a plain-English idea into the blocks; the admin reviews and edits them before saving.
 import { randomBytes } from 'node:crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import { state, save } from './db.js';
@@ -20,11 +22,11 @@ export { SHOWROOM_SETTING };
  * vehicles or people, no readable text or logos anywhere in the scene." The rules after the blocks are always added.
  */
 export const SCENE_BLOCKS = [
-  ['location', 'Location', 'Where the car is parked', 'a wide scenic overlook above the Pacific coast'],
-  ['ground', 'Ground', 'What the car stands on', 'level, clean paved asphalt'],
-  ['background', 'Background', 'What is behind the car, softly out of focus', 'ocean and cliffs'],
-  ['lighting', 'Lighting', 'Time of day and light; keep the car and spokesperson clearly lit', 'warm low golden-hour sunlight'],
-  ['atmosphere', 'Atmosphere', 'Mood and feel', 'calm, premium, cinematic'],
+  ['location', 'Location', 'Where the car is parked: wide, open, fictional', 'a wide, empty scenic overlook high above the Pacific coast, not a real or identifiable place'],
+  ['ground', 'Ground', 'What the car stands on: spotless and level', 'spotless, smooth dark asphalt, perfectly clean and level, with no markings, cracks or stains'],
+  ['background', 'Background', 'What is behind the car, softly out of focus', 'the deep blue ocean and rugged golden cliffs softly out of focus'],
+  ['lighting', 'Lighting', 'Time of day and light; keep the car and spokesperson clearly lit', 'warm low golden-hour sunlight, the car and spokesperson evenly lit'],
+  ['atmosphere', 'Atmosphere', 'Mood and feel', 'calm, premium, pristine, cinematic'],
 ];
 const SCENE_RULES = 'open space all around the car, no other vehicles or people, no readable text or logos anywhere in the scene';
 export function sceneDescription(blocks) {
@@ -36,15 +38,15 @@ const preset = (id, name, location, ground, background, lighting, atmosphere) =>
 };
 export const SCENE_PRESETS = [
   { id: 'showroom', name: 'Modern showroom', description: SHOWROOM_SETTING, builtin: true },
-  preset('coastal-overlook', 'Coastal overlook at golden hour', 'a wide scenic overlook above the Pacific coast', 'level, clean paved asphalt', 'ocean and rugged cliffs, softly out of focus', 'warm low golden-hour sunlight', 'calm, premium, cinematic'),
-  preset('city-rooftop-dusk', 'City rooftop at dusk', 'an open rooftop parking deck high above a city', 'clean level concrete', 'a softly lit city skyline at dusk', 'warm deck lights and the last blue light of dusk, the car and spokesperson clearly lit', 'urban, sleek, upscale'),
-  preset('white-studio', 'White photo studio', 'a seamless bright white photo studio with a curved infinity backdrop', 'a glossy white floor with a subtle reflection', 'plain white infinity cove', 'soft, even professional studio lighting', 'clean, minimal, high-end'),
-  preset('wine-country', 'Wine country afternoon', 'a wide courtyard beside a California vineyard', 'level, fine light-colored gravel', 'rolling vineyard hills and oak trees', 'soft natural afternoon sunlight', 'relaxed, sunny, refined'),
-  preset('mountain-pass', 'Mountain pass morning', 'a wide pull-out on a mountain road', 'level paved asphalt', 'pine forest and snow-dusted peaks', 'crisp clear morning light', 'fresh, adventurous, open'),
-  preset('desert-sunset', 'Desert highway at sunset', 'a wide flat pull-out beside an empty two-lane desert highway', 'level packed sand and gravel', 'red rock formations in the distance', 'warm golden sunset light on the car', 'rugged, free, cinematic'),
+  preset('coastal-overlook', 'Coastal overlook at golden hour', 'a wide, empty scenic overlook high above the Pacific coast, not a real or identifiable place', 'spotless, smooth dark asphalt, perfectly clean and level, with no markings, cracks or stains', 'the deep blue ocean and rugged golden cliffs softly out of focus, gentle white surf far below and a clear sky with a few soft clouds', 'warm low golden-hour sunlight with a soft glowing sky, the car and spokesperson evenly lit', 'calm, premium, pristine, cinematic'),
+  preset('city-rooftop-dusk', 'City rooftop at dusk', 'a wide, empty open-air rooftop plaza high above a modern city, with sleek glass railings at the far edges, not a real or identifiable building', 'spotless, smooth light-grey polished concrete, perfectly clean and level, with no markings, cracks or stains', 'a glittering city skyline softly out of focus, glass towers with warm lit windows under a deep blue dusk sky', 'the last soft blue light of dusk with warm accent lights along the railings, the car and spokesperson evenly lit', 'urban, sleek, pristine, upscale'),
+  preset('white-studio', 'White photo studio', 'a large, seamless bright white photo studio with a curved infinity backdrop and no visible equipment, lights or stands', 'a spotless glossy white floor with a soft subtle reflection of the car, perfectly clean and level, with no markings, seams or scuffs', 'the plain white infinity cove fading softly into white, with no edges, corners or objects', 'soft, even professional studio lighting with gentle shadows under the car, the car and spokesperson evenly lit', 'clean, minimal, pristine, high-end'),
+  preset('wine-country', 'Wine country afternoon', 'a wide, open stone courtyard beside a California vineyard estate, not a real or identifiable winery', 'spotless, smooth light-colored stone pavers, perfectly clean and level, with no markings, cracks or stains', 'rolling vineyard hills with neat rows of green vines, old oak trees and a rustic stone winery building, all softly out of focus', 'warm, soft late-afternoon sunlight under a clear sky, the car and spokesperson evenly lit', 'relaxed, sunny, pristine, refined'),
+  preset('mountain-pass', 'Mountain pass morning', 'a wide, empty scenic pull-out beside a winding mountain road, not a real or identifiable place', 'spotless, smooth dark asphalt, perfectly clean and level, with no markings, cracks or stains', 'tall pine forest and snow-dusted mountain peaks softly out of focus under a clear blue sky', 'crisp, clear morning sunlight, the car and spokesperson evenly lit', 'fresh, adventurous, pristine, open'),
+  preset('desert-sunset', 'Desert highway at sunset', 'a wide, empty paved pull-out beside a quiet two-lane desert highway, not a real or identifiable place', 'spotless, smooth dark asphalt, perfectly clean and level, with no markings, cracks or stains', 'red rock buttes and open desert softly out of focus under a glowing orange and pink sky', 'warm golden sunset light with a soft glowing sky, the car and spokesperson evenly lit', 'rugged, free, pristine, cinematic'),
   preset('estate-driveway', 'Luxury estate driveway', 'the wide, curved private driveway in front of a modern two-story luxury home with floor-to-ceiling glass windows, not a real or identifiable property', 'spotless, smooth pale stone pavers, perfectly clean and level, with no markings, cracks or stains', 'the house softly out of focus with warm lights glowing through its windows, a manicured striped lawn, landscaped flower beds and mature trees', 'warm golden-hour sunset light with a soft glowing sky, the car and spokesperson evenly lit', 'exclusive, serene, pristine, aspirational'),
-  preset('neon-night', 'City lights at night', 'a quiet open city plaza at night', 'level pavement, wet with soft reflections', 'colorful city lights, softly out of focus, with no readable signs', 'bright enough that the car and spokesperson are clearly lit', 'cinematic, energetic, modern'),
-  preset('industrial-loft', 'Industrial loft', 'a spacious industrial warehouse', 'a polished concrete floor', 'exposed brick, steel beams and tall factory windows', 'soft daylight through the windows', 'raw, stylish, bold'),
+  preset('neon-night', 'City lights at night', 'a wide, empty open city plaza at night between modern buildings, not a real or identifiable place', 'spotless, smooth dark stone pavers, rain-washed with soft colorful reflections, perfectly clean and level, with no markings or cracks', 'colorful city lights and glowing modern buildings softly out of focus, with no readable signs or text', 'a bright, soft key light against the glowing night, the car and spokesperson evenly lit', 'cinematic, energetic, pristine, modern'),
+  preset('industrial-loft', 'Industrial loft', 'a spacious, empty converted industrial loft with high ceilings, not a real or identifiable building', 'a spotless, smooth polished concrete floor, perfectly clean and level, with no markings, cracks or stains', 'exposed red brick walls, black steel beams and tall factory windows softly out of focus', 'soft natural daylight streaming through the tall windows, the car and spokesperson evenly lit', 'raw, stylish, pristine, bold'),
 ];
 
 const SPACES = new RegExp(U_SPACE + '+', 'gu');
@@ -73,6 +75,13 @@ export function sceneLibrary(db) {
     save(db, 'scenes', lib);
   }
   if (!Array.isArray(lib.items)) lib.items = [];
+  // Ready-made settings nobody has edited follow the current wording (an edit clears builtin).
+  let changed = false;
+  for (const [i, item] of lib.items.entries()) {
+    const p = item.builtin && SCENE_PRESETS.find((x) => x.id === item.id);
+    if (p && JSON.stringify(item) !== JSON.stringify(p)) { lib.items[i] = { ...p }; changed = true; }
+  }
+  if (changed) save(db, 'scenes', lib);
   return lib;
 }
 /** The chosen setting, or the default when none is chosen; an unknown id is an error (never a silent swap). */
@@ -97,7 +106,7 @@ export function sceneApi(action, inp, db, random = randomBytes) {
       const item = lib.items.find((x) => x.id === id);
       if (!item) throw new Error('Setting not found. Reload the list.');
       if (lib.items.some((x) => x.id !== id && x.name.toLowerCase() === name.toLowerCase())) throw new Error('A setting with this name already exists.');
-      item.name = name; item.description = description;
+      item.name = name; item.description = description; delete item.builtin;
       if (blocks) item.blocks = blocks; else delete item.blocks;
     } else {
       if (lib.items.some((x) => x.name.toLowerCase() === name.toLowerCase())) throw new Error('A setting with this name already exists.');
@@ -123,12 +132,12 @@ export function sceneApi(action, inp, db, random = randomBytes) {
 
 const SUGGEST_SYSTEM = `You turn a plain-English idea into the structured "Setting" blocks of a Seedance 2.5 video prompt for a car dealership ad. In the video a spokesperson walks around one parked car while the camera films four wide shots from the front, side, rear and the other front corner.
 
-Return a short title-case name (2 to 5 words) and these blocks, each a short lowercase phrase of 3 to 20 words with no ending period:
-- location: where the car is parked; always a wide, open place with room to walk all around the car.
-- ground: what the car stands on; always level and clean.
-- background: what is behind the car, kept softly out of focus.
-- lighting: time of day and light; the car and the spokesperson must stay clearly lit, even at night.
-- atmosphere: the mood in two to four adjectives.
+Return a short title-case name (2 to 5 words) and these blocks, each a lowercase phrase of 3 to 25 words (at most 150 characters) with no ending period. Be specific and vivid, in this style:
+- location: where the car is parked; always a wide, open, empty place with room to walk all around the car, ending with "not a real or identifiable place" (or property, building, winery…). Example: the wide, curved private driveway in front of a modern two-story luxury home with floor-to-ceiling glass windows, not a real or identifiable property
+- ground: what the car stands on; always spotless, smooth, perfectly clean and level. Example: spotless, smooth pale stone pavers, perfectly clean and level, with no markings, cracks or stains
+- background: what is behind the car, with concrete details, softly out of focus. Example: the house softly out of focus with warm lights glowing through its windows, a manicured striped lawn, landscaped flower beds and mature trees
+- lighting: time of day and light, always ending with "the car and spokesperson evenly lit", even at night. Example: warm golden-hour sunset light with a soft glowing sky, the car and spokesperson evenly lit
+- atmosphere: the mood in three or four adjectives, including pristine. Example: exclusive, serene, pristine, aspirational
 
 Never describe the car or the spokesperson, never put people, other vehicles, readable text, signs, logos or license plates in the scene, never name a real business or an identifiable private property, and never use double quotes or semicolons.`;
 

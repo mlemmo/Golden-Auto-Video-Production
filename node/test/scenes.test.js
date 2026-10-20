@@ -1,8 +1,8 @@
 // Background settings library and how it reaches the video prompt. No paid calls: Claude is a fake.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { openMemoryDb } from '../src/lib/db.js';
-import { sceneApi, sceneFind, sceneSuggest, SCENE_PRESETS, SHOWROOM_SETTING } from '../src/lib/scenes.js';
+import { openMemoryDb, save } from '../src/lib/db.js';
+import { sceneApi, sceneFind, sceneSuggest, sceneBody, SCENE_PRESETS, SHOWROOM_SETTING } from '../src/lib/scenes.js';
 import { promptNative, prompt } from '../src/lib/prompts.js';
 
 const v = { Year: 2025, Make: 'BMW', Model: 'M4' };
@@ -15,6 +15,28 @@ test('ready-made settings, showroom first and default', () => {
   for (const s of lib.items) assert.ok(/open space all around the car/.test(s.description) && !s.description.includes('"'), s.id);
   assert.equal(sceneFind(db, '').id, 'showroom', 'nothing chosen: the default');
   assert.throws(() => sceneFind(db, 'gone'), /Choose a background setting/);
+});
+
+test('every ready-made setting follows the estate driveway style and passes the editor checks', () => {
+  for (const p of SCENE_PRESETS.filter((x) => x.blocks)) {
+    const b = p.blocks;
+    assert.deepEqual(sceneBody({ blocks: b }).blocks, b, p.id + ': editable as saved (length, no quotes)');
+    assert.ok(/^(the |a )?(wide|large|spacious)/.test(b.location) && /spotless/.test(b.ground) && /perfectly clean and level/.test(b.ground), p.id);
+    assert.ok(/softly/.test(b.background) && b.lighting.endsWith('the car and spokesperson evenly lit') && b.atmosphere.includes('pristine'), p.id);
+  }
+});
+
+test('saved ready-made settings follow new wording until someone edits them', () => {
+  const db = openMemoryDb();
+  const old = { items: SCENE_PRESETS.map((p) => ({ ...p })), default: 'showroom' };
+  old.items[1] = { ...old.items[1], description: 'an older wording of the coastal overlook' };
+  old.items[2] = { id: 'city-rooftop-dusk', name: 'My rooftop', description: 'an edited rooftop, open space all around the car' };
+  save(db, 'scenes', old);
+  const lib = sceneApi('scene_list', {}, db);
+  assert.deepEqual(lib.items[1], SCENE_PRESETS[1], 'unedited: refreshed');
+  assert.equal(lib.items[2].name, 'My rooftop', 'edited: kept');
+  sceneApi('scene_save', { id: 'mountain-pass', name: 'Mountain pass', description: 'my own mountain pass, open space all around the car' }, db);
+  assert.equal(sceneApi('scene_list', {}, db).items.find((x) => x.id === 'mountain-pass').description, 'my own mountain pass, open space all around the car');
 });
 
 test('add, edit, set default, delete', () => {
@@ -38,7 +60,7 @@ test('the chosen setting goes into the prompt; the showroom prompt is unchanged'
   const base = promptNative(v, 'Hi there.', 30, 'adult woman', 'speech', 20);
   assert.equal(promptNative(v, 'Hi there.', 30, 'adult woman', 'speech', 20, {}, SHOWROOM_SETTING), base, 'default setting = the original prompt');
   const p = promptNative(v, 'Hi there.', 30, 'adult woman', 'speech', 20, {}, coastal);
-  assert.ok(p.includes('Setting: location: a wide scenic overlook above the Pacific coast; ground: level, clean paved asphalt;') && p.includes('no readable text or logos anywhere in the scene.') && !p.includes('modern showroom'), p);
+  assert.ok(p.includes('Setting: location: a wide, empty scenic overlook high above the Pacific coast, not a real or identifiable place; ground: spotless, smooth dark asphalt,') && p.includes('no readable text or logos anywhere in the scene.') && !p.includes('modern showroom'), p);
   assert.ok(prompt(v, 'x', 'showroom', 15, 'adult woman').includes('modern illustrative showroom'));
   assert.ok(prompt(v, 'x', 'showroom', 15, 'adult woman', coastal).includes('Setting: ' + coastal + '.'));
 });
