@@ -10,6 +10,8 @@ import { adPrice, highestPrice, priceMatches } from '../src/lib/price.js';
 import { nativeCues } from '../src/lib/finishing.js';
 import { clientDetails } from '../src/lib/clients.js';
 import { script } from '../src/lib/scripts.js';
+import { promptNative } from '../src/lib/prompts.js';
+import { narrationTextDifferences } from '../src/lib/narrations.js';
 
 test('prices are spoken as words', () => {
   for (const [input, expected] of Object.entries({
@@ -110,6 +112,16 @@ test('native voice speech', () => {
   assert.ok(seedanceRespell(speech).includes('San Rah-moan') && seedanceRespell(speech, { 'San Ramon': 'San Ra-MOAN' }).includes('San Ra-MOAN'), 'respelling default and config override');
 });
 
+test('with the approved recording the quoted line matches it; names are said as recorded', () => {
+  const v = { Year: 2015, Make: 'VOLKSWAGEN', Model: 'GOLF' };
+  const speech = 'Take a look at this twenty fifteen Volkswagen Golf here at Golden Auto in San Ramon. Book your test drive at my golden auto dot net.';
+  const rec = promptNative(v, speech, 30, 'adult woman', 'speech', 12);
+  assert.ok(rec.includes('"' + speech + '"') && !rec.includes('Rah-moan'), 'no respelling next to the recording');
+  assert.ok(rec.includes('exactly as the recording does, never in her own way, including "San Ramon", "Volkswagen"; the website is said as words'), rec);
+  const own = promptNative(v, speech, 30, 'adult woman', false);
+  assert.ok(own.includes('in San Rah-moan.') && own.includes('"San Ramon" is pronounced san rah-MOAN'), 'Seedance\'s own voice keeps the respelling');
+});
+
 test('no advertised price: no price in scripts, "Call For Price" caption', () => {
   const noPrice = { Year: 2016, Make: 'LAND ROVER', Model: 'RANGE ROVER SPORT', Trim: 'HSE', Drivetrain: '4WD', ExteriorColor: 'LOIRE BLUE', Odometer: 67351, price: null };
   assert.ok(!script(noPrice).includes('$') && !script(noPrice, 30).includes('$') && !script(noPrice, 30).toLowerCase().includes('price'), 'no price: scripts never mention a price');
@@ -118,6 +130,12 @@ test('no advertised price: no price in scripts, "Call For Price" caption', () =>
   const tight = captionCallForPrice([{ text: 'Book', start: 20.0, end: 29.4 }], 29.5);
   assert.ok(tight.at(-1).text === 'Call For Price' && tight[0].end <= 28.1 && tight.at(-1).start > tight[0].end && validateSrt(captionSrt(tight, 0.5), 30) !== '', 'speech to the very end: last caption shortened to make room');
   assert.ok(priceMatches(null, null) && !priceMatches(null, 14688.0) && priceMatches(14688.25, 14688.25) && !priceMatches(14688.0, 14690.0), 'no price matches no price only');
+});
+
+test('the letter Z is said "Zee", never "Zed"', () => {
+  assert.equal(speechScript('2016 CHEVROLET SILVERADO 1500 CREW CAB Z71 LTZ'), 'twenty sixteen Chevrolet Silverado 1500 Crew Cab Zee 71 L-T-Zee');
+  assert.equal(speechScript(speechScript('Z71 LTZ')), 'Zee 71 L-T-Zee', 'spoken text stays the same when checked again');
+  assert.deepEqual(narrationTextDifferences('Crew Cab Zee 71 L-T-Zee here.', 'Crew Cab Z71 LTZ here.'), [], 'no caption warning');
 });
 
 test('listing shorthand said as words; captions keep it', () => {

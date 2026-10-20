@@ -130,7 +130,9 @@ export const SPEECH_SPELLED = ['SUV', 'HSE', 'AWD', 'FWD', 'RWD', '2WD', '4WD', 
 export const SPEECH_LETTER_SEPARATOR = '-';
 
 const isDigits = (s) => /^\d+$/.test(s);
-const spell = (s) => s.split('').join(SPEECH_LETTER_SEPARATOR);
+// Z is written "Zee": a lone Z made the ElevenLabs voice say the British "Zed" (LTZ said as "L-T-Zed", 2026-10-20).
+const LETTER_SPEECH = { Z: 'Zee' };
+const spell = (s) => s.split('').map((c) => LETTER_SPEECH[c] ?? c).join(SPEECH_LETTER_SEPARATOR);
 
 /**
  * Voice models try to read SUV or XV as words, so spoken text spells them out: "S-U-V", "X-V", "C-R-V".

@@ -1,7 +1,7 @@
 // Seedance video prompts (promptNative, speechPronunciationGuide, prompt). The prompt text is part of each
 // generation's duplicate-request fingerprint, so any change to it makes earlier requests look new.
 import { trim, rtrim, lower, round, str } from './text.js';
-import { seedanceRespell, SPEECH_PRONUNCIATION } from './speech.js';
+import { seedanceRespell, SEEDANCE_RESPELL, SPEECH_PRONUNCIATION } from './speech.js';
 import { title } from './price.js';
 
 export const SPOKESPERSON_DEFAULT_DESCRIPTION = 'trustworthy friendly adult woman age 28–33, casual professional attire';
@@ -13,6 +13,18 @@ export function speechPronunciationGuide(speech) {
   const notes = [];
   for (const [word, say] of Object.entries(SPEECH_PRONUNCIATION)) if (lower(speech).includes(lower(word))) notes.push(`"${word}" is pronounced ${say}`);
   return notes.length ? 'Pronunciation: ' + notes.join('; ') + '. ' : '';
+}
+
+/**
+ * With the approved recording as reference audio, the quoted line matches the recording word for word: a respelled
+ * "San Rah-moan" in the text next to "San Ramon" in the audio made Seedance drop the city (2026-10-20, 30-second Golf).
+ * Names are pronounced as recorded instead.
+ */
+export function recordingPronunciationGuide(speech, v = {}, respell = {}) {
+  const make = str(v.Make ?? '').toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase());
+  const names = [...Object.keys({ ...SEEDANCE_RESPELL, ...respell }), make].filter((w) => w !== '' && lower(speech).includes(lower(w)));
+  return 'Pronunciation: she pronounces every word and name exactly as the recording does, never in her own way' + (names.length ? ', including ' + names.map((w) => '"' + w + '"').join(', ') : '') +
+    (lower(speech).includes('dot net') || lower(speech).includes('dot com') ? '; the website is said as words, never spelled out letter by letter' : '') + '. ';
 }
 
 /**
@@ -49,6 +61,8 @@ export function promptNative(v, speech, duration = 30, presenter = SPOKESPERSON_
   presenter = rtrim(trim(presenter), '.');
   speech = trim(speech.replaceAll('"', "'").replace(/[\t\n\v\f\r ]+/g, ' '));
   if (speech === '') throw new Error('Write the script the spokesperson will say.');
+  // Seedance's own voice reads respellings (San Rah-moan); with the approved recording the text matches the audio.
+  const recorded = voiceReference === 'speech', said = recorded ? speech : seedanceRespell(speech, respell);
   const speakFrom = 0.5;
   // Seedance says an approved recording about 8% faster than it plays (2026-10-20 test: 11.0 s of narration said in
   // 9.9 s); a window longer than her real speech made her fill it by repeating the website.
@@ -85,10 +99,10 @@ export function promptNative(v, speech, duration = 30, presenter = SPOKESPERSON_
     panShots.map((x, k) => 'Shot ' + (5 + k) + ' ' + x).join('') +
     'Clean cuts between shots; the camera is steady or moves slowly within each shot. ' +
     'Speech: she speaks to the camera' + (voiceReference === 'speech' ? ' while the recording plays, in that same voice and pace,' : ' throughout, in a warm, clear, natural, friendly American English voice, relaxed and unhurried, with a brief natural pause between sentences,') + ' like a real salesperson talking to one customer, not an announcer, with soft, understated mouth movement. Her speech continues seamlessly across the cuts and finishes by ' + num(speakUntil) + ' seconds. ' + silentAfter +
-    'She says exactly this, word for word, and nothing else: "' + seedanceRespell(speech, respell) + '" ' +
+    'She says exactly this, word for word, and nothing else: "' + said + '" ' +
     'She says each sentence exactly once, in this order, and then stops: she never repeats a sentence, the price or the website, and never adds words of her own. ' +
-    finalWords(seedanceRespell(speech, respell)) +
-    speechPronunciationGuide(speech) +
+    finalWords(said) +
+    (recorded ? recordingPronunciationGuide(speech, v, respell) : speechPronunciationGuide(speech)) +
     'Audio: only her voice, clear, natural and close to the microphone, with no echo or reverb, over a soft quiet room tone' + (panShots.length ? '; during the pan shots only the soft room tone' : '') + '. No music, no other voices, no sound effects. ' +
     'Leave space at the bottom of the frame for captions added in post-production. No on-screen text of any kind: no captions, no watermark, no website address, no logo, no signage text, no license-plate text.';
 }
