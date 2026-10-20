@@ -26,6 +26,12 @@ export function speechPronunciationGuide(speech) {
  */
 export const NATURAL_TALKING = 'The talking looks natural and relaxed, like a real person in conversation: the lips stay in sync with the words, but mouth and jaw movements are small and soft, never exaggerated or over-articulated; the face stays relaxed with warm, natural expressions and only small, natural head movements. Gestures toward the car are occasional, calm and open-handed, not constant. ';
 
+/**
+ * The asset sheet is a grid of the dealer's real lot photos, and Seedance copied their parking lot, sky and hills into
+ * the video instead of the chosen setting (user report 2026-10-20). This tells it to take only the car from them.
+ */
+export const REFERENCE_BACKGROUND_RULE = 'Use the reference images only for the appearance of the car and the spokesperson: completely ignore the backgrounds, parking lot, pavement markings, sky, hills, trees, buildings and other surroundings in the reference photos, and never copy them into the video. Place the car and the spokesperson only in the Setting described below. ';
+
 /** The original background (the default setting); the scene library (src/lib/scenes.js) offers others. */
 export const SHOWROOM_SETTING = 'a bright, upscale modern showroom with polished floors, soft even lighting and tall windows, with open space all around the car, not a representation of the dealership’s actual building';
 const settingText = (setting) => rtrim(trim(str(setting ?? '') || SHOWROOM_SETTING), '.');
@@ -53,6 +59,7 @@ export function promptNative(v, speech, duration = 30, presenter = SPOKESPERSON_
   const count = ['', 'one', 'two'][panShots.length];
   return 'Create a ' + duration + '-second dealership walkaround video made of four wide shots, with synchronized spoken dialogue' + (panShots.length ? ', followed by ' + count + ' slow camera-only pan shot' + (panShots.length > 1 ? 's' : '') + ' of the car with no one speaking' : '') + '. ' +
     'Reference image 1 is the exact vehicle asset sheet showing its front, sides and rear; reference image 2 is the spokesperson; match their face, hair, body and outfit exactly. ' +
+    REFERENCE_BACKGROUND_RULE +
     (voiceReference === 'speech' ? 'Reference audio 1 is the exact recording of her speech for this video: she says exactly those words with that voice, at exactly the same pace and timing as the recording, starting at ' + num(speakFrom) + ' seconds; do not slow it down, stretch it or add pauses. Her mouth stays in sync with that recording. '
       : (voiceReference ? 'Reference audio 1 is the spokesperson\'s voice: match its timbre, accent, pitch and delivery exactly. ' : '')) +
     'Preserve the vehicle paint, trim, wheels, lamps and body exactly; do not invent equipment, badges or license plates, and do not repair cosmetic imperfections. The vehicle is parked and stationary throughout. ' +
@@ -76,7 +83,7 @@ export function promptNative(v, speech, duration = 30, presenter = SPOKESPERSON_
 /** Silent walkaround or dynamic sequence for the lip-sync method (no spoken script in the video). */
 export function prompt(v, spoken, style = 'dynamic', duration = 15, presenter = SPOKESPERSON_DEFAULT_DESCRIPTION, setting = SHOWROOM_SETTING) {
   presenter = rtrim(trim(presenter), '.');
-  if (style === 'showroom') return 'Create a ' + duration + '-second dealership walkaround video. Reference image 1 is the exact vehicle asset sheet showing its front, sides and rear; reference image 2 is the spokesperson; match their face, hair, body and outfit exactly. Preserve the vehicle paint, trim, wheels, lamps and body exactly; do not invent equipment or repair cosmetic imperfections. The vehicle is parked throughout. ' +
+  if (style === 'showroom') return 'Create a ' + duration + '-second dealership walkaround video. Reference image 1 is the exact vehicle asset sheet showing its front, sides and rear; reference image 2 is the spokesperson; match their face, hair, body and outfit exactly. ' + REFERENCE_BACKGROUND_RULE + 'Preserve the vehicle paint, trim, wheels, lamps and body exactly; do not invent equipment or repair cosmetic imperfections. The vehicle is parked throughout. ' +
     'The spokesperson (' + presenter + ') begins at the rear three-quarter corner of the car on the side nearest the camera and walks slowly forward along that side to the front three-quarter corner, presenting the car. Never behind the car, never on its far side, never hidden by it. ' +
     'Throughout, the spokesperson is fully visible from head to at least the knees, faces the camera most of the time, and talks to the viewer continuously. ' + NATURAL_TALKING +
     'The stabilized camera tracks alongside at walking pace, slightly ahead of the spokesperson, keeping the face clearly visible, evenly lit and reasonably large in frame while the car stays recognizable beside them. One smooth continuous move; no hard cuts, no racing or drone shots. ' +
