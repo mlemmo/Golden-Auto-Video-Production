@@ -22,9 +22,10 @@ export function speechPronunciationGuide(speech) {
  */
 /**
  * How she talks on camera. Asking for lips that match "every word exactly" made Seedance over-articulate (user feedback
- * 2026-10-19: exaggerated lip sync); this asks for sync with small, relaxed mouth movement instead.
+ * 2026-10-19: exaggerated lip sync); this asks for sync with small, relaxed mouth movement instead. Still too big on
+ * 2026-10-20 (wide-open mouth, puckered vowels), so it now names the mouth shapes to avoid and comes before the shots.
  */
-export const NATURAL_TALKING = 'The talking looks natural and relaxed, like a real person in conversation: the lips stay in sync with the words, but mouth and jaw movements are small and soft, never exaggerated or over-articulated; the face stays relaxed with warm, natural expressions and only small, natural head movements. Gestures toward the car are occasional, calm and open-handed, not constant. ';
+export const NATURAL_TALKING = 'The spokesperson talks the way a real person does in a relaxed, quiet conversation: the lips stay in sync with the words, but the mouth opens only slightly, the jaw barely moves and the teeth stay mostly hidden. No wide-open mouth, no pursed, puckered or rounded lips, no stretched or exaggerated vowel shapes, no big grins or laughing while talking. The face stays relaxed with a warm, natural expression and only small head movements. Gestures toward the car are occasional, calm and open-handed, not constant. ';
 
 /**
  * The asset sheet is a grid of the dealer's real lot photos, and Seedance copied their parking lot, sky and hills into
@@ -60,19 +61,19 @@ export function promptNative(v, speech, duration = 30, presenter = SPOKESPERSON_
   return 'Create a ' + duration + '-second dealership walkaround video made of four wide shots, with synchronized spoken dialogue' + (panShots.length ? ', followed by ' + count + ' slow camera-only pan shot' + (panShots.length > 1 ? 's' : '') + ' of the car with no one speaking' : '') + '. ' +
     'Reference image 1 is the exact vehicle asset sheet showing its front, sides and rear; reference image 2 is the spokesperson; match their face, hair, body and outfit exactly. ' +
     REFERENCE_BACKGROUND_RULE +
-    (voiceReference === 'speech' ? 'Reference audio 1 is the exact recording of her speech for this video: she says exactly those words with that voice, at exactly the same pace and timing as the recording, starting at ' + num(speakFrom) + ' seconds; do not slow it down, stretch it or add pauses. Her mouth stays in sync with that recording. '
+    (voiceReference === 'speech' ? 'Reference audio 1 is the exact recording of her speech for this video: she says exactly those words with that voice, at exactly the same pace and timing as the recording, starting at ' + num(speakFrom) + ' seconds; do not slow it down, stretch it or add pauses. Her mouth follows the recording with small, natural movements. '
       : (voiceReference ? 'Reference audio 1 is the spokesperson\'s voice: match its timbre, accent, pitch and delivery exactly. ' : '')) +
     'Preserve the vehicle paint, trim, wheels, lamps and body exactly; do not invent equipment, badges or license plates, and do not repair cosmetic imperfections. The vehicle is parked and stationary throughout. ' +
     'Setting: ' + settingText(setting) + '. ' +
     'Framing rules for every shot: the car is the main subject and in sharp focus, and the entire car is visible from bumper to bumper with space around it, never cropped. Use a wide lens with the camera about seven meters away at chest height. ' +
-    (panShots.length ? 'In shots 1–4 the spokesperson' : 'The spokesperson') + ' (' + presenter + ') stands or walks right beside the car, about one step from its body, shown full length from head to shoes, roughly half the height of the frame. She is never closer to the camera than the car, never blocks the view of the car, and never stands behind it or on its far side. ' +
+    (panShots.length ? 'In shots 1–4 the spokesperson' : 'The spokesperson') + ' (' + presenter + ') stands or walks right beside the car, about one step from its body, shown full length from head to shoes, roughly half the height of the frame. ' + NATURAL_TALKING + 'She is never closer to the camera than the car, never blocks the view of the car, and never stands behind it or on its far side. ' +
     'Shot 1 (0–' + t(0.25) + ' s): wide front three-quarter view of the whole car; she stands beside the front fender, facing the camera, and begins speaking. ' +
     'Shot 2 (' + t(0.25) + '–' + t(0.5) + ' s): wide side profile of the whole car; she walks slowly along the side toward the rear, gesturing to the car. ' +
     'Shot 3 (' + t(0.5) + '–' + t(0.75) + ' s): wide rear three-quarter view of the whole car; she stands beside the rear corner, gesturing to the rear of the car. ' +
     'Shot 4 (' + t(0.75) + '–' + talkEnd + ' s): wide front three-quarter view of the whole car from the other side; she has walked around to the front corner and finishes speaking to the camera with a warm smile. ' +
     panShots.map((x, k) => 'Shot ' + (5 + k) + ' ' + x).join('') +
     'Clean cuts between shots; the camera is steady or moves slowly within each shot. ' +
-    'Speech: she speaks to the camera' + (voiceReference === 'speech' ? ' while the recording plays, in that same voice and pace,' : ' throughout, in a warm, clear, natural, friendly American English voice, relaxed and unhurried, with a brief natural pause between sentences,') + ' like a real salesperson talking to one customer, not an announcer. ' + NATURAL_TALKING + 'Her speech continues seamlessly across the cuts and finishes by ' + num(speakUntil) + ' seconds. ' + silentAfter +
+    'Speech: she speaks to the camera' + (voiceReference === 'speech' ? ' while the recording plays, in that same voice and pace,' : ' throughout, in a warm, clear, natural, friendly American English voice, relaxed and unhurried, with a brief natural pause between sentences,') + ' like a real salesperson talking to one customer, not an announcer, with soft, understated mouth movement. Her speech continues seamlessly across the cuts and finishes by ' + num(speakUntil) + ' seconds. ' + silentAfter +
     'She says exactly this, word for word, and nothing else: "' + seedanceRespell(speech, respell) + '" ' +
     'She says each sentence exactly once, in this order, and then stops: she never repeats a sentence, the price or the website, and never adds words of her own. ' +
     speechPronunciationGuide(speech) +
