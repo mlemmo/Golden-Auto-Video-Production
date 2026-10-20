@@ -123,6 +123,8 @@ function Spokespersons() {
           </div>
         ))}
       </div>
+      <AiSpokesperson />
+      <h3>Or upload a photo</h3>
       <form id="spokespersonForm" ref={formRef} onSubmit={submit}>
         <div className="import-grid">
           <label>Name<input name="name" maxLength={60} required placeholder="e.g. Maya — showroom" /></label>
@@ -220,6 +222,82 @@ function Scenes() {
         </div>
       </form>
     </section>
+  );
+}
+
+const PERSON_BLOCKS = [
+  ['person', 'Person', 'Apparent age, gender and build', 'a friendly adult woman in her early thirties, slim build'],
+  ['hair', 'Hair', 'Hair style and colour', 'shoulder-length straight brown hair'],
+  ['outfit', 'Outfit', 'Clothes and shoes, head to toe', 'fitted navy blazer over a white blouse, dark slim trousers, white leather sneakers'],
+  ['manner', 'Manner', 'How they come across', 'warm, trustworthy and confident'],
+];
+const EMPTY_PERSON = Object.fromEntries(PERSON_BLOCKS.map(([k]) => [k, '']));
+const personDescription = (b) => `${b.person} with ${b.hair}, wearing ${b.outfit}, ${b.manner}`.replace(/\s+/g, ' ').trim();
+
+/** A new spokesperson made with AI: Claude writes the look from an idea, Nano Banana Pro draws it (paid, approved each time). */
+function AiSpokesperson() {
+  const s = useStudio();
+  const [, say] = s.statuses.spokesperson;
+  const [idea, setIdea] = useState('');
+  const [name, setName] = useState('');
+  const [blocks, setBlocks] = useState(EMPTY_PERSON);
+  const [approve, setApprove] = useState(false);
+  const [draft, setDraft] = useState(null);
+  const filled = PERSON_BLOCKS.every(([k]) => blocks[k].trim().length >= 3);
+  const description = filled ? personDescription(blocks) : '';
+  const write = () => s.run(async () => {
+    say('Claude is writing the spokesperson’s look…');
+    try {
+      const r = await api('spokesperson_describe', { idea });
+      setName(r.name); setBlocks(r.blocks); setDraft(null);
+      say('Look written. Change anything you like, then make the picture.');
+    } catch (e) { say(e.message, true); }
+  });
+  const draw = () => s.run(async () => {
+    say('Drawing the picture with Nano Banana Pro… this takes about 20 seconds.');
+    try {
+      // A redo of the same look is on purpose: it is still approved and paid separately.
+      const r = await api('spokesperson_picture', { description, approve_spend: approve, new_take: !!draft && draft.description === description });
+      setDraft(r.draft); setApprove(false);
+      say('Picture ready. Save it to the library, or tick the approval again to redo it.');
+    } catch (e) { say(e.message, true); setApprove(false); }
+  });
+  const keep = () => s.run(async () => {
+    try {
+      const next = await api('spokesperson_save_draft', { draft_id: draft.id, name, description: draft.description });
+      s.showSpokespersons(next, next.saved ?? null);
+      setDraft(null); setIdea(''); setName(''); setBlocks(EMPTY_PERSON);
+      say('Spokesperson saved and selected for the next video.');
+    } catch (e) { say(e.message, true); }
+  });
+  return (
+    <div className="ai-person" id="aiSpokesperson">
+      <h3>Create a spokesperson with AI</h3>
+      <p className="hint">Describe the person you want; Claude writes their look, and Nano Banana Pro draws a full-length studio photo of a made-up person. Each picture is paid (about $0.15) and needs your approval; redo it as often as you like before saving.</p>
+      <div className="scene-idea">
+        <label>Your idea in plain English
+          <input value={idea} maxLength={200} onChange={(e) => setIdea(e.target.value)} placeholder="e.g. a friendly man in his forties in a suit, for luxury cars" />
+        </label>
+        <button type="button" className="secondary" disabled={s.busy || idea.trim().length < 3} onClick={write}>Write it with Claude</button>
+      </div>
+      <label>Name<input value={name} maxLength={60} onChange={(e) => setName(e.target.value)} placeholder="e.g. David — charcoal suit" /></label>
+      <div className="import-grid">
+        {PERSON_BLOCKS.map(([k, label, help, example]) => (
+          <label key={k} title={help}>{label}
+            <input value={blocks[k]} maxLength={160} onChange={(e) => setBlocks((b) => ({ ...b, [k]: e.target.value }))} placeholder={example} />
+            <small>{help}</small>
+          </label>
+        ))}
+      </div>
+      {description && <p className="hint"><b>Description used in the video prompt:</b> {description}</p>}
+      <label className="check note-important"><input type="checkbox" checked={approve} disabled={!filled} onChange={(e) => setApprove(e.target.checked)} />I approve <b>one paid picture</b> (Nano Banana Pro on fal, about $0.15).</label>
+      <div className="actions">
+        <button type="button" disabled={s.busy || !filled || !approve || description.length > 300} onClick={draw}>{draft ? 'Redo picture' : 'Make picture'}</button>
+        {draft && <button type="button" disabled={s.busy || !name.trim()} onClick={keep}>Save to spokesperson library</button>}
+      </div>
+      {description.length > 300 && <p className="hint warn">The description is {description.length} characters; keep it under 300.</p>}
+      {draft?.url && <figure className="ai-person-draft"><img src={draft.url} alt="New spokesperson picture" /><figcaption>{draft.description}</figcaption></figure>}
+    </div>
   );
 }
 

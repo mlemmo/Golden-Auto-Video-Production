@@ -8,7 +8,7 @@ import { CLIENT_DEFAULT } from './clients.js';
 
 export const BEFORE_ACCOUNTS = 'before accounts';
 // Estimated provider cost per paid action (USD). Change with config cost_estimates.
-export const DEFAULT_COSTS = { generate_30: 9.71, generate_15: 4.86, narration_preview: 0, narration_lipsync: 0 };
+export const DEFAULT_COSTS = { generate_30: 9.71, generate_15: 4.86, narration_preview: 0, narration_lipsync: 0, spokesperson_picture: 0.15 };
 // The kinds of activity the dashboard counts, and the actions behind them.
 export const KINDS = { generate: 'AI videos', narration_preview: 'Voice previews', narration_lipsync: 'Lip-syncs', footage_build: 'Footage videos' };
 
@@ -68,6 +68,7 @@ export function usageReport(db, cfg, { days = 30, client = '', user = '' } = {},
       if (r.action === 'sign_in') t.sign_ins++;
       else if (r.action === 'sign_in_failed') t.failed_sign_ins++;
       else if (r.action in KINDS || r.action === 'finish') { t[r.action]++; t.cost += costOf(r, costs); }
+      else if (r.action === 'spokesperson_picture') t.cost += costOf(r, costs);
       else if (r.action === 'job_delete' || r.action === 'narration_delete') t.deletes++;
       if (r.action !== 'sign_in_failed') t.last_active = r.at;
     }

@@ -8,7 +8,7 @@ import { jsonEncode } from '../lib/storedjson.js';
 import { script, introBudget } from '../lib/scripts.js';
 import { speechScript, speechWordCount } from '../lib/speech.js';
 import { assetSheet, importMediaZip } from '../lib/media.js';
-import { spokespersonApi, spokespersonFind } from '../lib/spokespersons.js';
+import { spokespersonApi, spokespersonFind, spokespersonDescribe, spokespersonPicture, spokespersonSaveDraft } from '../lib/spokespersons.js';
 import { enrich, referenceImageUrl, uploadReference, generateJob, pollJob, jobsForClient, goldenJobDelete, goldenFootageBuild } from '../lib/jobs.js';
 import { withThumbs } from '../lib/thumbs.js';
 import { syncLogKey } from '../lib/dealercenter.js';
@@ -24,6 +24,10 @@ export const jobRoutes = {
   // Background settings: everyone lists them; admins add, edit, delete, set the default, and ask Claude to write one.
   ...Object.fromEntries(['scene_list', 'scene_save', 'scene_delete', 'scene_default'].map((a) => [a, ({ db, body }) => sceneApi(a, body, db)])),
   scene_suggest: async ({ cfg, body }) => sceneSuggest(cfg, body.idea),
+  // Spokespersons made with AI (admins): Claude writes the description, one paid Nano Banana Pro picture per approval.
+  spokesperson_describe: ({ cfg, body }) => spokespersonDescribe(cfg, body.idea),
+  spokesperson_picture: ({ cfg, db, body }) => spokespersonPicture(db, cfg, body),
+  spokesperson_save_draft: ({ cfg, db, body }) => spokespersonSaveDraft(db, cfg, body),
   ...Object.fromEntries(SPOKESPERSON.map((a) => [a, ({ cfg, db, client, body, files }) => spokespersonApi(a, { ...body, client }, cfg, db, files)])),
 
   detail: async ({ cfg, db, client, body, dealer }) => {
