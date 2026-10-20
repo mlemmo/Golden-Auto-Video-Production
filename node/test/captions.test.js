@@ -109,17 +109,18 @@ test('native voice speech', () => {
   assert.ok(!speechScript('This 2013 SUBARU has 60,000 miles. Just $14,688.').includes('2013') && speechScript('Just $14,688.').includes('fourteen thousand six hundred eighty-eight dollars'));
   const speech = nativeSpeech('Take a look at this 2013 SUBARU XV CROSSTREK here at Golden Auto in San Ramon. Just $14,688. Book your test drive at mygoldenauto.net.');
   assert.ok(speech.includes('my golden auto dot net') && !speech.includes('N, E, T'), 'native voice says "dot net"');
-  assert.ok(seedanceRespell(speech).includes('San Rah-moan') && seedanceRespell(speech, { 'San Ramon': 'San Ra-MOAN' }).includes('San Ra-MOAN'), 'respelling default and config override');
+  assert.ok(seedanceRespell(speech).includes('Sahn Ruh-mohn') && seedanceRespell(speech, { 'San Ramon': 'San Ra-MOAN' }).includes('San Ra-MOAN'), 'respelling default and config override');
 });
 
-test('with the approved recording the quoted line matches it; names are said as recorded', () => {
+test('dialogue last in its own tag, respelled; with the recording, names are said as recorded', () => {
   const v = { Year: 2015, Make: 'VOLKSWAGEN', Model: 'GOLF' };
   const speech = 'Take a look at this twenty fifteen Volkswagen Golf here at Golden Auto in San Ramon. Book your test drive at my golden auto dot net.';
   const rec = promptNative(v, speech, 30, 'adult woman', 'speech', 12);
-  assert.ok(rec.endsWith('[Dialogue:] "' + speech + '"') && rec.split(speech).length === 2 && !rec.includes('Rah-moan'), 'the line once, last, in its own block; no respelling next to the recording');
-  assert.ok(rec.includes('exactly as the recording does, never in her own way, including "San Ramon", "Volkswagen"; the website is said as words'), rec);
+  const said = speech.replace('San Ramon', 'Sahn Ruh-mohn');
+  assert.ok(rec.endsWith('[Dialogue: "' + said + '"] [clear diction, distinct syllables]') && rec.split(said).length === 2, 'the line once, last, in its own tag, respelled');
+  assert.ok(rec.includes('exactly as the recording does, never in her own way, including "San Ramon" (written "Sahn Ruh-mohn"), "Volkswagen"; the website is said as words'), rec);
   const own = promptNative(v, speech, 30, 'adult woman', false);
-  assert.ok(own.endsWith('in San Rah-moan. Book your test drive at my golden auto dot net."') && own.includes('"San Ramon" is pronounced san rah-MOAN, written "San Rah-moan" in the dialogue'), 'Seedance\'s own voice keeps the respelling');
+  assert.ok(own.endsWith('in Sahn Ruh-mohn. Book your test drive at my golden auto dot net."] [clear diction, distinct syllables]') && own.includes('"San Ramon" is pronounced sahn ruh-MOHN, written "Sahn Ruh-mohn" in the dialogue'), 'Seedance\'s own voice: same respelling, with a pronunciation note');
 });
 
 test('no advertised price: no price in scripts, "Call For Price" caption', () => {

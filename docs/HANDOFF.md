@@ -44,8 +44,9 @@ first admin. Paid records say who approved them (`approved_by`).
    `node node/src/cli/dealercenter-sync.js snapshot.json [zip-dir]` (photos download fine from imagescf.dealercenter.net).
 2. **DealerCenter SFTP XML import** (needs host/credentials and a sample XML).
 3. **Word-level caption alignment** (ElevenLabs `with-timestamps` on new takes would give exact timing).
-4. "San Ramon" pronunciation by Seedance: default respelling "San Rah-moan" (config `respell`); next fallback
-   "San Ra-MOAN", then drop the city from the spoken line.
+4. "San Ramon" pronunciation by Seedance: default respelling "Sahn Ruh-mohn" (config `respell`), in a final
+   `[Dialogue: "…"] [clear diction, distinct syllables]` tag; next fallback: drop the city from the spoken line, or use
+   voice=narration (lip-sync to the real ElevenLabs MP3).
 
 ## Working on this server with Claude Code
 - Work in `~/golden-auto-dev` on `staging`, commit, push, run staging's `update.sh` and check; then fast-forward

@@ -225,7 +225,7 @@ test('generate: native voice and silent walkaround prompts; changed photos stop 
     const native = await generateJob(db, cfg, 'golden-auto', { ...inp, voice: 'native', script: 'Visit Golden Auto in San Ramon at mygoldenauto.net.' }, { transport });
     assert.equal(native.speech_script, 'Visit Golden Auto in San Ramon at my golden auto dot net.');
     const sent = JSON.parse(calls.at(-1).body);
-    assert.ok(!('audio_urls' in sent) && sent.generate_audio === true && sent.prompt.includes('San Rah-moan'));
+    assert.ok(!('audio_urls' in sent) && sent.generate_audio === true && sent.prompt.includes('Sahn Ruh-mohn'));
     await generateJob(db, cfg, 'golden-auto', { ...inp, voice: 'narration', style: 'dynamic', duration: 15, script: 'Hi.' }, { transport });
     const silent = JSON.parse(calls.at(-1).body);
     assert.ok(silent.generate_audio === false && silent.prompt === prompt(car, 'Hi.', 'dynamic', 15, SPOKESPERSON_DEFAULT_DESCRIPTION));

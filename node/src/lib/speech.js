@@ -94,7 +94,7 @@ export function shorthandSpeech(s) {
 }
 
 /** Respellings written into the line Seedance speaks (it ignored the pronunciation note). Captions keep the real spelling. */
-export const SEEDANCE_RESPELL = { 'San Ramon': 'San Rah-moan' };
+export const SEEDANCE_RESPELL = { 'San Ramon': 'Sahn Ruh-mohn' };
 
 /** extra: config 'respell' entries (word => how to write it for the voice), added to or overriding the defaults. */
 export function seedanceRespell(s, extra = {}) {
@@ -110,7 +110,7 @@ export function seedanceRespell(s, extra = {}) {
 
 /** Pronunciations given to the native-voice model when the word appears in the script. */
 export const SPEECH_PRONUNCIATION = {
-  'San Ramon': 'san rah-MOAN, written "San Rah-moan" in the dialogue (stress on MOAN, said like the word "moan")',
+  'San Ramon': 'sahn ruh-MOHN, written "Sahn Ruh-mohn" in the dialogue (stress on MOHN, which rhymes with "own")',
   'my golden auto dot net': 'my GOLD-en AW-toh dot net, said as words, never spelled out letter by letter',
   'Golden Auto': 'GOLD-en AW-toh',
 };

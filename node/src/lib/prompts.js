@@ -16,14 +16,15 @@ export function speechPronunciationGuide(speech) {
 }
 
 /**
- * With the approved recording as reference audio, the quoted line matches the recording word for word: a respelled
- * "San Rah-moan" in the text next to "San Ramon" in the audio made Seedance drop the city (2026-10-20, 30-second Golf).
- * Names are pronounced as recorded instead.
+ * With the approved recording as reference audio, names are pronounced as recorded. Respelled names (SEEDANCE_RESPELL,
+ * config respell) are written respelled in the dialogue and named here by their real spelling too.
  */
 export function recordingPronunciationGuide(speech, v = {}, respell = {}) {
   const make = str(v.Make ?? '').toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase());
-  const names = [...Object.keys({ ...SEEDANCE_RESPELL, ...respell }), make].filter((w) => w !== '' && lower(speech).includes(lower(w)));
-  return 'Pronunciation: she pronounces every word and name exactly as the recording does, never in her own way' + (names.length ? ', including ' + names.map((w) => '"' + w + '"').join(', ') : '') +
+  const all = { ...SEEDANCE_RESPELL, ...respell };
+  const names = [...Object.keys(all), make].filter((w) => w !== '' && lower(speech).includes(lower(w)))
+    .map((w) => typeof all[w] === 'string' && all[w] !== '' ? '"' + w + '" (written "' + all[w] + '")' : '"' + w + '"');
+  return 'Pronunciation: she pronounces every word and name exactly as the recording does, never in her own way' + (names.length ? ', including ' + names.join(', ') : '') +
     (lower(speech).includes('dot net') || lower(speech).includes('dot com') ? '; the website is said as words, never spelled out letter by letter' : '') + '. ';
 }
 
@@ -61,8 +62,8 @@ export function promptNative(v, speech, duration = 30, presenter = SPOKESPERSON_
   presenter = rtrim(trim(presenter), '.');
   speech = trim(speech.replaceAll('"', "'").replace(/[\t\n\v\f\r ]+/g, ' '));
   if (speech === '') throw new Error('Write the script the spokesperson will say.');
-  // Seedance's own voice reads respellings (San Rah-moan); with the approved recording the text matches the audio.
-  const recorded = voiceReference === 'speech', said = recorded ? speech : seedanceRespell(speech, respell);
+  // Names Seedance mispronounces are respelled in the dialogue (Sahn Ruh-mohn), with or without the approved recording.
+  const recorded = voiceReference === 'speech', said = seedanceRespell(speech, respell);
   const speakFrom = 0.5;
   // Seedance says an approved recording about 8% faster than it plays (2026-10-20 test: 11.0 s of narration said in
   // 9.9 s); a window longer than her real speech made her fill it by repeating the website.
@@ -101,12 +102,12 @@ export function promptNative(v, speech, duration = 30, presenter = SPOKESPERSON_
     'Speech: she speaks to the camera' + (voiceReference === 'speech' ? ' while the recording plays, in that same voice and pace,' : ' throughout, in a warm, clear, natural, friendly American English voice, relaxed and unhurried, with a brief natural pause between sentences,') + ' like a real salesperson talking to one customer, not an announcer, with soft, understated mouth movement. Her speech continues seamlessly across the cuts and finishes by ' + num(speakUntil) + ' seconds. ' + silentAfter +
     'Audio: only her voice, clear, natural and close to the microphone, with no echo or reverb, over a soft quiet room tone' + (panShots.length ? '; during the pan shots only the soft room tone' : '') + '. No music, no other voices, no sound effects. ' +
     'Leave space at the bottom of the frame for captions added in post-production. No on-screen text of any kind: no captions, no watermark, no website address, no logo, no signage text, no license-plate text. ' +
-    // Her words come last in their own [Dialogue:] block, apart from the visual description (user suggestion 2026-10-20:
-    // Seedance dropped or changed words such as San Ramon and Z71 when the line sat among the shots).
+    // Her words come last in their own [Dialogue: "…"] tag with a diction tag, apart from the visual description (user
+    // suggestions 2026-10-20: Seedance dropped or changed words such as San Ramon and Z71 when the line sat among the shots).
     'She says only the dialogue below, word for word, and nothing else. She says each sentence exactly once, in this order, and then stops: she never repeats a sentence, the price or the website, and never adds words of her own. ' +
     finalWords(said) +
     (recorded ? recordingPronunciationGuide(speech, v, respell) : speechPronunciationGuide(speech)) +
-    '[Dialogue:] "' + said + '"';
+    '[Dialogue: "' + said + '"] [clear diction, distinct syllables]';
 }
 
 /** Silent walkaround or dynamic sequence for the lip-sync method (no spoken script in the video). */
