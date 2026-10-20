@@ -38,7 +38,7 @@ export function numberSpeech(s) {
 }
 
 export function priceSpeech(s) {
-  // A sentence-ending period after the price ("Just $14,688.") must not block the conversion.
+  // A sentence-ending period after the price ("Priced at $14,688.") must not block the conversion.
   return s.replace(/\$(\d{1,3}(?:,\d{3})+(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)(?![\d,]|\.\d)(?:[\t\n\v\f\r ]+dollars\b)?/gi, (_, amount) => currencyWords(amount));
 }
 

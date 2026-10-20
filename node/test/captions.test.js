@@ -88,13 +88,13 @@ test('prices, scripts and acronym speech', () => {
   assert.equal(highestPrice({ VehiclePrice: 8688, TotalAskingPrice: 8826.25, TotalAdvertisingPrice: 0 }, [{ VehiclePrice: 9000 }]), 9000, 'highest price across same vehicle sources');
   assert.equal(highestPrice({ VehiclePrice: 0, TotalPrice: -1 }), null, 'call-for-price stays unknown');
   const v = { Year: 2011, Make: 'HONDA', Model: 'CR-V', Drivetrain: '4WD', price: 8826.25 };
-  assert.ok(script(v).includes('Just $8,826.') && !script(v).includes('.25'), 'script uses selected price in whole dollars');
+  assert.ok(script(v).includes('Priced at $8,826.') && !script(v).includes('.25'), 'script uses selected price in whole dollars');
   const long = { Year: 2015, Make: 'RAM', Model: '1500 CREW CAB', Trim: 'Laramie Longhorn Pickup 4D 5 1/2 ft', Drivetrain: '4WD', ExteriorColor: 'Green', Odometer: 154785, price: 15688.25 };
   const s30 = script(long, 30);
   assert.ok(script(v, 15) === script(v) && speechWordCount(script(v)) <= 38, '15-second script unchanged and within limit');
   assert.ok(speechWordCount(s30) >= 45 && speechWordCount(s30) <= 62, `30-second script fills most of the time (${speechWordCount(s30)} spoken words)`);
   assert.ok(s30.includes('Laramie Longhorn') && !s30.includes('Pickup 4D') && s30.includes('four-wheel drive') && s30.includes('just over 154,000 miles') && s30.includes('truck'), '30-second script uses trim, drive, mileage and body style');
-  assert.ok(s30.includes('Just $15,688.') && !s30.includes('.25') && s30.includes('mygoldenauto.net'), '30-second script keeps whole-dollar price and website');
+  assert.ok(s30.includes('Priced at $15,688.') && !s30.includes('.25') && s30.includes('mygoldenauto.net'), '30-second script keeps whole-dollar price and website');
   assert.equal(speechScript('Explore this 2013 SUBARU XV CROSSTREK with AWD. A great SUV!'), 'Explore this twenty thirteen Subaru X-V Crosstrek with all wheel drive. A great S-U-V!');
   assert.equal(speechScript('2011 HONDA CR-V EX-L, 2022 MAZDA CX-30, 2018 VOLVO XC90 T6, 2015 BMW 3 SERIES 328d, 2015 RAM 1500 CREW CAB, 2008 TOYOTA 4RUNNER, 4WD'),
     'twenty eleven Honda C-R-V E-X-L, twenty twenty-two Mazda C-X 30, twenty eighteen Volvo X-C 90 T 6, twenty fifteen B-M-W 3 Series 328d, twenty fifteen Ram 1500 Crew Cab, two thousand eight Toyota 4 Runner, four wheel drive');

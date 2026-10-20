@@ -19,7 +19,7 @@ export function script(v, duration = 15, dealer = DEALER_DEFAULT, intro = null) 
   // Keep drive codes uppercase so speech spells them ("A-W-D") and captions keep "AWD".
   const feature = truthy(drive) ? ' with ' + (/^[A-Za-z0-9]{2,4}$/.test(str(drive)) ? upper(str(drive)) : lower(str(drive))) : '';
   return 'Explore this ' + name + feature + ' at ' + str(dealer.name) + '. ' +
-    (hasPrice(v) ? 'Just ' + adPrice(toFloat(v.price)) + '. ' : '') +
+    (hasPrice(v) ? 'Priced at ' + adPrice(toFloat(v.price)) + '. ' : '') +
     'Book your test drive at ' + str(dealer.website) + '.';
 }
 
@@ -67,7 +67,7 @@ export function script30(v, dealer = DEALER_DEFAULT, intro = null) {
     name: 'Take a look at this ' + name + ', here at ' + str(dealer.name) + (str(dealer.city ?? '') !== '' ? ' in ' + str(dealer.city) : '') + '.',
     facts: factLine,
     use: intro ? trim(intro.highlight ?? '') : use,
-    price: hasPrice(v) ? 'Just ' + adPrice(toFloat(v.price)) + '.' : '',
+    price: hasPrice(v) ? 'Priced at ' + adPrice(toFloat(v.price)) + '.' : '',
     cta: 'Book your test drive today at ' + str(dealer.website) + '.',
   };
   const join = (p) => trim(Object.values(p).filter(truthy).join(' ').replace(/[\t\n\v\f\r ]+/g, ' '));

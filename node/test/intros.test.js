@@ -53,6 +53,7 @@ test('30-second script: fitted opener, a/an, no "Base", paint names, word budget
     { hook: 'Need a truck that can really work?', highlight: 'It is ready for work during the week and adventures on the weekend.' });
   assert.ok(speechWordCount(ram) <= 62, ram + ' (' + speechWordCount(ram) + ')');
   assert.ok(script(m4, 15, dealer, intro).startsWith('Explore this'), '15-second script unchanged');
+  assert.ok(s.includes('Priced at $80,914.') && script(m4, 15, dealer).includes('Priced at $80,914.') && !/\bJust \$/.test(s), 'price wording');
   assert.equal(introFacts({ ...m4, description: 'x'.repeat(3000) }).description.length, 1500);
 });
 
