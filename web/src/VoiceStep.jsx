@@ -103,7 +103,7 @@ function VoiceStudio({ hidden }) {
     if (!s.chosen) { say('Select a vehicle in step 1 first.', 'warn'); return; }
     if (!text.trim()) { say('Write the script in step 2 first.', 'warn'); return; }
     say('Creating the voice preview…');
-    act('narration_preview', { stock: s.chosen.StockNumber, voice_id: voiceId, text, caption_script: captions, duration: Number(s.duration), approve_spend: spend, new_take: newTake });
+    act('narration_preview', { stock: s.chosen.StockNumber, voice_id: voiceId, voice_name: (voices ?? []).find((x) => x.id === voiceId)?.name ?? '', text, caption_script: captions, duration: Number(s.duration), approve_spend: spend, new_take: newTake });
     setSpend(false); setNewTake(false);
   }
   // Previews: the selected car's only (newest first), so the list matches what you are working on.
@@ -134,13 +134,24 @@ function VoiceStudio({ hidden }) {
       </div>
       <div id="nPreviews" className="list">
         {s.chosen && !previews.length && <p>No voice previews for this car yet.</p>}
-        <LatestFirst key={s.chosen?.StockNumber ?? 'all'} items={previews} noun="voice preview" render={(p) => <Preview key={p.id} p={p} act={act} />} />
+        <LatestFirst key={s.chosen?.StockNumber ?? 'all'} items={previews} noun="voice preview" render={(p) => <Preview key={p.id} p={p} act={act} voices={voices} />} />
       </div>
     </div>
   );
 }
 
-function Preview({ p, act }) {
+/** The voice a preview was made with: its name from the account's voice list (or as saved), else a short id. */
+function voiceLabel(p, voices) {
+  const v = (voices ?? []).find((x) => x.id === p.voice_id);
+  const name = v?.name ?? p.voice_name;
+  if (name) {
+    const labels = v ? [v.labels?.gender, v.labels?.accent].filter(Boolean).join(', ') : '';
+    return name + (labels ? ` (${labels})` : '');
+  }
+  return p.voice_id ? 'voice ' + p.voice_id.slice(0, 8) + '… (no longer in your ElevenLabs voices)' : 'unknown';
+}
+
+function Preview({ p, act, voices }) {
   const [reviewed, setReviewed] = useState(false);
   const state = p.status !== 'ready' ? [p.status, 'busy'] : p.too_long ? ['Too long', 'bad'] : p.approved ? ['Approved', 'ok'] : ['Listen and approve', 'busy'];
   return (
@@ -149,6 +160,7 @@ function Preview({ p, act }) {
         <strong>{`${p.vehicle} · ${p.duration}s${p.audio_duration ? ' · ' + p.audio_duration.toFixed(1) + 's of speech' : ''}`}</strong>
         <span className={'badge ' + state[1]}>{state[0]}</span>
       </div>
+      <p className="preview-voice"><b>Voice:</b> {voiceLabel(p, voices)}</p>
       {p.approved_by && <small>Made by {p.approved_by}</small>}
       <p>Spoken: {p.text}</p>
       <p>Captions: {p.caption_script}</p>

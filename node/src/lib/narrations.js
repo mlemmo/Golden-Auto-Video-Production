@@ -213,7 +213,9 @@ export async function narrationApi(action, inp, cfg, db, { bridge: helper = narr
     const settings = narrationVoiceSettings(cfg, duration);
     let fingerprint = createHash('sha256').update(jsonEncode([v.StockNumber, v.price, voice, text, captions, duration, settings])).digest('hex');
     if (inp.new_take) fingerprint = createHash('sha256').update(Buffer.concat([Buffer.from(fingerprint), random(16)])).digest('hex');
-    const record = { id: random(16).toString('hex'), stock: v.StockNumber, vehicle: title(v), price: v.price, client: clientOf(inp), voice_id: voice, text,
+    // The voice's name as the dashboard listed it, for display only (not part of the request or its fingerprint).
+    const voiceName = trim(str(inp.voice_name ?? '').replace(/[\u0000-\u001f]/g, '')).slice(0, 80);
+    const record = { id: random(16).toString('hex'), stock: v.StockNumber, vehicle: title(v), price: v.price, client: clientOf(inp), voice_id: voice, ...(voiceName ? { voice_name: voiceName } : {}), text,
       caption_script: captions, duration, speed: settings.speed ?? 1.0, status: 'submitting', created_at: gmdateC(), approved_by: str(inp.approved_by ?? '') };
     narrationReserve(db, 'narrations', record, fingerprint);
     let code = 0;
