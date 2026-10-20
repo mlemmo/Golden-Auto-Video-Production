@@ -15,7 +15,7 @@ import { jsonEncode } from './storedjson.js';
 import { parseHtml, hasClassToken } from './dom.js';
 import { highestPrice, priceMatches, title } from './price.js';
 import { probeImage } from './images.js';
-import { validateAppBase, publicImage } from './media.js';
+import { validateAppBase, publicImage, cutoutSheet } from './media.js';
 import { state } from './db.js';
 import { CLIENT_DEFAULT, clientInventory, clientInventoryKey } from './clients.js';
 import { requestText, rawurlencode, goldenInventory } from './website.js';
@@ -191,7 +191,8 @@ export function jobFingerprint(v, spoken, sheet, avatar, description, format, st
  * The paid Seedance generation (dashboard "Generate"). opts: { transport (Higgsfield POST/PUT), getText (website
  * reader), random } — replaceable in tests so nothing is ever sent.
  */
-export async function generateJob(db, cfg, client, inp, { transport = uploadHttp, getText = requestText, random = randomBytes } = {}) {
+export async function generateJob(db, cfg, client, inp, opts = {}) {
+  const { transport = uploadHttp, getText = requestText, random = randomBytes } = opts;
   if (!truthy(cfg.higgsfield_key)) throw new Error('Add your Higgsfield API key to private/config.json first.');
   if (!truthy(inp.approve_spend ?? false)) throw new Error('Confirm this paid generation.');
   const a = state(db, clientInventoryKey(client)) ?? {};
@@ -239,6 +240,13 @@ export async function generateJob(db, cfg, client, inp, { transport = uploadHttp
     sheetUrl = savedSheet.url;
   }
   const presenter = spokespersonFind(db, cfg, str(inp.spokesperson ?? ''));
+  // The sheet sent to the video model shows the car cut out of the lot photos (see cutoutSheet); a custom sheet URL is
+  // sent as given. Prepared before anything paid is sent; a failure stops here.
+  let referenceSheet = 'original';
+  if (savedSheet && sheetUrl === savedSheet.url) {
+    const cut = await (opts.cutoutSheet ?? cutoutSheet)(fresh, cfg, db, savedSheet);
+    if (cut) { sheetUrl = cut.url; referenceSheet = 'cutout'; }
+  }
   const sheet = referenceImageUrl(str(sheetUrl), cfg), avatar = referenceImageUrl(presenter.url, cfg);
   const format = str(inp.format ?? '');
   if (!Object.hasOwn(FORMATS, format)) throw new Error('Choose a video format.');
@@ -259,7 +267,7 @@ export async function generateJob(db, cfg, client, inp, { transport = uploadHttp
       : prompt(fresh, spoken, style, duration, presenter.description, scene.description);
   const fingerprint = jobFingerprint(v, spoken, sheet, avatar, presenter.description, format, style, duration, voice, promptText, voiceRef);
   const id = random(12).toString('hex');
-  const job = { id, client, stock: v.StockNumber, vehicle: title(v), spokesperson_id: presenter.id, spokesperson: presenter.name, scene_id: scene.id, scene: scene.name, format, style, duration,
+  const job = { id, client, stock: v.StockNumber, vehicle: title(v), spokesperson_id: presenter.id, spokesperson: presenter.name, scene_id: scene.id, scene: scene.name, reference_sheet: referenceSheet, format, style, duration,
     status: 'preparing_references', created_at: gmdateC(), approved_by: str(inp.approved_by ?? ''), script: spoken, speech_script: voice === 'native' ? nativeSpeech(spoken) : speechScript(spoken), price: v.price ?? null, voice };
   // Native voice: one approval builds the final video (captions timed from the video's own audio).
   if (voice !== 'narration') job.auto_build = true;

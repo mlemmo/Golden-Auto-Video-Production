@@ -33,6 +33,14 @@ export const NATURAL_TALKING = 'The spokesperson talks the way a real person doe
  */
 export const REFERENCE_BACKGROUND_RULE = 'Use the reference images only for the appearance of the car and the spokesperson: completely ignore the backgrounds, parking lot, pavement markings, sky, hills, trees, buildings and other surroundings in the reference photos, and never copy them into the video. Place the car and the spokesperson only in the Setting described below. ';
 
+/** Her last few words, named so she stops after them instead of repeating them (the website was said twice). */
+export function finalWords(speech) {
+  const words = trim(speech).split(/\s+/).filter(Boolean);
+  if (words.length < 3) return '';
+  const last = words.slice(-Math.min(6, words.length)).join(' ');
+  return 'Her final words are "' + last + '": she says them only once, then immediately stops talking, closes her mouth and smiles warmly; she never says them again. ';
+}
+
 /** The original background (the default setting); the scene library (src/lib/scenes.js) offers others. */
 export const SHOWROOM_SETTING = 'a bright, upscale modern showroom with polished floors, soft even lighting and tall windows, with open space all around the car, not a representation of the dealership’s actual building';
 const settingText = (setting) => rtrim(trim(str(setting ?? '') || SHOWROOM_SETTING), '.');
@@ -42,7 +50,10 @@ export function promptNative(v, speech, duration = 30, presenter = SPOKESPERSON_
   speech = trim(speech.replaceAll('"', "'").replace(/[\t\n\v\f\r ]+/g, ' '));
   if (speech === '') throw new Error('Write the script the spokesperson will say.');
   const speakFrom = 0.5;
-  const speakUntil = speechSeconds !== null ? Math.min(duration - 0.5, round(speakFrom + speechSeconds, 1)) : Math.max(4, duration - 2);
+  // Seedance says an approved recording about 8% faster than it plays (2026-10-20 test: 11.0 s of narration said in
+  // 9.9 s); a window longer than her real speech made her fill it by repeating the website.
+  const SEEDANCE_PACE = 0.92;
+  const speakUntil = speechSeconds !== null ? Math.min(duration - 0.5, round(speakFrom + speechSeconds * SEEDANCE_PACE, 1)) : Math.max(4, duration - 2);
   const talkEnd = speechSeconds !== null && duration - speakUntil >= 3 ? Math.trunc(Math.min(duration - 2, Math.ceil(speakUntil + 0.5))) : duration;
   let panShots = [];
   if (talkEnd < duration) {
@@ -76,6 +87,7 @@ export function promptNative(v, speech, duration = 30, presenter = SPOKESPERSON_
     'Speech: she speaks to the camera' + (voiceReference === 'speech' ? ' while the recording plays, in that same voice and pace,' : ' throughout, in a warm, clear, natural, friendly American English voice, relaxed and unhurried, with a brief natural pause between sentences,') + ' like a real salesperson talking to one customer, not an announcer, with soft, understated mouth movement. Her speech continues seamlessly across the cuts and finishes by ' + num(speakUntil) + ' seconds. ' + silentAfter +
     'She says exactly this, word for word, and nothing else: "' + seedanceRespell(speech, respell) + '" ' +
     'She says each sentence exactly once, in this order, and then stops: she never repeats a sentence, the price or the website, and never adds words of her own. ' +
+    finalWords(seedanceRespell(speech, respell)) +
     speechPronunciationGuide(speech) +
     'Audio: only her voice, clear, natural and close to the microphone, with no echo or reverb, over a soft quiet room tone' + (panShots.length ? '; during the pan shots only the soft room tone' : '') + '. No music, no other voices, no sound effects. ' +
     'Leave space at the bottom of the frame for captions added in post-production. No on-screen text of any kind: no captions, no watermark, no website address, no logo, no signage text, no license-plate text.';

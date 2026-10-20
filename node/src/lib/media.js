@@ -2,12 +2,16 @@
 // photos, and the car asset sheet sent to the video model. Image work is done with FFmpeg
 // (src/lib/images.js).
 import { randomBytes, createHash } from 'node:crypto';
-import { existsSync, mkdirSync, writeFileSync, readFileSync, statSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync, readFileSync, statSync, unlinkSync, mkdtempSync, rmSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { readZip } from './zip.js';
 import { probeImage, toJpeg, renderSheet } from './images.js';
 import { trim, upper, lower, filterValidateInt, strnatcasecmp, stripTags, strlen, isNumeric, toFloat, gmdateC, parseUrl, str } from './text.js';
 import { title } from './price.js';
 import { jsonEncode } from './storedjson.js';
+import { state, save } from './db.js';
 
 const assetDir = (cfg) => String(cfg.asset_dir ?? '');
 
@@ -183,4 +187,74 @@ export async function assetSheet(v, cfg, selected = [], download = downloadPhoto
   writeFileSync(dir + '/' + name, jpg, { mode: 0o644 });
   return { url: base + '/assets/' + name, photo_urls: urls, gallery_hash: createHash('sha256').update(jsonEncode(all)).digest('hex'),
     content_hash: hash.digest('hex'), created_at: gmdateC(), photo_count: urls.length };
+}
+
+// ---- Cut-out sheet for the video model ----
+// Seedance copied the dealer lot in the sheet's real photos (pavement markings, buildings, hills) into the video
+// instead of the chosen background setting (2026-10-20), so the sheet sent with a generation shows the same photos
+// with the car cut out on a plain light-grey backdrop (private/cutout.py, free local rembg model, config
+// cutout_python). Saved per photo set in state "sheet_cutout:<content hash>" and reused.
+const CUTTER = fileURLToPath(new URL('../../../private/cutout.py', import.meta.url));
+
+/** The car photos cut out of their backgrounds, same order (replaceable in tests). */
+export function cutoutPhotos(cfg, images) {
+  const python = str(cfg.cutout_python ?? '');
+  if (!python) return Promise.reject(new Error('Background removal is not set up (config cutout_python).'));
+  const dir = mkdtempSync(tmpdir() + '/ga-cut-');
+  images.forEach((b, i) => writeFileSync(`${dir}/in${i}.img`, b));
+  return new Promise((resolve, reject) => {
+    const p = spawn(python, ['-I', CUTTER], { stdio: ['pipe', 'pipe', 'ignore'] });
+    const out = [];
+    const timer = setTimeout(() => p.kill('SIGKILL'), 180000);
+    p.stdout.on('data', (d) => out.push(d));
+    p.on('error', () => { clearTimeout(timer); rmSync(dir, { recursive: true, force: true }); reject(new Error('Background removal could not start.')); });
+    p.on('close', (code) => {
+      clearTimeout(timer);
+      try {
+        if (code !== 0) throw new Error('Background removal failed.');
+        const files = JSON.parse(Buffer.concat(out).toString()).files;
+        if (!Array.isArray(files) || files.length !== images.length) throw new Error('Background removal returned the wrong number of photos.');
+        resolve(files.map((f) => readFileSync(f)));
+      } catch (e) { reject(e); } finally { rmSync(dir, { recursive: true, force: true }); }
+    });
+    p.stdin.on('error', () => {});
+    p.stdin.end(JSON.stringify({ images: images.map((_, i) => `${dir}/in${i}.img`), out: dir }));
+  });
+}
+
+/**
+ * The cut-out version of a saved asset sheet (same photos and layout, car on a plain backdrop): its record
+ * { url, content_hash }. null when background removal is not set up; an error when it is set up but fails.
+ */
+export async function cutoutSheet(v, cfg, db, sheet, { cut = cutoutPhotos, download = downloadPhotos } = {}) {
+  if (!str(cfg.cutout_python ?? '') && cut === cutoutPhotos) return null;
+  const key = 'sheet_cutout:' + str(sheet.content_hash ?? '');
+  const saved = sheet.content_hash ? state(db, key) : null;
+  if (saved?.url && existsSync(assetDir(cfg) + '/' + saved.url.split('/').pop())) return saved;
+  const urls = sheet.photo_urls ?? [];
+  const all = v.photos ?? [];
+  const bytes = await sheetBytes(urls, cfg, download);
+  if (!urls.length || Object.keys(bytes).length !== urls.length) throw new Error('A vehicle photo could not be read for the video reference. Nothing was sent; try again.');
+  const cutBytes = await cut(cfg, urls.map((_, i) => bytes[i]));
+  const cols = urls.length <= 4 ? 2 : 3, width = 1800, tileW = Math.trunc(width / cols), boxW = tileW - 30, boxH = Math.round(boxW * 0.737);
+  const rows = Math.ceil(urls.length / cols), height = 100 + rows * (boxH + 40);
+  const tiles = [], texts = [
+    { text: title(v) + ' | STOCK ' + str(v.StockNumber ?? ''), x: 24, y: 20, size: 22, color: '#1b2230', bold: true },
+    { text: 'Original inventory photos, car only - source views only; no invented angles or features', x: 24, y: 52, size: 16, color: '#1b2230' },
+  ];
+  urls.forEach((url, i) => {
+    const size = probeImage(cutBytes[i]);
+    if (!size) throw new Error('Background removal returned an unreadable photo.');
+    const x = (i % cols) * tileW + 15, y = 100 + Math.floor(i / cols) * (boxH + 40);
+    const ratio = Math.min(boxW / size.width, boxH / size.height), w = Math.round(size.width * ratio), h = Math.round(size.height * ratio);
+    tiles.push({ bytes: cutBytes[i], x: x + Math.trunc((boxW - w) / 2), y: y + Math.trunc((boxH - h) / 2), w, h });
+    texts.push({ text: 'SOURCE PHOTO ' + (all.indexOf(url) + 1), x, y: y + boxH + 8, size: 16, color: '#1b2230' });
+  });
+  const jpg = renderSheet({ width, height, bg: '#dee0e3', tiles, texts, quality: 92 });
+  const name = randomBytes(20).toString('hex') + '.jpg';
+  mkdirSync(assetDir(cfg), { recursive: true, mode: 0o755 });
+  writeFileSync(assetDir(cfg) + '/' + name, jpg, { mode: 0o644 });
+  const record = { url: validateAppBase(cfg) + '/assets/' + name, content_hash: sheet.content_hash ?? null, created_at: gmdateC() };
+  if (sheet.content_hash) save(db, key, record);
+  return record;
 }
