@@ -116,10 +116,10 @@ test('with the approved recording the quoted line matches it; names are said as 
   const v = { Year: 2015, Make: 'VOLKSWAGEN', Model: 'GOLF' };
   const speech = 'Take a look at this twenty fifteen Volkswagen Golf here at Golden Auto in San Ramon. Book your test drive at my golden auto dot net.';
   const rec = promptNative(v, speech, 30, 'adult woman', 'speech', 12);
-  assert.ok(rec.includes('"' + speech + '"') && !rec.includes('Rah-moan'), 'no respelling next to the recording');
+  assert.ok(rec.endsWith('[Dialogue:] "' + speech + '"') && rec.split(speech).length === 2 && !rec.includes('Rah-moan'), 'the line once, last, in its own block; no respelling next to the recording');
   assert.ok(rec.includes('exactly as the recording does, never in her own way, including "San Ramon", "Volkswagen"; the website is said as words'), rec);
   const own = promptNative(v, speech, 30, 'adult woman', false);
-  assert.ok(own.includes('in San Rah-moan.') && own.includes('"San Ramon" is pronounced san rah-MOAN'), 'Seedance\'s own voice keeps the respelling');
+  assert.ok(own.endsWith('in San Rah-moan. Book your test drive at my golden auto dot net."') && own.includes('"San Ramon" is pronounced san rah-MOAN, written "San Rah-moan" in the dialogue'), 'Seedance\'s own voice keeps the respelling');
 });
 
 test('no advertised price: no price in scripts, "Call For Price" caption', () => {

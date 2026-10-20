@@ -99,12 +99,14 @@ export function promptNative(v, speech, duration = 30, presenter = SPOKESPERSON_
     panShots.map((x, k) => 'Shot ' + (5 + k) + ' ' + x).join('') +
     'Clean cuts between shots; the camera is steady or moves slowly within each shot. ' +
     'Speech: she speaks to the camera' + (voiceReference === 'speech' ? ' while the recording plays, in that same voice and pace,' : ' throughout, in a warm, clear, natural, friendly American English voice, relaxed and unhurried, with a brief natural pause between sentences,') + ' like a real salesperson talking to one customer, not an announcer, with soft, understated mouth movement. Her speech continues seamlessly across the cuts and finishes by ' + num(speakUntil) + ' seconds. ' + silentAfter +
-    'She says exactly this, word for word, and nothing else: "' + said + '" ' +
-    'She says each sentence exactly once, in this order, and then stops: she never repeats a sentence, the price or the website, and never adds words of her own. ' +
+    'Audio: only her voice, clear, natural and close to the microphone, with no echo or reverb, over a soft quiet room tone' + (panShots.length ? '; during the pan shots only the soft room tone' : '') + '. No music, no other voices, no sound effects. ' +
+    'Leave space at the bottom of the frame for captions added in post-production. No on-screen text of any kind: no captions, no watermark, no website address, no logo, no signage text, no license-plate text. ' +
+    // Her words come last in their own [Dialogue:] block, apart from the visual description (user suggestion 2026-10-20:
+    // Seedance dropped or changed words such as San Ramon and Z71 when the line sat among the shots).
+    'She says only the dialogue below, word for word, and nothing else. She says each sentence exactly once, in this order, and then stops: she never repeats a sentence, the price or the website, and never adds words of her own. ' +
     finalWords(said) +
     (recorded ? recordingPronunciationGuide(speech, v, respell) : speechPronunciationGuide(speech)) +
-    'Audio: only her voice, clear, natural and close to the microphone, with no echo or reverb, over a soft quiet room tone' + (panShots.length ? '; during the pan shots only the soft room tone' : '') + '. No music, no other voices, no sound effects. ' +
-    'Leave space at the bottom of the frame for captions added in post-production. No on-screen text of any kind: no captions, no watermark, no website address, no logo, no signage text, no license-plate text.';
+    '[Dialogue:] "' + said + '"';
 }
 
 /** Silent walkaround or dynamic sequence for the lip-sync method (no spoken script in the video). */

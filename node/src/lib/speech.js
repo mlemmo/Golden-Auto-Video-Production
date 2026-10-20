@@ -110,7 +110,7 @@ export function seedanceRespell(s, extra = {}) {
 
 /** Pronunciations given to the native-voice model when the word appears in the script. */
 export const SPEECH_PRONUNCIATION = {
-  'San Ramon': 'san rah-MOAN, written "San Rah-moan" above (stress on MOAN, said like the word "moan")',
+  'San Ramon': 'san rah-MOAN, written "San Rah-moan" in the dialogue (stress on MOAN, said like the word "moan")',
   'my golden auto dot net': 'my GOLD-en AW-toh dot net, said as words, never spelled out letter by letter',
   'Golden Auto': 'GOLD-en AW-toh',
 };
