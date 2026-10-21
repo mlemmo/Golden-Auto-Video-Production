@@ -4,11 +4,11 @@
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
 
-const NAME = { facebook: 'Facebook', instagram: 'Instagram' };
-const STATUS = { scheduled: 'Scheduled', uploading: 'Uploading', processing: 'Processing at Meta', publishing: 'Publishing', published: 'Published',
+export const NAME = { facebook: 'Facebook', instagram: 'Instagram' };
+export const STATUS = { scheduled: 'Scheduled', uploading: 'Uploading', processing: 'Processing at Meta', publishing: 'Publishing', published: 'Published',
   failed: 'Failed', check: 'Check the page', canceled: 'Cancelled' };
-const PENDING = ['scheduled', 'uploading', 'processing', 'publishing'];
-const when = (t) => (t ? new Date(t).toLocaleString([], { weekday: 'short', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '');
+export const PENDING = ['scheduled', 'uploading', 'processing', 'publishing'];
+export const when = (t) => (t ? new Date(t).toLocaleString([], { weekday: 'short', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '');
 /** datetime-local value for a time, in the viewer's time zone. */
 const localInput = (ms) => { const d = new Date(ms); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
 

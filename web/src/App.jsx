@@ -6,6 +6,7 @@ import { api, boot } from './api.js';
 import { Notifications, Popups, useStatus, vehicleName } from './ui.jsx';
 import { AccountMenu } from './Accounts.jsx';
 import { Library } from './Library.jsx';
+import { PostsWindow, AdsWindow } from './Activity.jsx';
 import VehicleStep, { ClientPanel } from './VehicleStep.jsx';
 import ScriptStep from './ScriptStep.jsx';
 import VoiceStep from './VoiceStep.jsx';
@@ -118,6 +119,8 @@ export default function App() {
   // Tools: a dropdown in the top bar; each tool opens in a full-page window (null = none open).
   const [tool, setTool] = useState(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
+  const [postsOpen, setPostsOpen] = useState(false);
+  const [adsOpen, setAdsOpen] = useState(false);
   // Collapsed steps: only step 1 is open when the page loads.
   const [collapsed, setCollapsed] = useState(START_COLLAPSED);
   const toggleStep = useCallback((id) => setCollapsed((c) => ({ ...c, [id]: !c[id] })), []);
@@ -292,6 +295,8 @@ export default function App() {
         <span className="topbar-brand">{client ? client.name : 'Golden Auto'} · Video Studio</span>
         <div className="header-actions">
           <button type="button" className="secondary small" id="libraryOpen" aria-label="Video library" onClick={() => setLibraryOpen(true)}>▶<span className="label-long"> Library</span></button>
+          {!readOnly && <button type="button" className="secondary small" id="postsOpen" aria-label="Posts" onClick={() => setPostsOpen(true)}>📣<span className="label-long"> Posts</span></button>}
+          {!readOnly && <button type="button" className="secondary small" id="adsOpen" aria-label="Ads" onClick={() => setAdsOpen(true)}>💲<span className="label-long"> Ads</span></button>}
           {!readOnly && <ToolsMenu />}
           {isAdmin && <AdminMenu />}
           <AccountMenu onSignOut={signOut} />
@@ -328,6 +333,8 @@ export default function App() {
       </main>
       <ToolWindows />
       <Library open={libraryOpen} onClose={() => setLibraryOpen(false)} />
+      <PostsWindow open={postsOpen} onClose={() => setPostsOpen(false)} />
+      <AdsWindow open={adsOpen} onClose={() => setAdsOpen(false)} />
     </Studio.Provider>
   );
 }

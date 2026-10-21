@@ -212,3 +212,14 @@ a.button.secondary-link{background:#262d3a;color:#fff;border:1px solid var(--lin
 .facebook-connection{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}
 .facebook-connection h3{margin:0 0 6px}
 .facebook-connection p{margin:0 0 8px}
+/* Posts and Ads windows (top bar) */
+.activity-list{display:grid;gap:12px}
+.activity-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);gap:12px 24px;background:#151b26;border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.activity-main{display:grid;gap:4px;min-width:0}
+.activity-caption{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.activity-platforms{display:grid;gap:6px;align-content:start}
+.activity-status{display:grid;gap:2px}
+.activity-status.status-published,.activity-status.status-active{color:#8fd19e}
+.activity-status.status-failed,.activity-status.status-check{color:#f0a3a3}
+.activity-summary{color:var(--muted);margin:0 0 12px}
+@media (max-width:720px){.activity-row{grid-template-columns:1fr}}

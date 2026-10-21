@@ -4,13 +4,13 @@
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
 
-const NAME = { meta: 'Meta (Facebook & Instagram)', tiktok: 'TikTok' };
-const STATUS = { requested: 'Requested — waiting to be launched (paused)', launched_paused: 'Created, paused — waiting for your go-ahead', active: 'Running',
+export const NAME = { meta: 'Meta (Facebook & Instagram)', tiktok: 'TikTok' };
+export const STATUS = { requested: 'Requested — waiting to be launched (paused)', launched_paused: 'Created, paused — waiting for your go-ahead', active: 'Running',
   ended: 'Ended', failed: 'Failed', canceled: 'Cancelled' };
 const MIN = { meta: 5, tiktok: 20 };
 const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
-const money = (n) => '$' + Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
-const managerLink = (p, a, x) => (p === 'meta' && x.campaign_id ? `https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${a.meta_account.replace('act_', '')}&selected_campaign_ids=${x.campaign_id}`
+export const money = (n) => '$' + Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
+export const managerLink = (p, a, x) => (p === 'meta' && x.campaign_id ? `https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${a.meta_account.replace('act_', '')}&selected_campaign_ids=${x.campaign_id}`
   : p === 'tiktok' && x.campaign_id ? `https://ads.tiktok.com/i18n/perf/campaign?aadvid=${a.tiktok_account}` : '');
 
 export function AdRequest({ v, onClose, say }) {
