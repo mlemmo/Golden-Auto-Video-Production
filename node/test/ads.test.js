@@ -1,9 +1,9 @@
 // Paid ad requests. Nothing here calls an ad platform: the dashboard only records requests and settings.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { openMemoryDb } from '../src/lib/db.js';
+import { openMemoryDb, save } from '../src/lib/db.js';
 import { jsonEncode } from '../src/lib/storedjson.js';
-import { adApi, adPending, adRecord } from '../src/lib/ads.js';
+import { adApi, adPending, adRecord, adSettings } from '../src/lib/ads.js';
 
 const NOW = Date.parse('2026-10-21T17:00:00Z');
 function setup(job = {}) {
@@ -16,8 +16,8 @@ function setup(job = {}) {
   return { db, api };
 }
 const settings = { client: 'golden-auto', meta_account: 'act_1331366881207657', meta_page: 'Golden Auto', tiktok_account: '7694780320964493313',
-  radius_address: '24532 San Ramon Valley Blvd, San Ramon, CA', radius_km: 25, daily_budget: 20, days: 7 };
-const request = (o = {}) => ({ id: 'job1', platforms: ['meta', 'tiktok'], daily_budget: 25, days: 5, start_date: '2026-10-22', radius_address: settings.radius_address, radius_km: 25,
+  radius_address: '24532 San Ramon Valley Blvd, San Ramon, CA', radius_miles: 15, daily_budget: 20, days: 7 };
+const request = (o = {}) => ({ id: 'job1', platforms: ['meta', 'tiktok'], daily_budget: 25, days: 5, start_date: '2026-10-22', radius_address: settings.radius_address, radius_miles: 15,
   text: 'Take a look at this Silverado.', headline: '2016 Chevrolet Silverado · $19,366', tiktok_text: '2016 Chevrolet Silverado at Golden Auto. Book your test drive today.', link: 'https://mygoldenauto.net', ...o });
 
 test('dealer ad settings: checked ids; suggested copy and link for a video', () => {
@@ -74,4 +74,16 @@ test('the launcher side: pending list, results recorded, ads past their end date
   assert.deepEqual([shown.meta.status, shown.meta.stats.clicks, shown.tiktok.error], ['active', 41, 'TikTok identity missing']);
   p = adPending(db, Date.parse('2026-10-27T17:00:00Z'));
   assert.deepEqual([p.launch.length, p.end.map((x) => x.platform)], [0, ['meta']], 'past its end date: to be ended');
+});
+
+test('radius in miles; the request also carries km for the ad tools; old km settings are converted', () => {
+  const { api, db } = setup();
+  api('ad_settings_save', settings);
+  assert.throws(() => api('ad_settings_save', { ...settings, radius_miles: 60 }), /1–50 miles/);
+  assert.throws(() => api('ad_request', request({ radius_miles: 0 })), /1–50 miles/);
+  const { ad } = api('ad_request', request({ radius_miles: 15 }));
+  assert.deepEqual([ad.radius_miles, ad.radius_km], [15, 24.1]);
+  save(db, 'ad_settings:eastbay', { radius_km: 40 });
+  assert.equal(adSettings(db, 'eastbay').radius_miles, 25, 'settings saved in km before become miles');
+  assert.equal(adSettings(db, 'nobody').radius_miles, 15, 'default 15 miles');
 });

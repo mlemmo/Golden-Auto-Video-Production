@@ -14,6 +14,8 @@ export const AD_PLATFORM_NAME = { meta: 'Meta (Facebook & Instagram)', tiktok: '
 // Request → launched paused → active → ended; or failed / canceled.
 export const AD_STATUSES = ['requested', 'launched_paused', 'active', 'ended', 'failed', 'canceled'];
 const MIN_BUDGET = { meta: 5, tiktok: 20 };
+// The dashboard uses miles; the request also keeps km for ad tools that take km (AdWhispr radiusKm: 1–80).
+export const KM_PER_MILE = 1.609344;
 const REELS = ['instagram_reels', 'facebook_reels'];
 // Meta puts ads about credit (financing, payments, APR) in a special category with restricted targeting.
 const CREDIT_WORDS = /\b(financ\w*|credit|apr|down\s*payment|monthly\s*payment|per\s*month|\/\s*mo\b|\d+\s*\/\s*month|lease\s*(for|from)|loan\w*)\b/i;
@@ -32,7 +34,8 @@ export function adSettings(db, client) {
   const s = state(db, 'ad_settings:' + client) ?? {};
   return {
     meta_account: str(s.meta_account ?? ''), meta_page: str(s.meta_page ?? ''), tiktok_account: str(s.tiktok_account ?? ''),
-    radius_address: str(s.radius_address ?? ''), radius_km: Number(s.radius_km ?? 25) || 25,
+    // Miles in the dashboard; settings saved in km before 2026-10-21 are converted.
+    radius_address: str(s.radius_address ?? ''), radius_miles: Number(s.radius_miles ?? (s.radius_km ? Math.round(s.radius_km / KM_PER_MILE) : 15)) || 15,
     daily_budget: Number(s.daily_budget ?? 20) || 20, days: Number(s.days ?? 7) || 7,
   };
 }
@@ -40,12 +43,12 @@ export function adSettingsSave(db, client, inp) {
   const meta = trim(str(inp.meta_account ?? '')), tiktok = trim(str(inp.tiktok_account ?? ''));
   if (meta && !/^act_\d{5,25}$/.test(meta)) throw new Error('The Meta ad account id looks like act_1234567890.');
   if (tiktok && !/^\d{5,25}$/.test(tiktok)) throw new Error('The TikTok advertiser id is a number.');
-  const km = Number(inp.radius_km ?? 25), budget = Number(inp.daily_budget ?? 20), days = Number(inp.days ?? 7);
-  if (!(km >= 1 && km <= 80)) throw new Error('The area radius must be 1–80 km.');
+  const miles = Number(inp.radius_miles ?? 15), budget = Number(inp.daily_budget ?? 20), days = Number(inp.days ?? 7);
+  if (!(miles >= 1 && miles <= 50)) throw new Error('The area radius must be 1–50 miles.');
   if (!(budget >= 5 && budget <= 1000)) throw new Error('The default daily budget must be $5–$1,000.');
   if (!(Number.isInteger(days) && days >= 1 && days <= 30)) throw new Error('The default number of days must be 1–30.');
   const s = { meta_account: meta, meta_page: trim(str(inp.meta_page ?? '')).slice(0, 100), tiktok_account: tiktok,
-    radius_address: trim(str(inp.radius_address ?? '')).slice(0, 200), radius_km: km, daily_budget: budget, days };
+    radius_address: trim(str(inp.radius_address ?? '')).slice(0, 200), radius_miles: miles, daily_budget: budget, days };
   save(db, 'ad_settings:' + client, s);
   return adSettings(db, client);
 }
@@ -124,15 +127,15 @@ export function adApi(action, inp, db, { allowed = [CLIENT_DEFAULT], user = '', 
     if (platforms.includes('tiktok') && (!tiktok || [...tiktok].length > 100 || EMOJI.test(tiktok))) throw new Error('The TikTok caption must be 1–100 characters without emoji.');
     if (!/^https:\/\/[^\s]+$/.test(link)) throw new Error('The ad link must be an https web address.');
     if (CREDIT_WORDS.test([text, headline, tiktok].join(' '))) throw new Error('Remove financing, payment or credit wording: Meta treats those ads as a special "Credit" category with restricted targeting.');
-    const address = trim(str(inp.radius_address ?? s.radius_address)), km = Number(inp.radius_km ?? s.radius_km);
+    const address = trim(str(inp.radius_address ?? s.radius_address)), miles = Number(inp.radius_miles ?? s.radius_miles);
     if (!address) throw new Error('Enter the address to target around (e.g. the dealership).');
-    if (!(km >= 1 && km <= 80)) throw new Error('The area radius must be 1–80 km.');
+    if (!(miles >= 1 && miles <= 50)) throw new Error('The area radius must be 1–50 miles.');
     for (const p of platforms) if (all(db).some((a) => a.job_id === job.id && ['requested', 'launched_paused', 'active'].includes(a.platforms[p]?.status))) {
       throw new Error('This video already has an open ' + AD_PLATFORM_NAME[p] + ' ad request or ad. Cancel or end it first.');
     }
     const end = new Date(Date.parse(start) + (days - 1) * 86400000).toISOString().slice(0, 10);
     const a = { id: random(12).toString('hex'), client, job_id: job.id, vehicle: str(job.vehicle), stock: str(job.stock), format: str(job.format),
-      video_url: str(job.captioned_url), daily_budget: budget, days, start_date: start, end_date: end, radius_address: address, radius_km: km,
+      video_url: str(job.captioned_url), daily_budget: budget, days, start_date: start, end_date: end, radius_address: address, radius_miles: miles, radius_km: Math.min(80, Math.round(miles * KM_PER_MILE * 10) / 10),
       text, headline, tiktok_text: tiktok, link, objective: 'traffic', meta_account: s.meta_account, meta_page: s.meta_page, tiktok_account: s.tiktok_account,
       created_by: str(user), created_at: gmdateC(new Date(now)), platforms: Object.fromEntries(platforms.map((p) => [p, { status: 'requested' }])) };
     store(db, a);

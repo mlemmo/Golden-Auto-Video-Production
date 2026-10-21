@@ -24,7 +24,7 @@ export function AdRequest({ v, onClose, say }) {
     api('ad_status', { id: v.id }).then((s) => {
       setSt(s);
       setF({ meta: s.meta, tiktok: s.tiktok && s.reels, daily_budget: Math.max(s.settings.daily_budget, s.tiktok && s.reels ? MIN.tiktok : MIN.meta), days: s.settings.days,
-        start_date: today(), radius_address: s.settings.radius_address, radius_km: s.settings.radius_km, ...s.draft });
+        start_date: today(), radius_address: s.settings.radius_address, radius_miles: s.settings.radius_miles, ...s.draft });
     }).catch((e) => say(e.message, true));
     refresh();
   }, [v.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -38,7 +38,7 @@ export function AdRequest({ v, onClose, say }) {
   }
   const submit = async () => {
     const ok = await act('ad_request', { id: v.id, platforms, daily_budget: Number(f.daily_budget), days: Number(f.days), start_date: f.start_date,
-      radius_address: f.radius_address, radius_km: Number(f.radius_km), text: f.text, headline: f.headline, tiktok_text: f.tiktok_text, link: f.link });
+      radius_address: f.radius_address, radius_miles: Number(f.radius_miles), text: f.text, headline: f.headline, tiktok_text: f.tiktok_text, link: f.link });
     if (ok) setConfirm(false);
   };
   return (
@@ -57,7 +57,7 @@ export function AdRequest({ v, onClose, say }) {
               <label>Daily budget ($)<input type="number" min={f.tiktok ? MIN.tiktok : MIN.meta} max="1000" step="1" value={f.daily_budget} onChange={set('daily_budget')} /></label>
               <label>Days<input type="number" min="1" max="30" step="1" value={f.days} onChange={set('days')} /></label>
               <label>Start date<input type="date" min={today()} value={f.start_date} onChange={set('start_date')} /></label>
-              <label>Radius (km)<input type="number" min="1" max="80" value={f.radius_km} onChange={set('radius_km')} /></label>
+              <label>Radius (miles)<input type="number" min="1" max="50" value={f.radius_miles} onChange={set('radius_miles')} /></label>
             </div>
             <label>Target people around<input value={f.radius_address} placeholder="Dealership street address" onChange={set('radius_address')} /></label>
             {f.meta && <label>Ad text (Meta)<textarea rows={4} maxLength={2000} value={f.text} onChange={set('text')} /></label>}
@@ -84,7 +84,7 @@ export function AdRequest({ v, onClose, say }) {
             <h4>Ads of this video</h4>
             {ads.map((a) => (
               <div key={a.id} className="job">
-                <small>{`${money(a.daily_budget)}/day · ${a.start_date} to ${a.end_date} · ${a.radius_km} km · ${a.created_by}`}</small>
+                <small>{`${money(a.daily_budget)}/day · ${a.start_date} to ${a.end_date} · ${a.radius_miles ?? Math.round(a.radius_km / 1.609344)} mi · ${a.created_by}`}</small>
                 {Object.entries(a.platforms).map(([p, x]) => (
                   <div key={p} className="social-row">
                     <span><b>{NAME[p]}</b>: {STATUS[x.status] ?? x.status}</span>

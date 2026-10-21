@@ -1,7 +1,7 @@
 # Launching paid ads (Run as ad)
 
 Dealers request ads in the dashboard: **Library → Run as ad** on a finished video (Meta = Facebook & Instagram, and/or
-TikTok; daily budget, days, start date, radius around an address, ad text, TikTok caption, link). Each dealer's ad
+TikTok; daily budget, days, start date, radius in miles around an address, ad text, TikTok caption, link). Each dealer's ad
 accounts and defaults are under **View details → Paid ads** (admins edit). The dashboard records requests only
 (table `ad_requests`, `node/src/lib/ads.js`); it never calls an ad platform or spends money.
 
@@ -30,7 +30,8 @@ requests"). Later a direct AdWhispr connection can do the same through `adPendin
    - `accountId` = `meta_account`, `pageName` = `meta_page` (if set), `name` = "<vehicle> <stock> <start_date>",
      `objective` = `traffic`, `dailyBudgetUsd` = `daily_budget`
    - `cards` = `[{ videoUrl: video_url, headline }]`, `message` = `text`, `link` = `link`, `ctaType` = `LEARN_MORE`
-   - `radiusAddress` = `radius_address`, `radiusKm` = `radius_km`
+   - `radiusAddress` = `radius_address`, `radiusKm` = `radius_km` (the dashboard asks in miles, `radius_miles`; the
+     request also stores the km value AdWhispr takes)
    - Call once for the preview, show it, then again with the `confirmToken` after the user confirms.
    - Record: `node src/cli/ad-requests.js record <id> meta status=launched_paused campaign_id=<id> ad_id=<id>`
 

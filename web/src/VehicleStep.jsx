@@ -226,7 +226,7 @@ function AdSettings() {
   const field = (k) => ({ value: form[k], onChange: (e) => setForm({ ...form, [k]: e.target.value }) });
   const save = async (e) => {
     e.preventDefault();
-    try { const r = await api('ad_settings_save', { ...form, radius_km: Number(form.radius_km), daily_budget: Number(form.daily_budget), days: Number(form.days) }); setSt(r.settings); setForm(null); say(r.message); }
+    try { const r = await api('ad_settings_save', { ...form, radius_miles: Number(form.radius_miles), daily_budget: Number(form.daily_budget), days: Number(form.days) }); setSt(r.settings); setForm(null); say(r.message); }
     catch (err) { say(err.message, true); }
   };
   return (
@@ -236,7 +236,7 @@ function AdSettings() {
         <>
           <p>{st.meta_account ? <>Meta ad account <b>{st.meta_account}</b>{st.meta_page && <> · Page {st.meta_page}</>}</> : 'No Meta ad account set'}{' · '}
             {st.tiktok_account ? <>TikTok <b>{st.tiktok_account}</b></> : 'no TikTok ad account set'}
-            <small className="hint">{` · default ${st.radius_km} km around ${st.radius_address || '(no address)'}, $${st.daily_budget}/day for ${st.days} days`}</small></p>
+            <small className="hint">{` · default ${st.radius_miles} miles around ${st.radius_address || '(no address)'}, $${st.daily_budget}/day for ${st.days} days`}</small></p>
           {s.isAdmin && <div className="actions"><button type="button" className="secondary small" id="adSettingsEdit" onClick={() => setForm({ ...st })}>Edit ad settings</button></div>}
         </>
       ) : (
@@ -246,7 +246,7 @@ function AdSettings() {
             <label>Facebook Page name (for ads)<input autoComplete="off" {...field('meta_page')} /></label>
             <label>TikTok advertiser id<input placeholder="7690000000000000000" autoComplete="off" {...field('tiktok_account')} /></label>
             <label>Target around (address)<input autoComplete="off" {...field('radius_address')} /></label>
-            <label>Radius (km)<input type="number" min="1" max="80" {...field('radius_km')} /></label>
+            <label>Radius (miles)<input type="number" min="1" max="50" {...field('radius_miles')} /></label>
             <label>Default daily budget ($)<input type="number" min="5" max="1000" {...field('daily_budget')} /></label>
             <label>Default days<input type="number" min="1" max="30" {...field('days')} /></label>
           </div>
