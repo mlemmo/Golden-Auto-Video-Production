@@ -18,7 +18,8 @@ only then fast-forward `main` and deploy production (`bash /srv/golden-auto/ubun
 │   ├── STRUCTURE.md       This file
 │   ├── HANDOFF.md         Current status and open items
 │   ├── STAGING.md         Production vs staging, everyday flow
-│   └── DEPLOY_UBUNTU.md   Deploying, cron workers, logs, rollback
+│   ├── DEPLOY_UBUNTU.md   Deploying, cron workers, logs, rollback
+│   └── META_SETUP.md      Connecting a dealer's Facebook Page and Instagram for posting
 ├── node/                  The server (Node.js): sign-in, accounts, every dashboard action, background workers
 │   ├── package.json       Server dependencies (bcryptjs) and scripts (npm test, npm start, npm run password-hash)
 │   ├── src/server.js      HTTP server: pages, sessions, role checks, action routing, share pages, static files
@@ -60,7 +61,7 @@ only then fast-forward `main` and deploy production (`bash /srv/golden-auto/ubun
 | `LookStep.jsx` | Step 4: video source, spokesperson, style, format, asset sheet photos |
 | `GenerateStep.jsx` | Step 5: summary, paid-approval boxes, Generate / Build from footage |
 | `Videos.jsx` | Videos list and the caption editor |
-| `Library.jsx` | Video library (gallery, player, Download, Share) |
+| `Library.jsx`, `SocialPost.jsx` | Video library (gallery, player, Download, Share, Post to Facebook & Instagram) |
 | `Tools.jsx` | Tools and Admin dropdowns and their full-page windows (ZIP import, lip-sync builder, spokespersons) |
 | `Accounts.jsx` | Account menu, Change password, Manage users |
 | `Usage.jsx` | Usage dashboard (tiles, daily chart, tables) |
@@ -79,6 +80,7 @@ only then fast-forward `main` and deploy production (`bash /srv/golden-auto/ubun
 | `finishing.js`, `worker.js`, `autobuild.js` | Building the final captioned video (caption style, FFmpeg render, auto build) |
 | `jobs.js` | Paid generation, status checks, jobs list, My footage, library list |
 | `narrations.js` | Voice previews and lip-sync |
+| `social.js` | Posting to Facebook and Instagram: posts, schedule, the social worker's publishing steps |
 | `clients.js` | Clients, website analysis, dealer details |
 | `importers.js`, `website.js`, `dealercenter.js`, `photos.js`, `media.js`, `thumbs.js`, `images.js` | Inventory import, photos, asset sheets, thumbnails |
 | `users.js` | Accounts and roles |

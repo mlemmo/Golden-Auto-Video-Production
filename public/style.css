@@ -197,3 +197,15 @@ a.button.secondary-link{background:#262d3a;color:#fff;border:1px solid var(--lin
 .lipsync-check p.hint { margin: 0; }
 .lipsync-check audio { width: 100%; }
 .lipsync-check video { width: 100%; max-width: 280px; max-height: 420px; border-radius: 8px; background: #000; }
+
+/* Post to Facebook & Instagram (Library) */
+.player-backdrop:has(.social-panel){z-index:90}
+.social-panel{background:#151b26;border:1px solid var(--line);border-radius:14px;padding:18px 20px;width:min(560px,100%);max-height:calc(100vh - 40px);overflow:auto;display:grid;gap:12px}
+.social-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.social-head h3{margin:0}
+.social-panel textarea{width:100%;resize:vertical}
+.social-platforms,.social-when{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center}
+.social-when input[type=datetime-local]{margin:0}
+.social-confirm p{margin:0 0 10px}
+.social-list h4{margin:6px 0}
+.social-row{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}

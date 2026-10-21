@@ -17,5 +17,7 @@
   "source": "https://www.mygoldenauto.net",
   "anthropic_key": "",
   "anthropic_workspace_id": "",
-  "intro_model": "claude-opus-5-5"
+  "intro_model": "claude-opus-5-5",
+  "meta_graph_version": "v26.0",
+  "meta_accounts": { "golden-auto": { "page_id": "", "page_token": "", "ig_user_id": "" } }
 }

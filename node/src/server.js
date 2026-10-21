@@ -12,6 +12,7 @@ import { clientRoutes } from './routes/clients.js';
 import { narrationRoutes } from './routes/narrations.js';
 import { jobRoutes, MULTIPART } from './routes/jobs.js';
 import { finishingRoutes } from './routes/finishing.js';
+import { socialApi } from './lib/social.js';
 import { parseMultipart } from './lib/multipart.js';
 import { CLIENT_DEFAULT, clientsLoad, clientFind, clientDetails, clientSpeechSites } from './lib/clients.js';
 import { withSpeechSites } from './lib/speech.js';
@@ -38,6 +39,8 @@ const sessionRoutes = {
   logout: ({ session }) => { session.destroyed = true; return {}; },
   me: ({ db, user }) => ({ user: publicUser(user), clients: allowedClients(db, user) }),
   // The Library page: every finished video of the clients this account may use.
+  // Posting finished videos to Facebook and Instagram (src/lib/social.js); the video's client must be one of the account's.
+  ...Object.fromEntries(['social_status', 'social_list', 'social_post', 'social_cancel', 'social_retry'].map((a) => [a, ({ db, cfg, user, body }) => socialApi(a, body, db, cfg, { allowed: allowedClients(db, user), user: user.email })])),
   library: ({ db, user }) => { const ids = allowedClients(db, user); return { videos: libraryVideos(db, ids), clients: clientsLoad(db).items.filter((c) => ids.includes(c.id)).map((c) => ({ id: c.id, name: c.name })) }; },
   password_change: async ({ db, user, body }) => { await passwordChange(db, user, body.current, body.password); return { message: 'Password changed.' }; },
   // Admins: accounts.
@@ -54,15 +57,16 @@ const sessionRoutes = {
 const VIEWER_ACTIONS = new Set(['library', 'scene_list', 'clients', 'client_select', 'inventory', 'sync_log', 'jobs', 'narration_list', 'spokesperson_list', 'detail', 'speech', 'logout', 'me', 'password_change']);
 const ADMIN_ACTIONS = new Set(['usage', 'spokesperson_describe', 'spokesperson_picture', 'spokesperson_save_draft', 'snapshot_import', 'scene_save', 'scene_delete', 'scene_default', 'scene_suggest', 'client_add', 'client_analyze', 'client_details', 'spokesperson_upload', 'spokesperson_default', 'spokesperson_delete', 'users_list', 'user_create', 'user_update', 'user_delete']);
 // Actions that need no current client (an account without clients can still use them).
-const NO_CLIENT = new Set(['library', 'usage', 'clients', 'logout', 'me', 'password_change', 'users_list', 'user_create', 'user_update', 'user_delete', 'client_add']);
+const NO_CLIENT = new Set(['library', 'social_status', 'social_list', 'social_post', 'social_cancel', 'social_retry', 'usage', 'clients', 'logout', 'me', 'password_change', 'users_list', 'user_create', 'user_update', 'user_delete', 'client_add']);
 // Actions recorded for the Usage dashboard (who, which client, what, when; never passwords).
-const TRACKED = new Set(['generate', 'spokesperson_picture', 'spokesperson_save_draft', 'narration_preview', 'narration_lipsync', 'footage_build', 'finish', 'narration_approve', 'job_delete',
+const TRACKED = new Set(['generate', 'social_post', 'social_cancel', 'social_retry', 'spokesperson_picture', 'spokesperson_save_draft', 'narration_preview', 'narration_lipsync', 'footage_build', 'finish', 'narration_approve', 'job_delete',
   'narration_delete', 'narration_lipsync_delete', 'sync', 'import', 'client_add', 'client_details', 'client_analyze', 'spokesperson_upload',
   'spokesperson_default', 'spokesperson_delete', 'user_create', 'user_update', 'user_delete', 'password_change']);
 function activityDetail(name, body, out) {
   const d = {};
   for (const k of ['stock', 'duration', 'voice', 'format', 'id']) if (['string', 'number'].includes(typeof body[k]) && body[k] !== '') d[k] = body[k];
-  const v = out?.job?.vehicle ?? out?.vehicle; if (v) d.vehicle = v;
+  const v = out?.job?.vehicle ?? out?.vehicle ?? out?.post?.vehicle; if (v) d.vehicle = v;
+  if (Array.isArray(body.platforms)) d.platforms = body.platforms.join(',');
   if (out?.job?.duration) d.duration = out.job.duration;
   if (name.startsWith('user_')) { d.email = body.email ?? out?.user?.email; d.role = body.role; }
   if (name === 'client_add') d.client_name = out?.client?.name;

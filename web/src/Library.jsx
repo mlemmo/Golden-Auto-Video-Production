@@ -4,7 +4,9 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from './api.js';
 import { useStudio } from './App.jsx';
 import { useStatus } from './ui.jsx';
+import { SocialPost } from './SocialPost.jsx';
 
+const REELS = ['instagram_reels', 'facebook_reels'];
 const FORMAT = { instagram_reels: 'Reels 9:16', facebook_reels: 'Reels 9:16', facebook_feed: 'Feed 4:5', square: 'Square 1:1' };
 const money = (p) => (p == null ? 'Call for price' : '$' + Math.round(p).toLocaleString('en-US'));
 /** Share a video's public page: the phone's share sheet when there is one, else copy the link. */
@@ -24,13 +26,15 @@ export function Library({ open, onClose }) {
   const [client, setClient] = useState('');
   const [q, setQ] = useState('');
   const [playing, setPlaying] = useState(null);
+  const [posting, setPosting] = useState(null);
+  const { readOnly } = useStudio();
   useEffect(() => { if (open) api('library').then(setData).catch((e) => say(e.message, true)); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!open) return undefined;
-    const esc = (e) => { if (e.key === 'Escape') (playing ? setPlaying(null) : onClose()); };
+    const esc = (e) => { if (e.key === 'Escape') (posting ? setPosting(null) : playing ? setPlaying(null) : onClose()); };
     document.addEventListener('keydown', esc); document.body.style.overflow = 'hidden';
     return () => { document.removeEventListener('keydown', esc); document.body.style.overflow = ''; };
-  }, [open, playing, onClose]);
+  }, [open, playing, posting, onClose]);
   if (!open) return null;
   const names = Object.fromEntries((data?.clients ?? []).map((c) => [c.id, c.name]));
   const shown = (data?.videos ?? []).filter((v) => (!client || v.client === client) && (!q || `${v.vehicle} ${v.stock}`.toLowerCase().includes(q.toLowerCase())));
@@ -67,18 +71,20 @@ export function Library({ open, onClose }) {
                 <button type="button" className="small" onClick={() => setPlaying(v)}>Watch</button>
                 <a className="button small secondary-link" href={v.url} download={fileName(v)}>Download</a>
                 <button type="button" className="secondary small share-btn" onClick={() => shareVideo(v, say)}>Share</button>
+                {!readOnly && <button type="button" className="secondary small" title={REELS.includes(v.format) ? 'Post to Facebook & Instagram' : 'Make the Reels 9:16 format to post'} onClick={() => setPosting(v)}>Post</button>}
               </div>
             </article>
           ))}
         </div>
       </div>
-      {playing && <Player v={playing} client={names[playing.client]} onClose={() => setPlaying(null)} onShare={() => shareVideo(playing, say)} />}
+      {playing && <Player v={playing} client={names[playing.client]} onClose={() => setPlaying(null)} onShare={() => shareVideo(playing, say)} onPost={readOnly ? null : () => setPosting(playing)} />}
+      {posting && <SocialPost v={posting} say={say} onClose={() => setPosting(null)} />}
     </div>
   );
 }
 
 /** Large player for presenting: plays at once; Full screen and Download beside it. */
-function Player({ v, client, onClose, onShare }) {
+function Player({ v, client, onClose, onShare, onPost }) {
   const ref = useRef(null);
   const full = () => { const el = ref.current; (el.requestFullscreen ?? el.webkitEnterFullscreen)?.call(el); };
   return (
@@ -91,6 +97,7 @@ function Player({ v, client, onClose, onShare }) {
             <button type="button" className="secondary" onClick={full}>Full screen</button>
             <a className="button" href={v.url} download={fileName(v)}>Download</a>
             <button type="button" className="secondary" id="playerShare" onClick={onShare}>Share</button>
+            {onPost && <button type="button" className="secondary" id="playerPost" onClick={onPost}>Post</button>}
             <button type="button" className="secondary" id="playerClose" onClick={onClose}>Close</button>
           </div>
         </div>
