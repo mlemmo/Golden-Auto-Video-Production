@@ -66,6 +66,12 @@ export function narrationWords(s) {
   if (letters) out.push(letters);
   return out;
 }
+/**
+ * Lip-sync needs a silent source video (voice method "narration"; older jobs without a voice field were silent too).
+ * Videos with Seedance speech, lip-sync results and footage videos are not offered: a talking video with camera-only
+ * pan shots at the end was picked by mistake and the lip-sync stopped when she left the frame (2026-10-20).
+ */
+export const lipsyncSource = (job) => (job.voice ?? 'narration') === 'narration' && !['fal_lipsync', 'footage'].includes(job.provider ?? '');
 /** Word differences between a preview's caption text and spoken text (numbers, prices, website, respellings ignored). */
 export function narrationTextDifferences(spoken, caption, respell = {}) {
   for (const [word, say] of Object.entries({ ...SEEDANCE_RESPELL, ...(respell && typeof respell === 'object' && !Array.isArray(respell) ? respell : {}) }))
@@ -194,7 +200,7 @@ export async function narrationApi(action, inp, cfg, db, { bridge: helper = narr
     const videos = [];
     for (const { payload } of db.prepare('SELECT payload FROM jobs ORDER BY rowid DESC LIMIT 50').all()) {
       const v = JSON.parse(payload); if ((v.client ?? CLIENT_DEFAULT) !== clientOf(inp)) continue;
-      if ((v.status ?? '') === 'completed' && v.video_url) videos.push({ id: v.id, vehicle: v.vehicle, stock: v.stock, duration: v.duration ?? 15 });
+      if ((v.status ?? '') === 'completed' && v.video_url && lipsyncSource(v)) videos.push({ id: v.id, vehicle: v.vehicle, stock: v.stock, duration: v.duration ?? 15, created_at: v.created_at ?? '', scene: v.scene ?? '' });
     }
     return { previews: list, lipsync: sync, videos };
   }
@@ -255,6 +261,7 @@ export async function narrationApi(action, inp, cfg, db, { bridge: helper = narr
     if (audio.status !== 'ready' || !audio.approved) throw new Error('Approve the voice preview first.');
     const source = narrationLoad(db, 'jobs', str(inp.video_id ?? ''));
     if ((source.status ?? '') !== 'completed' || !source.video_url) throw new Error('Choose a completed video.');
+    if (!lipsyncSource(source)) throw new Error('Choose a silent video made with the "ElevenLabs narration + lip-sync" voice method. This video already has its own speech.');
     if ((source.stock ?? '') !== audio.stock || (source.price ?? null) !== audio.price) throw new Error('Preview and video must be for the same vehicle and price.');
     let current = null;
     for (const c of clientInventory(db, audio.client ?? CLIENT_DEFAULT).vehicles ?? []) if (c.StockNumber === audio.stock) current = c;

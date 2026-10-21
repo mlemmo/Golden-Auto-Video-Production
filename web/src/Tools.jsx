@@ -7,6 +7,8 @@ import { PasswordTool, UsersTool } from './Accounts.jsx';
 import { UsageTool } from './Usage.jsx';
 import { SceneBlocks } from './LookStep.jsx';
 
+const when = (t) => (t ? new Date(t).toLocaleString([], { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '');
+
 // Everyday tools (Tools menu) and the admin's (Admin menu). Each opens in a full-page window.
 const TOOLS = [
   ['import', 'Import a vehicle (DealerCenter ZIP)', 'For cars not on the website yet'],
@@ -348,6 +350,9 @@ function LipsyncBuilder() {
   useEffect(() => { setCurrent(false); setSpend(false); }, [s.clients.current]);
   const r = s.narr;
   const approved = r.previews.filter((p) => p.status === 'ready' && p.audio_url && !p.too_long && p.approved);
+  // Only silent videos of the chosen preview's car and length (newest first).
+  const preview = approved.find((p) => p.id === narrationId);
+  const videos = r.videos.filter((v) => !preview || (v.stock === preview.stock && Number(v.duration) === Number(preview.duration)));
   async function act(action, data) {
     if (pending) return;
     setPending(true);
@@ -377,7 +382,7 @@ function LipsyncBuilder() {
       <label>Completed source video
         <select id="nVideo" value={videoId} onChange={(e) => setVideoId(e.target.value)}>
           <option value="">Choose a completed video</option>
-          {r.videos.map((v) => <option key={v.id} value={v.id}>{`${v.vehicle} · ${v.duration}s · ${v.id.slice(0, 8)}`}</option>)}
+          {videos.map((v) => <option key={v.id} value={v.id}>{`${v.vehicle} · ${v.duration}s${v.scene ? ' · ' + v.scene : ''} · ${when(v.created_at)} · ${v.id.slice(0, 8)}`}</option>)}
         </select>
       </label>
       <label className="check note-important"><input type="checkbox" id="nCurrent" checked={current} onChange={(e) => setCurrent(e.target.checked)} />I confirm this vehicle is <b>available</b> and the advertised <b>price is current</b>.</label>

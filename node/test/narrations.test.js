@@ -5,7 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync } from 'node:
 import { tmpdir } from 'node:os';
 import { openMemoryDb, save } from '../src/lib/db.js';
 import { jsonEncode } from '../src/lib/storedjson.js';
-import { narrationApi, narrationTables, narrationTextDifferences, narrationVoiceSettings } from '../src/lib/narrations.js';
+import { narrationApi, narrationTables, narrationTextDifferences, narrationVoiceSettings, lipsyncSource } from '../src/lib/narrations.js';
 
 function setup() {
   const dir = mkdtempSync(tmpdir() + '/ga-nar-'); mkdirSync(dir + '/assets/narrations', { recursive: true });
@@ -77,4 +77,10 @@ test('caption/spoken text differences and voice speed', () => {
   assert.equal(narrationVoiceSettings({}, 30).speed, 0.9);
   assert.equal(narrationVoiceSettings({}, 15).speed, undefined);
   assert.equal(narrationVoiceSettings({ narration_speed: 1.5 }, 30).speed, 1.2);
+});
+
+test('lip-sync only offers and accepts silent videos', () => {
+  assert.ok(lipsyncSource({ voice: 'narration' }) && lipsyncSource({}), 'silent video (older jobs had no voice field)');
+  assert.ok(!lipsyncSource({ voice: 'elevenlabs' }) && !lipsyncSource({ voice: 'native' }), 'Seedance already speaks');
+  assert.ok(!lipsyncSource({ voice: null, provider: 'fal_lipsync' }) && !lipsyncSource({ provider: 'footage' }), 'lip-sync results and footage');
 });
