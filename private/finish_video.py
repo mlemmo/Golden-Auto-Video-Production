@@ -83,7 +83,14 @@ def voiced_spans(pcm, speech_end):
             if min(b, speech_end) - a >= 0.06]
 
 
-def make_card(photo, output, width, height, title, closing):
+def video_frame(ffmpeg, video, at, output):
+    """One still from the video (the car in the chosen setting), or None when it cannot be read."""
+    r = subprocess.run([ffmpeg, '-nostdin', '-v', 'error', '-y', '-ss', f'{max(0.0, at):.3f}', '-i', str(video),
+                        '-frames:v', '1', '-q:v', '2', str(output)], capture_output=True, timeout=60)
+    return output if r.returncode == 0 and Path(output).is_file() and Path(output).stat().st_size > 1000 else None
+
+
+def make_card(photo, output, width, height, title, closing, frame=False):
     from PIL import Image, ImageDraw, ImageFont, ImageOps
     # Compose at delivery size; contain the whole inventory photo.
     im = Image.new('RGB', (width, height), '#101d2b')
@@ -100,6 +107,10 @@ def make_card(photo, output, width, height, title, closing):
     label(.164, title, 28, '#cbd5e1')
     with Image.open(photo) as source:
         source = ImageOps.exif_transpose(source).convert('RGB')
+        if frame:
+            # A video frame is as tall as the card: crop the band with the car (slightly below the middle).
+            box = (width, round(height * .39))
+            source = ImageOps.fit(source, box, centering=(0.5, 0.58))
         source = ImageOps.contain(source, (width, round(height * .39)))
         im.paste(source, ((width - source.width) // 2,
                          round(height * .258) + (round(height * .39) - source.height) // 2))
@@ -123,8 +134,13 @@ def render(data):
     closing_at = intro + end
     if width < 100 or height < 100 or total - closing_at < .5:
         raise ValueError('Narration leaves insufficient room for intro and closing card.')
-    make_card(data['photo'], work / 'intro.png', width, height, data['title'], False)
-    make_card(data['photo'], work / 'closing.png', width, height, data['title'], True)
+    # Cards show stills from the video itself, so the car appears in the chosen setting rather than on the dealer's lot
+    # (user request 2026-10-20); the inventory photo is the fallback when a still cannot be read.
+    ffmpeg = data.get('ffmpeg', '/usr/bin/ffmpeg')
+    first = video_frame(ffmpeg, work / 'master.mp4', 0.3, work / 'card-first.jpg')
+    last = video_frame(ffmpeg, work / 'master.mp4', end - 0.2, work / 'card-last.jpg')
+    make_card(first or data['photo'], work / 'intro.png', width, height, data['title'], False, bool(first))
+    make_card(last or data['photo'], work / 'closing.png', width, height, data['title'], True, bool(last))
     # Freeze the first presenter frame only during the dissolve. Both original
     # motion and original audio start at t=2, so lip-sync stays aligned.
     graph = (

@@ -81,7 +81,7 @@ export async function finishDraft(db, cfg, job, python = finishPython) {
   if ((vehicle.price ?? null) === null) cues = captionCallForPrice(cues, duration - 2.0);
   const srt = captionSrt(cues, 2.0);
   db.prepare('UPDATE jobs SET payload=? WHERE id=?').run(jsonEncode(job), job.id);
-  return { srt, note: 'Two-second intro and smooth dissolve enabled. Uses inventory photo ' + (index + 1) + '. Caption timestamps include the intro. Cue timing follows the pauses in the approved audio and is spread by syllable count inside each sentence; it is not word-level transcription, so review the final render.' };
+  return { srt, note: 'Two-second intro and smooth dissolve enabled. The intro and closing cards show stills from the video (inventory photo ' + (index + 1) + ' if a still cannot be read). Caption timestamps include the intro. Cue timing follows the pauses in the approved audio and is spread by syllable count inside each sentence; it is not word-level transcription, so review the final render.' };
 }
 
 /** Lip-synced jobs: the final render with intro card, captions and closing card (finish_video.py). */
