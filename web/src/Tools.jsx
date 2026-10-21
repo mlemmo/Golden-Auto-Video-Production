@@ -353,6 +353,8 @@ function LipsyncBuilder() {
   // Only silent videos of the chosen preview's car and length (newest first).
   const preview = approved.find((p) => p.id === narrationId);
   const videos = r.videos.filter((v) => !preview || (v.stock === preview.stock && Number(v.duration) === Number(preview.duration)));
+  // Play both before paying, to be sure the right voice and the right silent video are chosen.
+  const source = videos.find((v) => v.id === videoId);
   async function act(action, data) {
     if (pending) return;
     setPending(true);
@@ -379,12 +381,24 @@ function LipsyncBuilder() {
           {approved.map((p) => <option key={p.id} value={p.id}>{`${p.vehicle} · ${p.duration}s · ${p.id.slice(0, 8)}`}</option>)}
         </select>
       </label>
+      {preview && (
+        <div className="lipsync-check" id="nPreviewCheck">
+          <small>{(preview.voice_name ? preview.voice_name + ' · ' : '') + when(preview.created_at)}</small>
+          <p className="hint">{preview.text}</p>
+          <audio key={preview.id} controls preload="none" src={preview.audio_url} />
+        </div>
+      )}
       <label>Completed source video
         <select id="nVideo" value={videoId} onChange={(e) => setVideoId(e.target.value)}>
           <option value="">Choose a completed video</option>
           {videos.map((v) => <option key={v.id} value={v.id}>{`${v.vehicle} · ${v.duration}s${v.scene ? ' · ' + v.scene : ''} · ${when(v.created_at)} · ${v.id.slice(0, 8)}`}</option>)}
         </select>
       </label>
+      {source?.url && (
+        <div className="lipsync-check" id="nVideoCheck">
+          <video key={source.id} src={source.url + '#t=1'} controls preload="metadata" playsInline />
+        </div>
+      )}
       <label className="check note-important"><input type="checkbox" id="nCurrent" checked={current} onChange={(e) => setCurrent(e.target.checked)} />I confirm this vehicle is <b>available</b> and the advertised <b>price is current</b>.</label>
       <label className="check note-important"><input type="checkbox" id="nSyncSpend" checked={spend} onChange={(e) => setSpend(e.target.checked)} />I approve <b>one paid fal Sync Lipsync request</b> at my account’s current rate; captions and the final render then run automatically.</label>
       <button type="button" id="nSubmitSync" disabled={pending || !current || !spend} title={current && spend ? undefined : 'Tick both boxes above first'} onClick={submit}>Build final video with lip-sync</button>

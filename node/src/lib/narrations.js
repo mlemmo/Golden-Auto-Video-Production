@@ -200,7 +200,7 @@ export async function narrationApi(action, inp, cfg, db, { bridge: helper = narr
     const videos = [];
     for (const { payload } of db.prepare('SELECT payload FROM jobs ORDER BY rowid DESC LIMIT 50').all()) {
       const v = JSON.parse(payload); if ((v.client ?? CLIENT_DEFAULT) !== clientOf(inp)) continue;
-      if ((v.status ?? '') === 'completed' && v.video_url && lipsyncSource(v)) videos.push({ id: v.id, vehicle: v.vehicle, stock: v.stock, duration: v.duration ?? 15, created_at: v.created_at ?? '', scene: v.scene ?? '' });
+      if ((v.status ?? '') === 'completed' && v.video_url && lipsyncSource(v)) videos.push({ id: v.id, vehicle: v.vehicle, stock: v.stock, duration: v.duration ?? 15, created_at: v.created_at ?? '', scene: v.scene ?? '', url: v.video_url });
     }
     return { previews: list, lipsync: sync, videos };
   }
