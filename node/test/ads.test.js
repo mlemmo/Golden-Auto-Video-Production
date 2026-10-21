@@ -1,4 +1,5 @@
-// Paid ad requests. Nothing here calls an ad platform: the dashboard only records requests and settings.
+// Paid ad requests. Nothing here calls an ad platform: the dashboard only records requests and settings (the Meta
+// launcher is tested in meta-ads.test.js).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openMemoryDb, save } from '../src/lib/db.js';
@@ -59,12 +60,12 @@ test('TikTok needs the Reels format; unfinished videos cannot be advertised', ()
   assert.throws(() => wip.api('ad_request', request()), /not finished/);
 });
 
-test('the launcher side: pending list, results recorded, ads past their end date listed to end', () => {
+test('TikTok by hand: pending list (Meta belongs to the worker), results recorded, ads past their end date listed to end', () => {
   const { api, db } = setup();
   api('ad_settings_save', settings);
   const { ad } = api('ad_request', request());
   let p = adPending(db, NOW);
-  assert.deepEqual(p.launch.map((x) => x.platform), ['meta', 'tiktok']);
+  assert.deepEqual(p.launch.map((x) => x.platform), ['tiktok'], 'Meta requests are launched by the ads worker');
   adRecord(db, ad.id, 'meta', { status: 'launched_paused', campaign_id: '120200000000001', ad_id: '120200000000003' }, NOW);
   adRecord(db, ad.id, 'tiktok', { status: 'failed', error: 'TikTok identity missing' }, NOW);
   assert.throws(() => adRecord(db, ad.id, 'meta', { status: 'running' }), /Unknown status/);
@@ -73,10 +74,12 @@ test('the launcher side: pending list, results recorded, ads past their end date
   const shown = api('ad_list', { id: 'job1' }).ads[0].platforms;
   assert.deepEqual([shown.meta.status, shown.meta.stats.clicks, shown.tiktok.error], ['active', 41, 'TikTok identity missing']);
   p = adPending(db, Date.parse('2026-10-27T17:00:00Z'));
-  assert.deepEqual([p.launch.length, p.end.map((x) => x.platform)], [0, ['meta']], 'past its end date: to be ended');
+  assert.deepEqual([p.launch.length, p.end.length], [0, 0], 'Meta is ended by the ads worker; the TikTok part failed');
+  adRecord(db, ad.id, 'tiktok', { status: 'active' }, NOW);
+  assert.deepEqual(adPending(db, Date.parse('2026-10-27T17:00:00Z')).end.map((x) => x.platform), ['tiktok'], 'past its end date: to be ended');
 });
 
-test('radius in miles; the request also carries km for the ad tools; old km settings are converted', () => {
+test('radius in miles; the request also carries km for TikTok; old km settings are converted', () => {
   const { api, db } = setup();
   api('ad_settings_save', settings);
   assert.throws(() => api('ad_settings_save', { ...settings, radius_miles: 60 }), /1–50 miles/);

@@ -20,7 +20,7 @@ only then fast-forward `main` and deploy production (`bash /srv/golden-auto/ubun
 │   ├── STAGING.md         Production vs staging, everyday flow
 │   ├── DEPLOY_UBUNTU.md   Deploying, cron workers, logs, rollback
 │   ├── META_SETUP.md      Connecting a dealer's Facebook Page and Instagram for posting
-│   └── ADS_LAUNCH.md      Launching requested paid ads (Meta, TikTok) through AdWhispr
+│   └── ADS_LAUNCH.md      Paid ads: Meta through the Marketing API (ads worker), TikTok by hand
 ├── node/                  The server (Node.js): sign-in, accounts, every dashboard action, background workers
 │   ├── package.json       Server dependencies (bcryptjs) and scripts (npm test, npm start, npm run password-hash)
 │   ├── src/server.js      HTTP server: pages, sessions, role checks, action routing, share pages, static files
@@ -81,7 +81,8 @@ only then fast-forward `main` and deploy production (`bash /srv/golden-auto/ubun
 | `finishing.js`, `worker.js`, `autobuild.js` | Building the final captioned video (caption style, FFmpeg render, auto build) |
 | `jobs.js` | Paid generation, status checks, jobs list, My footage, library list |
 | `narrations.js` | Voice previews and lip-sync |
-| `ads.js` | Paid ad requests and dealer ad settings (launched through AdWhispr, docs/ADS_LAUNCH.md) |
+| `ads.js` | Paid ad requests and dealer ad settings (docs/ADS_LAUNCH.md) |
+| `meta-ads.js` | Meta ads through the Marketing API: create paused, switch on/pause, end, results (ads worker) |
 | `social.js`, `facebook.js` | Posting to Facebook and Instagram (posts, schedule, the social worker's steps); Connect Facebook & Instagram (login, stored tokens) |
 | `clients.js` | Clients, website analysis, dealer details |
 | `importers.js`, `website.js`, `dealercenter.js`, `photos.js`, `media.js`, `thumbs.js`, `images.js` | Inventory import, photos, asset sheets, thumbnails |

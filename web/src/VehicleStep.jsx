@@ -250,7 +250,7 @@ function AdSettings() {
             <label>Default daily budget ($)<input type="number" min="5" max="1000" {...field('daily_budget')} /></label>
             <label>Default days<input type="number" min="1" max="30" {...field('days')} /></label>
           </div>
-          <p className="hint">Ad accounts must be the dealer's own, shared with your Meta Business portfolio or TikTok Business Center and connected in AdWhispr.</p>
+          <p className="hint">Ad accounts must be the dealer's own. Meta ads use this dealer's Facebook connection (Connect Facebook &amp; Instagram, with ad permissions); TikTok ads are launched by hand in TikTok Ads Manager.</p>
           <div className="actions"><button>Save ad settings</button><button type="button" className="secondary" onClick={() => setForm(null)}>Cancel</button></div>
         </form>
       )}

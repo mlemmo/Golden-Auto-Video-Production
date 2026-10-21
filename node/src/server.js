@@ -45,8 +45,8 @@ const sessionRoutes = {
   ...Object.fromEntries(['social_status', 'social_list', 'social_post', 'social_cancel', 'social_retry'].map((a) => [a, ({ db, cfg, user, body }) => socialApi(a, body, db, cfg, { allowed: allowedClients(db, user), user: user.email })])),
   // Connect Facebook & Instagram for the current client (src/lib/facebook.js); tokens stay on the server.
   ...Object.fromEntries(['facebook_status', 'facebook_connect', 'facebook_page', 'facebook_disconnect'].map((a) => [a, ({ db, cfg, body, session, client }) => facebookApi(a, body, db, cfg, session, client)])),
-  // Paid ads (src/lib/ads.js): requests and dealer ad settings only; the launcher creates the ads paused.
-  ...Object.fromEntries(['ad_status', 'ad_list', 'ad_request', 'ad_cancel'].map((a) => [a, ({ db, user, body }) => adApi(a, body, db, { allowed: allowedClients(db, user), user: user.email })])),
+  // Paid ads (src/lib/ads.js): requests, Switch on / Pause / Retry (applied by the ads worker) and dealer ad settings.
+  ...Object.fromEntries(['ad_status', 'ad_list', 'ad_request', 'ad_cancel', 'ad_switch_on', 'ad_pause', 'ad_retry'].map((a) => [a, ({ db, user, body }) => adApi(a, body, db, { allowed: allowedClients(db, user), user: user.email })])),
   ...Object.fromEntries(['ad_settings', 'ad_settings_save'].map((a) => [a, ({ db, user, body, client }) => adApi(a, { ...body, client }, db, { allowed: allowedClients(db, user), user: user.email })])),
   library: ({ db, user }) => { const ids = allowedClients(db, user); return { videos: libraryVideos(db, ids), clients: clientsLoad(db).items.filter((c) => ids.includes(c.id)).map((c) => ({ id: c.id, name: c.name })) }; },
   password_change: async ({ db, user, body }) => { await passwordChange(db, user, body.current, body.password); return { message: 'Password changed.' }; },
@@ -64,9 +64,9 @@ const sessionRoutes = {
 const VIEWER_ACTIONS = new Set(['library', 'scene_list', 'clients', 'client_select', 'inventory', 'sync_log', 'jobs', 'narration_list', 'spokesperson_list', 'detail', 'speech', 'logout', 'me', 'password_change']);
 const ADMIN_ACTIONS = new Set(['usage', 'ad_settings_save', 'facebook_disconnect', 'spokesperson_describe', 'spokesperson_picture', 'spokesperson_save_draft', 'snapshot_import', 'scene_save', 'scene_delete', 'scene_default', 'scene_suggest', 'client_add', 'client_analyze', 'client_details', 'spokesperson_upload', 'spokesperson_default', 'spokesperson_delete', 'users_list', 'user_create', 'user_update', 'user_delete']);
 // Actions that need no current client (an account without clients can still use them).
-const NO_CLIENT = new Set(['library', 'ad_status', 'ad_list', 'ad_request', 'ad_cancel', 'social_status', 'social_list', 'social_post', 'social_cancel', 'social_retry', 'usage', 'clients', 'logout', 'me', 'password_change', 'users_list', 'user_create', 'user_update', 'user_delete', 'client_add']);
+const NO_CLIENT = new Set(['library', 'ad_status', 'ad_list', 'ad_request', 'ad_cancel', 'ad_switch_on', 'ad_pause', 'ad_retry', 'social_status', 'social_list', 'social_post', 'social_cancel', 'social_retry', 'usage', 'clients', 'logout', 'me', 'password_change', 'users_list', 'user_create', 'user_update', 'user_delete', 'client_add']);
 // Actions recorded for the Usage dashboard (who, which client, what, when; never passwords).
-const TRACKED = new Set(['generate', 'ad_request', 'ad_cancel', 'ad_settings_save', 'facebook_page', 'facebook_disconnect', 'social_post', 'social_cancel', 'social_retry', 'spokesperson_picture', 'spokesperson_save_draft', 'narration_preview', 'narration_lipsync', 'footage_build', 'finish', 'narration_approve', 'job_delete',
+const TRACKED = new Set(['generate', 'ad_request', 'ad_cancel', 'ad_switch_on', 'ad_pause', 'ad_retry', 'ad_settings_save', 'facebook_page', 'facebook_disconnect', 'social_post', 'social_cancel', 'social_retry', 'spokesperson_picture', 'spokesperson_save_draft', 'narration_preview', 'narration_lipsync', 'footage_build', 'finish', 'narration_approve', 'job_delete',
   'narration_delete', 'narration_lipsync_delete', 'sync', 'import', 'client_add', 'client_details', 'client_analyze', 'spokesperson_upload',
   'spokesperson_default', 'spokesperson_delete', 'user_create', 'user_update', 'user_delete', 'password_change']);
 function activityDetail(name, body, out) {

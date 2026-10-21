@@ -1,12 +1,13 @@
 // "Run as ad": request a paid Meta (Facebook & Instagram) and/or TikTok ad for a finished video (ad_* actions,
-// src/lib/ads.js). The request is launched PAUSED in the dealer's ad account (docs/ADS_LAUNCH.md) and switched on only
-// after the user confirms, so nothing here spends money. Shows the video's requests with their status and results.
+// src/lib/ads.js). Meta requests are created PAUSED in the dealer's ad account by the ads worker (Meta's Marketing API)
+// and spend only after Switch on; TikTok requests are launched by hand (docs/ADS_LAUNCH.md). Shows the video's requests
+// with their status and results.
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
 
 export const NAME = { meta: 'Meta (Facebook & Instagram)', tiktok: 'TikTok' };
-export const STATUS = { requested: 'Requested — waiting to be launched (paused)', launched_paused: 'Created, paused — waiting for your go-ahead', active: 'Running',
-  ended: 'Ended', failed: 'Failed', canceled: 'Cancelled' };
+export const STATUS = { requested: 'Requested — waiting to be created (paused)', launching: 'Creating the ad (paused)…', launched_paused: 'Created, paused — press Switch on to run it',
+  active: 'Running', paused: 'Paused', ended: 'Ended', failed: 'Failed', canceled: 'Cancelled' };
 const MIN = { meta: 5, tiktok: 20 };
 const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
 export const money = (n) => '$' + Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });
@@ -90,7 +91,16 @@ export function AdRequest({ v, onClose, say }) {
                     <span><b>{NAME[p]}</b>: {STATUS[x.status] ?? x.status}</span>
                     {managerLink(p, a, x) && <a href={managerLink(p, a, x)} target="_blank" rel="noreferrer">Open in Ads Manager</a>}
                     {x.stats && <small className="hint">{`${money(x.stats.spend)} spent · ${x.stats.impressions.toLocaleString()} views · ${x.stats.clicks.toLocaleString()} clicks`}</small>}
+                    {x.want && <small className="hint">{x.want === 'active' ? 'Switching on…' : 'Pausing…'}</small>}
                     {x.error && <small className="hint">{x.error}</small>}
+                    {p === 'meta' && !x.want && (
+                      <span className="actions">
+                        {['launched_paused', 'paused'].includes(x.status) && <button type="button" className="small" disabled={busy}
+                          onClick={() => { if (window.confirm(`Switch on? It spends up to ${money(a.daily_budget)} a day until ${a.end_date}.`)) act('ad_switch_on', { id: a.id }); }}>Switch on</button>}
+                        {x.status === 'active' && <button type="button" className="secondary small" disabled={busy} onClick={() => act('ad_pause', { id: a.id })}>Pause</button>}
+                        {x.status === 'failed' && <button type="button" className="secondary small" disabled={busy} onClick={() => act('ad_retry', { id: a.id })}>Retry</button>}
+                      </span>
+                    )}
                   </div>
                 ))}
                 {Object.values(a.platforms).some((x) => x.status === 'requested') && <div className="actions"><button type="button" className="secondary small" disabled={busy} onClick={() => act('ad_cancel', { id: a.id })}>Cancel request</button></div>}

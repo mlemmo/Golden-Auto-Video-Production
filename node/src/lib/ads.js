@@ -1,8 +1,9 @@
 // Paid ads on Meta (Facebook + Instagram) and TikTok for a finished video ("Run as ad" in the Library), per dealer.
-// The dashboard only records requests (table ad_requests) and each dealer's ad settings (state ad_settings:<client>):
-// nothing here spends money or calls an ad platform. The launcher creates the ads PAUSED and records the result: for
-// now a Claude session using AdWhispr (docs/ADS_LAUNCH.md, through src/cli/ad-requests.js); later a direct AdWhispr
-// connection can call adPending/adRecord the same way. A paused ad is switched on only after the user confirms.
+// The dashboard records requests (table ad_requests) and each dealer's ad settings (state ad_settings:<client>); nothing
+// here calls an ad platform. Meta requests are launched by the ads worker straight through Meta's Marketing API
+// (meta-ads.js): created PAUSED, switched on or paused only when a user presses Switch on / Pause (ad_switch_on,
+// ad_pause), paused after the end date. TikTok requests are launched by hand in TikTok Ads Manager and recorded with
+// src/cli/ad-requests.js (docs/ADS_LAUNCH.md).
 import { randomBytes } from 'node:crypto';
 import { jsonEncode } from './storedjson.js';
 import { state, save } from './db.js';
@@ -11,10 +12,10 @@ import { CLIENT_DEFAULT, clientFind, clientDetails, clientInventory } from './cl
 
 export const AD_PLATFORMS = ['meta', 'tiktok'];
 export const AD_PLATFORM_NAME = { meta: 'Meta (Facebook & Instagram)', tiktok: 'TikTok' };
-// Request → launched paused → active → ended; or failed / canceled.
-export const AD_STATUSES = ['requested', 'launched_paused', 'active', 'ended', 'failed', 'canceled'];
+// Request → (Meta: launching) → launched paused → active ⇄ paused → ended; or failed / canceled.
+export const AD_STATUSES = ['requested', 'launching', 'launched_paused', 'active', 'paused', 'ended', 'failed', 'canceled'];
 const MIN_BUDGET = { meta: 5, tiktok: 20 };
-// The dashboard uses miles; the request also keeps km for ad tools that take km (AdWhispr radiusKm: 1–80).
+// The dashboard uses miles (Meta's radius targeting takes 1–50 miles); the request also keeps km for TikTok Ads Manager.
 export const KM_PER_MILE = 1.609344;
 const REELS = ['instagram_reels', 'facebook_reels'];
 // Meta puts ads about credit (financing, payments, APR) in a special category with restricted targeting.
@@ -25,9 +26,9 @@ export function adTables(db) {
   db.exec('PRAGMA busy_timeout=5000');
   db.exec('CREATE TABLE IF NOT EXISTS ad_requests (id TEXT PRIMARY KEY, payload TEXT NOT NULL)');
 }
-const load = (db, id) => { adTables(db); const r = db.prepare('SELECT payload FROM ad_requests WHERE id=?').get(id); return r ? JSON.parse(r.payload) : null; };
-const store = (db, a) => db.prepare('INSERT INTO ad_requests (id, payload) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload').run(a.id, jsonEncode(a));
-const all = (db) => { adTables(db); return db.prepare('SELECT payload FROM ad_requests ORDER BY rowid DESC').all().map((r) => JSON.parse(r.payload)); };
+export const adLoad = (db, id) => { adTables(db); const r = db.prepare('SELECT payload FROM ad_requests WHERE id=?').get(id); return r ? JSON.parse(r.payload) : null; };
+export const adStore = (db, a) => db.prepare('INSERT INTO ad_requests (id, payload) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload').run(a.id, jsonEncode(a));
+export const adLoadAll = (db) => { adTables(db); return db.prepare('SELECT payload FROM ad_requests ORDER BY rowid DESC').all().map((r) => JSON.parse(r.payload)); };
 
 /** A dealer's ad settings (no secrets: ad account ids, Page name, defaults). */
 export function adSettings(db, client) {
@@ -93,16 +94,35 @@ export function adApi(action, inp, db, { allowed = [CLIENT_DEFAULT], user = '', 
   if (action === 'ad_settings_save') { const client = str(inp.client ?? ''); mine(client); return { settings: adSettingsSave(db, client, inp), message: 'Ad settings saved.' }; }
   if (action === 'ad_list') {
     const id = str(inp.id ?? '');
-    return { ads: all(db).filter((a) => allowed.includes(a.client) && (!id || a.job_id === id)).slice(0, 100).map(publicAd) };
+    return { ads: adLoadAll(db).filter((a) => allowed.includes(a.client) && (!id || a.job_id === id)).slice(0, 100).map(publicAd) };
   }
   if (action === 'ad_cancel') {
-    const a = load(db, str(inp.id ?? '')); if (!a) throw new Error('Ad request not found. Reload the list.');
+    const a = adLoad(db, str(inp.id ?? '')); if (!a) throw new Error('Ad request not found. Reload the list.');
     mine(a.client);
     const open = Object.values(a.platforms).filter((x) => x.status === 'requested');
     if (!open.length) throw new Error('Only requests that have not been launched can be cancelled here. A launched ad is paused or stopped in the ad account.');
     for (const x of open) x.status = 'canceled';
-    store(db, a);
+    adStore(db, a);
     return { ad: publicAd(a), message: 'Request cancelled.' };
+  }
+  if (action === 'ad_switch_on' || action === 'ad_pause' || action === 'ad_retry') {
+    // Meta only: the ads worker applies it within a minute (meta-ads.js).
+    const a = adLoad(db, str(inp.id ?? '')); if (!a) throw new Error('Ad not found. Reload the list.');
+    mine(a.client);
+    const x = a.platforms.meta; if (!x) throw new Error('Only Meta ads are switched on and off here; TikTok ads are managed in TikTok Ads Manager.');
+    if (action === 'ad_retry') {
+      if (x.status !== 'failed') throw new Error('Only a failed launch can be retried.');
+      x.status = 'requested'; delete x.error; adStore(db, a);
+      return { ad: publicAd(a), message: 'Launching again (paused). It carries on from where it stopped.' };
+    }
+    if (!['launched_paused', 'active', 'paused'].includes(x.status)) throw new Error(x.status === 'ended' ? 'This ad has ended. Request a new ad to run it again.' : 'The ad is not created yet. Wait until it shows as created and paused.');
+    const today = new Date(now).toISOString().slice(0, 10);
+    if (action === 'ad_switch_on' && a.end_date < today) throw new Error('This ad is past its end date.');
+    x.want = action === 'ad_switch_on' ? 'active' : 'paused'; delete x.error;
+    adStore(db, a);
+    return { ad: publicAd(a), message: action === 'ad_switch_on'
+      ? 'Switching on: it starts spending up to $' + a.daily_budget.toLocaleString('en-US') + ' a day until ' + a.end_date + '. Applied within a minute.'
+      : 'Pausing. Applied within a minute.' };
   }
   if (action === 'ad_request') {
     const job = jobFor(db, inp.id), client = job.client ?? CLIENT_DEFAULT; mine(client);
@@ -130,7 +150,7 @@ export function adApi(action, inp, db, { allowed = [CLIENT_DEFAULT], user = '', 
     const address = trim(str(inp.radius_address ?? s.radius_address)), miles = Number(inp.radius_miles ?? s.radius_miles);
     if (!address) throw new Error('Enter the address to target around (e.g. the dealership).');
     if (!(miles >= 1 && miles <= 50)) throw new Error('The area radius must be 1–50 miles.');
-    for (const p of platforms) if (all(db).some((a) => a.job_id === job.id && ['requested', 'launched_paused', 'active'].includes(a.platforms[p]?.status))) {
+    for (const p of platforms) if (adLoadAll(db).some((a) => a.job_id === job.id && ['requested', 'launching', 'launched_paused', 'active', 'paused'].includes(a.platforms[p]?.status))) {
       throw new Error('This video already has an open ' + AD_PLATFORM_NAME[p] + ' ad request or ad. Cancel or end it first.');
     }
     const end = new Date(Date.parse(start) + (days - 1) * 86400000).toISOString().slice(0, 10);
@@ -138,30 +158,31 @@ export function adApi(action, inp, db, { allowed = [CLIENT_DEFAULT], user = '', 
       video_url: str(job.captioned_url), daily_budget: budget, days, start_date: start, end_date: end, radius_address: address, radius_miles: miles, radius_km: Math.min(80, Math.round(miles * KM_PER_MILE * 10) / 10),
       text, headline, tiktok_text: tiktok, link, objective: 'traffic', meta_account: s.meta_account, meta_page: s.meta_page, tiktok_account: s.tiktok_account,
       created_by: str(user), created_at: gmdateC(new Date(now)), platforms: Object.fromEntries(platforms.map((p) => [p, { status: 'requested' }])) };
-    store(db, a);
+    adStore(db, a);
     const total = budget * days * platforms.length;
     return { ad: publicAd(a), message: 'Ad requested: up to $' + total.toLocaleString('en-US') + ' in total. It is created paused and nothing is spent until you confirm it is switched on.' };
   }
   throw new Error('Unknown action.');
 }
 
-// ---- The launcher's side (CLI now, a direct AdWhispr connection later) ----
+// ---- TikTok, by hand (src/cli/ad-requests.js). Meta is done by the ads worker (meta-ads.js). ----
 
-/** Requests and running ads the launcher should act on: to launch, to end (past their end date). */
+/** TikTok requests to launch by hand and TikTok ads past their end date to end. */
 export function adPending(db, now = Date.now()) {
   const today = new Date(now).toISOString().slice(0, 10);
   const out = { launch: [], end: [] };
-  for (const a of all(db).reverse()) {
+  for (const a of adLoadAll(db).reverse()) {
     for (const [p, x] of Object.entries(a.platforms)) {
+      if (p === 'meta') continue;
       if (x.status === 'requested') out.launch.push({ ...a, platform: p });
-      if (['active', 'launched_paused'].includes(x.status) && a.end_date < today) out.end.push({ ...a, platform: p });
+      if (['active', 'launched_paused', 'paused'].includes(x.status) && a.end_date < today) out.end.push({ ...a, platform: p });
     }
   }
   return out;
 }
 /** Record what the launcher did for one platform of a request. */
 export function adRecord(db, id, platform, { status, campaign_id, ad_id, ad_group_id, error, spend, impressions, clicks } = {}, now = Date.now()) {
-  const a = load(db, id); if (!a) throw new Error('Ad request not found: ' + id);
+  const a = adLoad(db, id); if (!a) throw new Error('Ad request not found: ' + id);
   const x = a.platforms[platform]; if (!x) throw new Error('This request has no ' + platform + ' part.');
   if (status !== undefined) {
     if (!AD_STATUSES.includes(status)) throw new Error('Unknown status ' + status);
@@ -170,6 +191,6 @@ export function adRecord(db, id, platform, { status, campaign_id, ad_id, ad_grou
   for (const [k, v] of Object.entries({ campaign_id, ad_id, ad_group_id })) if (v !== undefined) x[k] = str(v);
   if (error !== undefined) x.error = str(error).slice(0, 500);
   if (spend !== undefined || impressions !== undefined || clicks !== undefined) x.stats = { spend: Number(spend ?? 0), impressions: Number(impressions ?? 0), clicks: Number(clicks ?? 0), at: gmdateC(new Date(now)) };
-  store(db, a);
+  adStore(db, a);
   return a;
 }

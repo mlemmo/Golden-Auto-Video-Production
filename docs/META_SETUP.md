@@ -1,4 +1,4 @@
-# Connecting Facebook and Instagram for posting
+# Connecting Facebook and Instagram for posting and ads
 
 The dashboard's **Library → Post** sends a finished Reels (9:16) video to a dealer's Facebook Page and Instagram
 account, now or at a scheduled time. Each dealer connects once with **Connect Facebook & Instagram** (Facebook Login
@@ -76,6 +76,27 @@ A Page token can also be put in the settings by hand: `"meta_accounts": { "golde
 "page_token": "…", "ig_user_id": "…" } }` (Graph API Explorer: `GET me/accounts` gives the Page id and token;
 `GET <page id>?fields=instagram_business_account` the Instagram id). A dealer connected with the button uses the
 connection instead.
+
+## Ads (Run as ad → Meta)
+
+Paid Meta ads are created by the ads worker straight through Meta's Marketing API with the same connection
+(docs/ADS_LAUNCH.md). One-time setup:
+
+1. In the app (developers.facebook.com → Golden Auto Video Publisher): **Use cases → Add use case → "Create & manage ads
+   with Marketing API"**. This adds the permissions `ads_management` and `ads_read`.
+2. **Facebook Login for Business → Configurations → "Video Publisher"**: add `ads_management` and `ads_read` to the
+   permissions and **Ad accounts** to the assets (or create a new configuration and put its id in config
+   `facebook.config_id`).
+3. The dealer presses **Connect Facebook & Instagram** again and, on Facebook's screen, also ticks the dealer's ad
+   account (Golden Auto: act_1331366881207657). The Page and Instagram account are chosen as before.
+4. Add the ads worker to cron (docs/DEPLOY_UBUNTU.md) and check `private/data/ads-worker.log` after the first request.
+
+While the app is in development mode this works for the app's own admins/developers/testers and ad accounts they
+manage; ads for other businesses need **Advanced access** for `ads_management` (App Review and Business verification).
+A failed launch shows Meta's message on the ad (for example a missing permission: reconnect, then press Retry).
+
+Without the login button, a token with ad permissions can be put in config:
+`"meta_accounts": { "golden-auto": { "ads_token": "…", "page_id": "…", "ig_user_id": "…" } }`.
 
 ## What the app does with it
 

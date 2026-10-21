@@ -52,10 +52,12 @@ uploads up to 72 MB) and reloads Nginx. The previous site is kept as `<site>.pre
 * * * * * /bin/bash -c ". /srv/golden-auto-staging/ubuntu/node/nvm-env.sh && node /srv/golden-auto-staging/node/src/cli/caption-worker.js" >> /srv/golden-auto-staging/private/data/finishing-worker.log 2>&1
 * * * * * /bin/bash -c ". /srv/golden-auto-staging/ubuntu/node/nvm-env.sh && node /srv/golden-auto-staging/node/src/cli/photo-worker.js" >> /srv/golden-auto-staging/private/data/photo-worker.log 2>&1
 * * * * * /bin/bash -c ". /srv/golden-auto-staging/ubuntu/node/nvm-env.sh && node /srv/golden-auto-staging/node/src/cli/social-worker.js" >> /srv/golden-auto-staging/private/data/social-worker.log 2>&1
+* * * * * /bin/bash -c ". /srv/golden-auto-staging/ubuntu/node/nvm-env.sh && node /srv/golden-auto-staging/node/src/cli/ads-worker.js" >> /srv/golden-auto-staging/private/data/ads-worker.log 2>&1
 ```
 
 The social worker (Facebook/Instagram posting, docs/META_SETUP.md) runs on staging only so far. When it is released,
-add the same line for production (`/srv/golden-auto`, log `/srv/golden-auto/private/data/social-worker.log`).
+add the same line for production (`/srv/golden-auto`, log `/srv/golden-auto/private/data/social-worker.log`). The ads
+worker (paid Meta ads, docs/ADS_LAUNCH.md) is the same: staging first, production at release.
 
 Each worker takes a lock folder in `data_dir`, so only one run of each happens at a time. The `goldenauto-video`
 timer (inventory-ads) stays disabled.
@@ -64,7 +66,7 @@ timer (inventory-ads) stays disabled.
 
 - Node service: `journalctl -u golden-auto-production-node` or `-u golden-auto-staging-node` (add `-f` to follow).
 - Caption worker: `private/data/finishing-worker.log`; photo worker: `private/data/photo-worker.log`; social worker:
-  `private/data/social-worker.log`.
+  `private/data/social-worker.log`; ads worker: `private/data/ads-worker.log`.
 - Nginx: `/var/log/nginx/error.log`.
 - Health: `curl -fsS http://127.0.0.1:4353/api/node/health` (production) or `:4352` (staging).
 
