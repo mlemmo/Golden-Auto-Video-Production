@@ -18,7 +18,7 @@ export default function GenerateStep() {
     ['Voice', voiceText + (s.voice === 'elevenlabs' ? (approved ? ' · preview chosen' : ' · no approved preview yet') : ''), !!approved],
     footage ? ['Footage', s.footage?.name || 'no video chosen yet', !!s.footage] : ['Spokesperson', s.spokesperson?.name || 'none', !!s.spokesperson],
     ...(footage ? [] : [['Setting', s.scene?.name || 'default', true]]),
-    ['Video', `${s.duration} s · ${FORMAT_NAME[s.format]} · ${footage ? 'your footage' : s.style === 'showroom' ? 'walkaround' : 'dynamic'}`, true],
+    ['Video', `${s.duration} s · ${FORMAT_NAME[s.format]} · ${footage ? 'your footage' : s.style === 'showroom' ? 'walkaround' : 'dynamic'}${footage ? '' : ' · ' + s.resolution}`, true],
   ];
 
   const generate = () => {
@@ -27,7 +27,7 @@ export default function GenerateStep() {
     s.run(async () => {
       say('Checking current availability and submitting one paid generation…');
       try {
-        await api('generate', { stock: c.StockNumber, format: s.format, style: s.style, voice: s.voice, narration_id: s.approvedVoice, duration: Number(s.duration),
+        await api('generate', { stock: c.StockNumber, format: s.format, style: s.style, voice: s.voice, narration_id: s.approvedVoice, duration: Number(s.duration), resolution: s.resolution,
           script: s.script, sheet: s.sheetUrl, spokesperson: s.spokespersonId, scene: s.sceneId, approve_spend: s.approve, confirm_current: s.confirmCurrent });
         s.setApprove(false);
         say('Generation submitted. It takes a few minutes — follow it under Videos below.');
@@ -73,6 +73,12 @@ export default function GenerateStep() {
       <ul className="summary" id="summary">
         {rows.map(([k, v, ok]) => <li key={k} className={ok ? 'ok' : 'todo'}><b>{k}</b><span>{v}</span></li>)}
       </ul>
+      <label id="resolutionLabel" hidden={footage}>Quality
+        <select id="resolution" value={s.resolution} onChange={(e) => s.setResolution(e.target.value)}>
+          <option value="720p">720p — standard (about $9.71 for 30 s)</option>
+          <option value="1080p">1080p — sharper badges and lettering (about 40% more)</option>
+        </select>
+      </label>
       <label className="check note-important" id="approveLabel" hidden={footage}><input type="checkbox" id="approve" checked={s.approve} onChange={(e) => s.setApprove(e.target.checked)} />I reviewed the vehicle facts and script and approve <b>one paid Higgsfield generation</b> at my account’s current rate.</label>
       <label className="check note-important"><input type="checkbox" id="confirmCurrent" checked={s.confirmCurrent} onChange={(e) => s.setConfirmCurrent(e.target.checked)} />I confirm the vehicle is <b>available</b> and its advertised <b>price is current</b>.</label>
       <div className="actions">

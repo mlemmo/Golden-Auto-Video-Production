@@ -183,8 +183,11 @@ export async function enrich(v, get = requestText) {
 export const FORMATS = { instagram_reels: '9:16', facebook_reels: '9:16', facebook_feed: '3:4', square: '1:1' };
 
 /** The duplicate-request fingerprint: the exact prompt is part of it, so a prompt improvement is a new request. */
-export function jobFingerprint(v, spoken, sheet, avatar, description, format, style, duration, voice, promptText, voiceRef) {
-  return sha256(jsonEncode([v.Vin ?? null, v.price ?? null, spoken, sheet, avatar, description, format, style, duration, voice, sha256(promptText), voiceRef]));
+export const RESOLUTIONS = ['720p', '1080p'];
+
+export function jobFingerprint(v, spoken, sheet, avatar, description, format, style, duration, voice, promptText, voiceRef, resolution = '720p') {
+  // 720p requests keep their original fingerprint; 1080p is a different paid request.
+  return sha256(jsonEncode([v.Vin ?? null, v.price ?? null, spoken, sheet, avatar, description, format, style, duration, voice, sha256(promptText), voiceRef, ...(resolution === '720p' ? [] : [resolution])]));
 }
 
 /**
@@ -227,6 +230,9 @@ export async function generateJob(db, cfg, client, inp, opts = {}) {
   }
   const duration = toInt(inp.duration ?? 15);
   if (![15, 30].includes(duration)) throw new Error('Choose 15 or 30 seconds.');
+  // 1080p costs about 40% more (Higgsfield: 9 credits per second vs 6.5) but draws small lettering more clearly.
+  const resolution = str(inp.resolution ?? '720p') || '720p';
+  if (!RESOLUTIONS.includes(resolution)) throw new Error('Choose 720p or 1080p.');
   const style = str(inp.style ?? 'dynamic');
   if (!['dynamic', 'showroom'].includes(style)) throw new Error('Choose a video style.');
   if (style === 'dynamic' && duration !== 15) throw new Error('The dynamic shot sequence is fixed at 15 seconds. Choose showroom for 30 seconds.');
@@ -267,9 +273,9 @@ export async function generateJob(db, cfg, client, inp, opts = {}) {
     ? promptNative(fresh, str(approvedVoice.text), duration, presenter.description, 'speech', approvedVoice.audio_duration != null ? toFloat(approvedVoice.audio_duration) : null, respell, scene.description)
     : voice === 'native' ? promptNative(fresh, nativeSpeech(spoken), duration, presenter.description, voiceRef !== '', null, respell, scene.description)
       : prompt(fresh, spoken, style, duration, presenter.description, scene.description);
-  const fingerprint = jobFingerprint(v, spoken, sheet, avatar, presenter.description, format, style, duration, voice, promptText, voiceRef);
+  const fingerprint = jobFingerprint(v, spoken, sheet, avatar, presenter.description, format, style, duration, voice, promptText, voiceRef, resolution);
   const id = random(12).toString('hex');
-  const job = { id, client, stock: v.StockNumber, vehicle: title(v), spokesperson_id: presenter.id, spokesperson: presenter.name, scene_id: scene.id, scene: scene.name, reference_sheet: referenceSheet, format, style, duration,
+  const job = { id, client, stock: v.StockNumber, vehicle: title(v), spokesperson_id: presenter.id, spokesperson: presenter.name, scene_id: scene.id, scene: scene.name, reference_sheet: referenceSheet, format, style, duration, resolution,
     status: 'preparing_references', created_at: gmdateC(), approved_by: str(inp.approved_by ?? ''), script: spoken, speech_script: voice === 'native' ? nativeSpeech(spoken) : speechScript(spoken), price: v.price ?? null, voice };
   // Native voice: one approval builds the final video (captions timed from the video's own audio).
   if (voice !== 'narration') job.auto_build = true;
@@ -291,7 +297,7 @@ export async function generateJob(db, cfg, client, inp, opts = {}) {
   try { hostedSheet = await uploadReference(sheet, cfg, transport); hostedAvatar = await uploadReference(avatar, cfg, transport); }
   catch (e) { job.status = 'reference_upload_failed'; job.error = jobError(e.message); update(true); throw new Error(job.error); }
   job.status = 'submitting'; update(false);
-  const payload = { prompt: promptText, image_urls: [hostedSheet, hostedAvatar], duration, resolution: '720p', aspect_ratio: FORMATS[format], output_format: 'mp4', generate_audio: native };
+  const payload = { prompt: promptText, image_urls: [hostedSheet, hostedAvatar], duration, resolution, aspect_ratio: FORMATS[format], output_format: 'mp4', generate_audio: native };
   if (voiceRef !== '') payload.audio_urls = [voiceRef];
   try {
     const r = JSON.parse(await higgsfieldRequest('https://api.higgsfield.ai/bytedance/seedance-2.5/reference-to-video', payload, str(cfg.higgsfield_key), transport));

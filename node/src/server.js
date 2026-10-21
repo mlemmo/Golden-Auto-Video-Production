@@ -64,7 +64,7 @@ const TRACKED = new Set(['generate', 'social_post', 'social_cancel', 'social_ret
   'spokesperson_default', 'spokesperson_delete', 'user_create', 'user_update', 'user_delete', 'password_change']);
 function activityDetail(name, body, out) {
   const d = {};
-  for (const k of ['stock', 'duration', 'voice', 'format', 'id']) if (['string', 'number'].includes(typeof body[k]) && body[k] !== '') d[k] = body[k];
+  for (const k of ['stock', 'duration', 'voice', 'format', 'id', 'resolution']) if (['string', 'number'].includes(typeof body[k]) && body[k] !== '') d[k] = body[k];
   const v = out?.job?.vehicle ?? out?.vehicle ?? out?.post?.vehicle; if (v) d.vehicle = v;
   if (Array.isArray(body.platforms)) d.platforms = body.platforms.join(',');
   if (out?.job?.duration) d.duration = out.job.duration;

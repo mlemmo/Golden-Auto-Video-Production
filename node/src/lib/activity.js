@@ -8,7 +8,7 @@ import { CLIENT_DEFAULT } from './clients.js';
 
 export const BEFORE_ACCOUNTS = 'before accounts';
 // Estimated provider cost per paid action (USD). Change with config cost_estimates.
-export const DEFAULT_COSTS = { generate_30: 9.71, generate_15: 4.86, narration_preview: 0, narration_lipsync: 0, spokesperson_picture: 0.15 };
+export const DEFAULT_COSTS = { generate_30: 9.71, generate_15: 4.86, narration_preview: 0, narration_lipsync: 0, spokesperson_picture: 0.15, generate_1080_factor: 1.385 };
 // The kinds of activity the dashboard counts, and the actions behind them.
 export const KINDS = { generate: 'AI videos', narration_preview: 'Voice previews', narration_lipsync: 'Lip-syncs', footage_build: 'Footage videos' };
 
@@ -44,7 +44,7 @@ export function backfillActivity(db) {
 
 /** Estimated cost of one activity row. */
 export function costOf(row, costs) {
-  if (row.action === 'generate') return toFloat(Number(row.detail.duration) >= 30 ? costs.generate_30 : costs.generate_15);
+  if (row.action === 'generate') return toFloat(Number(row.detail.duration) >= 30 ? costs.generate_30 : costs.generate_15) * (row.detail.resolution === '1080p' ? toFloat(costs.generate_1080_factor ?? 1.385) : 1);
   return toFloat(costs[row.action] ?? 0);
 }
 

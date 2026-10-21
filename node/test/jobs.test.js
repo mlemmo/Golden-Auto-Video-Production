@@ -13,6 +13,7 @@ import { speechScript } from '../src/lib/speech.js';
 import { spokespersonApi, spokespersonFind, spokespersonClean } from '../src/lib/spokespersons.js';
 import { uploadReference, referenceFile, referenceImageUrl, jobError, generateJob, pollJob, jobsForClient, goldenJobDelete, goldenFootageBuild, footageLocalPath, galleryPhotos } from '../src/lib/jobs.js';
 import { parseMultipart } from '../src/lib/multipart.js';
+import { costOf, DEFAULT_COSTS } from '../src/lib/activity.js';
 import { JPEG_1800x900 } from './fixtures/images.js';
 
 const PNG_1x1 = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aGxkAAAAASUVORK5CYII=', 'base64');
@@ -178,6 +179,22 @@ test('generate: a saved sheet with text is rebuilt from the same photos before a
     await generateJob(db, cfg, 'golden-auto', { ...inp, client: 'golden-auto' }, { transport, sheetRebuild });
     assert.deepEqual(rebuilt, [old.photo_urls], 'same photo picks');
     assert.ok(state(db, 'sheet:V1').url.endsWith('/sheet-v2.jpg') && calls.some((c) => c.method === 'PUT'), 'the new sheet is saved and sent');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('generate: 1080p is sent as asked, is its own paid request and is costed higher', async () => {
+  const { dir, cfg, db, calls, transport, inp } = generateSetup();
+  const gen = (i) => generateJob(db, cfg, 'golden-auto', { ...i, client: 'golden-auto' }, { transport });
+  const sent = () => calls.filter((c) => c.url.includes('seedance')).map((c) => JSON.parse(c.body).resolution);
+  try {
+    await assert.rejects(gen({ ...inp, resolution: '4k' }), /720p or 1080p/);
+    await gen(inp);
+    await gen({ ...inp, resolution: '1080p' });
+    assert.deepEqual(sent(), ['720p', '1080p'], 'not refused as a repeat of the 720p video');
+    const saved = db.prepare('SELECT payload FROM jobs ORDER BY rowid').all().map((r) => JSON.parse(r.payload).resolution);
+    assert.deepEqual(saved, ['720p', '1080p'], 'saved on the job');
+    const row = (resolution) => ({ action: 'generate', detail: { duration: 30, resolution } });
+    assert.ok(Math.abs(costOf(row('1080p'), DEFAULT_COSTS) - 9.71 * 1.385) < 0.001 && costOf(row(undefined), DEFAULT_COSTS) === 9.71);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
