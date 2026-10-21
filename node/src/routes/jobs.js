@@ -7,7 +7,7 @@ import { trim, str } from '../lib/text.js';
 import { jsonEncode } from '../lib/storedjson.js';
 import { script, introBudget } from '../lib/scripts.js';
 import { speechScript, speechWordCount } from '../lib/speech.js';
-import { assetSheet, importMediaZip } from '../lib/media.js';
+import { assetSheet, importMediaZip, sheetRebuild, sheetUpToDate } from '../lib/media.js';
 import { spokespersonApi, spokespersonFind, spokespersonDescribe, spokespersonPicture, spokespersonSaveDraft } from '../lib/spokespersons.js';
 import { enrich, referenceImageUrl, uploadReference, generateJob, pollJob, jobsForClient, goldenJobDelete, goldenFootageBuild } from '../lib/jobs.js';
 import { withThumbs } from '../lib/thumbs.js';
@@ -40,8 +40,10 @@ export const jobRoutes = {
     const intro = await vehicleIntro(db, cfg, client, out, introBudget(out, dealer));
     out.script = script(out, 15, dealer); out.scripts = { 15: out.script, 30: script(out, 30, dealer, intro) }; out.intro_source = intro.source;
     const existing = state(db, 'sheet:' + (out.Vin ?? ''));
-    if (existing && (existing.gallery_hash ?? '') === sha256(jsonEncode(out.photos ?? null))) out.asset_sheet = existing;
-    else try { out.asset_sheet = await assetSheet(out, cfg); save(db, 'sheet:' + (out.Vin ?? ''), out.asset_sheet); } catch (e) { out.sheet_error = e.message; }
+    const sameGallery = existing && (existing.gallery_hash ?? '') === sha256(jsonEncode(out.photos ?? null));
+    if (sameGallery && sheetUpToDate(existing)) out.asset_sheet = existing;
+    // An older sheet with text is rebuilt from the same photo picks; a changed gallery gets the default picks.
+    else try { out.asset_sheet = await (sameGallery ? sheetRebuild(out, cfg, existing) : assetSheet(out, cfg)); save(db, 'sheet:' + (out.Vin ?? ''), out.asset_sheet); } catch (e) { out.sheet_error = e.message; }
     return out;
   },
   sheet: async ({ cfg, db, client, body }) => {

@@ -152,7 +152,7 @@ function generateSetup() {
   const car = { StockNumber: '870288', Vin: 'V1', Year: 2013, Make: 'SUBARU', Model: 'XV CROSSTREK', price: 14688.25, source: 'dcs', photos };
   save(db, 'inventory', { vehicles: [car] });
   writeFileSync(dir + '/assets/sheet-v1.jpg', JPEG); writeFileSync(dir + '/assets/spokesperson.png', JPEG);
-  save(db, 'sheet:V1', { url: cfg.public_base_url + '/assets/sheet-v1.jpg', gallery_hash: sha(jsonEncode(photos)) });
+  save(db, 'sheet:V1', { url: cfg.public_base_url + '/assets/sheet-v1.jpg', gallery_hash: sha(jsonEncode(photos)), photo_urls: photos, version: 2 });
   const mp3 = 'b'.repeat(32) + '.mp3'; writeFileSync(`${dir}/assets/narrations/${mp3}`, 'voice');
   put(db, 'narrations', { id: 'N1', stock: '870288', price: 14688.25, status: 'ready', approved: true, duration: 30, audio_duration: 24.3, audio_name: mp3, audio_hash: sha('voice'), text: 'Take a look at this twenty thirteen Subaru.', caption_script: 'Take a look at this 2013 Subaru.' });
   const spokes = spokespersonApi('spokesperson_list', {}, cfg, db).items[0].id;
@@ -167,6 +167,19 @@ function generateSetup() {
   const inp = { stock: '870288', voice: 'elevenlabs', narration_id: 'N1', duration: 30, style: 'showroom', format: 'instagram_reels', spokesperson: spokes, confirm_current: true, approve_spend: true };
   return { dir, cfg, db, calls, transport, inp, car, setSeedance: (f) => { seedance = f; } };
 }
+
+test('generate: a saved sheet with text is rebuilt from the same photos before anything is sent', async () => {
+  const { dir, cfg, db, calls, transport, inp } = generateSetup();
+  const old = state(db, 'sheet:V1'); delete old.version; save(db, 'sheet:V1', old);
+  writeFileSync(dir + '/assets/sheet-v2.jpg', JPEG);
+  const rebuilt = [];
+  const sheetRebuild = async (v, c, sheet) => { rebuilt.push(sheet.photo_urls); return { ...sheet, url: cfg.public_base_url + '/assets/sheet-v2.jpg', version: 2 }; };
+  try {
+    await generateJob(db, cfg, 'golden-auto', { ...inp, client: 'golden-auto' }, { transport, sheetRebuild });
+    assert.deepEqual(rebuilt, [old.photo_urls], 'same photo picks');
+    assert.ok(state(db, 'sheet:V1').url.endsWith('/sheet-v2.jpg') && calls.some((c) => c.method === 'PUT'), 'the new sheet is saved and sent');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
 
 test('generate: approval, exact prompt, one paid request per fingerprint, no automatic retries', async () => {
   const { dir, cfg, db, calls, transport, inp, car, setSeedance } = generateSetup();

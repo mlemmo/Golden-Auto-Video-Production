@@ -8,8 +8,7 @@ import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { readZip } from './zip.js';
 import { probeImage, toJpeg, renderSheet } from './images.js';
-import { trim, upper, lower, filterValidateInt, strnatcasecmp, stripTags, strlen, isNumeric, toFloat, gmdateC, parseUrl, str } from './text.js';
-import { title } from './price.js';
+import { trim, upper, lower, filterValidateInt, strnatcasecmp, stripTags, strlen, isNumeric, toFloat, gmdateC, parseUrl, str, toInt } from './text.js';
 import { jsonEncode } from './storedjson.js';
 import { state, save } from './db.js';
 
@@ -153,9 +152,16 @@ export async function sheetBytes(urls, cfg, download = downloadPhotos) {
 
 /**
  * assetSheet(): the reference sheet for the video model — up to 9 original photos in a 2- (≤4 photos) or 3-column
- * grid on a dark background, with the car's name and stock number and "SOURCE PHOTO n" under each, drawn with
- * FFmpeg. Returns the sheet record saved as state 'sheet:<VIN>'.
+ * grid on a dark background, photos only, drawn with FFmpeg. Returns the sheet record saved as state 'sheet:<VIN>'.
+ * Version 2 has no text: version 1 printed the car's name, stock number and "SOURCE PHOTO n" labels, and Seedance may
+ * copy text from a reference onto the car (invented door lettering on a Silverado, 2026-10-20). Older sheets are
+ * rebuilt from the same photos (sheetUpToDate) when the vehicle is opened or a video is generated.
  */
+export const SHEET_VERSION = 2;
+export const sheetUpToDate = (sheet) => toInt(sheet?.version ?? 1) >= SHEET_VERSION;
+/** The same photos as an older saved sheet, rebuilt without text. */
+export const sheetRebuild = (v, cfg, sheet, download = downloadPhotos) =>
+  assetSheet(v, cfg, (sheet.photo_urls ?? []).every((u) => (v.photos ?? []).includes(u)) ? sheet.photo_urls ?? [] : [], download);
 export async function assetSheet(v, cfg, selected = [], download = downloadPhotos) {
   const base = validateAppBase(cfg);
   const all = v.photos ?? [];
@@ -165,28 +171,24 @@ export async function assetSheet(v, cfg, selected = [], download = downloadPhoto
   const bytes = await sheetBytes(urls, cfg, download);
   if (Object.keys(bytes).length !== urls.length) throw new Error('A vehicle photo could not be downloaded. No incomplete sheet was saved; try again or choose other photos.');
   const cols = urls.length <= 4 ? 2 : 3, width = 1800, tileW = Math.trunc(width / cols), boxW = tileW - 30, boxH = Math.round(boxW * 0.737);
-  const rows = Math.ceil(urls.length / cols), height = 100 + rows * (boxH + 40);
-  const tiles = [], texts = [
-    { text: title(v) + ' | STOCK ' + str(v.StockNumber ?? ''), x: 24, y: 20, size: 22, color: '#efbd64', bold: true },
-    { text: 'Original inventory photos - source views only; no invented angles or features', x: 24, y: 52, size: 16, color: '#f4f4f4' },
-  ];
+  const rows = Math.ceil(urls.length / cols), height = 15 + rows * (boxH + 15);
+  const tiles = [];
   const hash = createHash('sha256');
-  urls.forEach((url, i) => {
+  urls.forEach((_, i) => {
     const size = probeImage(bytes[i]);
     if (!size || size.width * size.height > 16000000) throw new Error('Invalid or excessively large source image.');
-    const x = (i % cols) * tileW + 15, y = 100 + Math.floor(i / cols) * (boxH + 40);
+    const x = (i % cols) * tileW + 15, y = 15 + Math.floor(i / cols) * (boxH + 15);
     const ratio = Math.min(boxW / size.width, boxH / size.height), w = Math.round(size.width * ratio), h = Math.round(size.height * ratio);
     tiles.push({ bytes: bytes[i], x: x + Math.trunc((boxW - w) / 2), y: y + Math.trunc((boxH - h) / 2), w, h });
-    texts.push({ text: 'SOURCE PHOTO ' + (all.indexOf(url) + 1), x, y: y + boxH + 8, size: 16, color: '#f4f4f4' });
     hash.update(bytes[i]);
   });
-  const jpg = renderSheet({ width, height, bg: '#121720', tiles, texts, quality: 92 });
+  const jpg = renderSheet({ width, height, bg: '#121720', tiles, texts: [], quality: 92 });
   const dir = assetDir(cfg);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true, mode: 0o755 });
   const name = randomBytes(20).toString('hex') + '.jpg';
   writeFileSync(dir + '/' + name, jpg, { mode: 0o644 });
   return { url: base + '/assets/' + name, photo_urls: urls, gallery_hash: createHash('sha256').update(jsonEncode(all)).digest('hex'),
-    content_hash: hash.digest('hex'), created_at: gmdateC(), photo_count: urls.length };
+    content_hash: hash.digest('hex'), created_at: gmdateC(), photo_count: urls.length, version: SHEET_VERSION };
 }
 
 // ---- Cut-out sheet for the video model ----

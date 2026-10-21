@@ -15,8 +15,8 @@ import { jsonEncode } from './storedjson.js';
 import { parseHtml, hasClassToken } from './dom.js';
 import { highestPrice, priceMatches, title } from './price.js';
 import { probeImage } from './images.js';
-import { validateAppBase, publicImage, cutoutSheet } from './media.js';
-import { state } from './db.js';
+import { validateAppBase, publicImage, cutoutSheet, sheetRebuild, sheetUpToDate } from './media.js';
+import { state, save } from './db.js';
 import { CLIENT_DEFAULT, clientInventory, clientInventoryKey } from './clients.js';
 import { requestText, rawurlencode, goldenInventory } from './website.js';
 import { narrationTables, narrationLoad, narrationCheckAudio } from './narrations.js';
@@ -234,9 +234,11 @@ export async function generateJob(db, cfg, client, inp, opts = {}) {
   if (voice !== 'narration' && style !== 'showroom') throw new Error('Spoken-in-video uses the showroom style. Choose showroom, or ElevenLabs narration for the dynamic sequence.');
   if (voice !== 'narration' && spoken === '') throw new Error('Write the script the spokesperson will say.');
   let sheetUrl = trim(str(inp.sheet ?? ''));
-  const savedSheet = state(db, 'sheet:' + (v.Vin ?? ''));
+  let savedSheet = state(db, 'sheet:' + (v.Vin ?? ''));
   if (savedSheet && (!truthy(sheetUrl) || sheetUrl === savedSheet.url)) {
     if (savedSheet.gallery_hash !== sha256(jsonEncode(fresh.photos ?? null))) throw new Error('Vehicle photos changed. Reopen the vehicle to rebuild its asset sheet.');
+    // A sheet saved with text (car name, stock number, labels) is rebuilt from the same photos before anything is sent.
+    if (!sheetUpToDate(savedSheet)) { savedSheet = await (opts.sheetRebuild ?? sheetRebuild)(fresh, cfg, savedSheet); save(db, 'sheet:' + (v.Vin ?? ''), savedSheet); }
     sheetUrl = savedSheet.url;
   }
   const presenter = spokespersonFind(db, cfg, str(inp.spokesperson ?? ''));
