@@ -20,6 +20,7 @@ export function AdRequest({ v, onClose, say }) {
   const [f, setF] = useState(null);
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState(null);
   const refresh = () => api('ad_list', { id: v.id }).then((r) => setAds(r.ads)).catch((e) => say(e.message, true));
   useEffect(() => {
     api('ad_status', { id: v.id }).then((s) => {
@@ -67,7 +68,10 @@ export function AdRequest({ v, onClose, say }) {
             <label>Link<input type="url" value={f.link} onChange={set('link')} /></label>
             <small className="hint">Avoid financing, payment or credit wording: Meta restricts targeting for those ads.</small>
             {!confirm
-              ? <button type="button" disabled={busy || !platforms.length} onClick={() => setConfirm(true)}>Request ad…</button>
+              ? <div className="actions">
+                  <button type="button" disabled={busy || !platforms.length} onClick={() => setConfirm(true)}>Request ad…</button>
+                  {f.meta && st.meta && <button type="button" className="secondary" disabled={busy} onClick={() => setPreview({ id: v.id, text: f.text, headline: f.headline, link: f.link })}>Preview on Meta</button>}
+                </div>
               : (
                 <div className="social-confirm note-important">
                   <p>Request a {platforms.map((p) => NAME[p]).join(' and ')} ad: {money(f.daily_budget)} a day for {f.days} day{Number(f.days) === 1 ? '' : 's'}
@@ -99,6 +103,7 @@ export function AdRequest({ v, onClose, say }) {
                           onClick={() => { if (window.confirm(`Switch on? It spends up to ${money(a.daily_budget)} a day until ${a.end_date}.`)) act('ad_switch_on', { id: a.id }); }}>Switch on</button>}
                         {x.status === 'active' && <button type="button" className="secondary small" disabled={busy} onClick={() => act('ad_pause', { id: a.id })}>Pause</button>}
                         {x.status === 'failed' && <button type="button" className="secondary small" disabled={busy} onClick={() => act('ad_retry', { id: a.id })}>Retry</button>}
+                        {['requested', 'launched_paused', 'paused', 'failed'].includes(x.status) && <button type="button" className="secondary small" disabled={busy} onClick={() => setPreview({ ad: a.id })}>Preview</button>}
                       </span>
                     )}
                   </div>
@@ -108,6 +113,46 @@ export function AdRequest({ v, onClose, say }) {
             ))}
           </div>
         )}
+      </div>
+      {preview && <AdPreview req={preview} say={say} onClose={() => setPreview(null)} />}
+    </div>
+  );
+}
+
+/** Meta's own previews of the ad in each placement (ad_preview). Nothing is created; while Meta processes the video
+ * the panel asks again every 15 seconds. */
+function AdPreview({ req, say, onClose }) {
+  const [r, setR] = useState(null);
+  const [tries, setTries] = useState(0);
+  useEffect(() => {
+    let off = false;
+    api('ad_preview', req).then((x) => { if (!off) setR(x); }).catch((e) => { if (!off) { say(e.message, true); setR({ error: e.message }); } });
+    return () => { off = true; };
+  }, [tries]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!r?.processing || tries >= 8) return undefined;
+    const t = setTimeout(() => setTries((n) => n + 1), 15000);
+    return () => clearTimeout(t);
+  }, [r, tries]);
+  return (
+    <div className="player-backdrop ad-preview-backdrop" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="social-panel ad-preview" role="dialog" aria-label="Ad preview">
+        <div className="social-head"><h3>Preview on Meta</h3><button type="button" className="secondary small" onClick={onClose}>Close</button></div>
+        <p className="hint">Drawn by Meta from the ad's settings. Nothing is created and nothing is spent.</p>
+        {!r ? <p className="hint">Asking Meta for previews…</p>
+          : r.error ? <p className="note-important">{r.error}</p>
+          : r.processing ? <p className="hint">{r.message} {tries < 8 ? 'Checking again shortly…' : 'Close and press Preview again in a minute.'}</p>
+          : (
+            <div className="ad-preview-grid">
+              {r.previews.map((p) => (
+                <figure key={p.format}>
+                  <figcaption>{p.label}</figcaption>
+                  {p.error ? <small className="hint">{p.error}</small>
+                    : <iframe title={p.label} src={p.src} width={p.width} height={p.height} loading="lazy" referrerPolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-popups" />}
+                </figure>
+              ))}
+            </div>
+          )}
       </div>
     </div>
   );

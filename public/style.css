@@ -223,3 +223,10 @@ a.button.secondary-link{background:#262d3a;color:#fff;border:1px solid var(--lin
 .activity-status.status-failed,.activity-status.status-check{color:#f0a3a3}
 .activity-summary{color:var(--muted);margin:0 0 12px}
 @media (max-width:720px){.activity-row{grid-template-columns:1fr}}
+/* Meta ad previews (Run as ad → Preview on Meta) */
+.player-backdrop.ad-preview-backdrop{z-index:95}
+.social-panel.ad-preview{width:min(1400px,100%)}
+.ad-preview-grid{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
+.ad-preview-grid figure{margin:0;display:grid;gap:6px}
+.ad-preview-grid figcaption{font-weight:600}
+.ad-preview-grid iframe{border:0;border-radius:8px;background:#fff;max-width:100%}

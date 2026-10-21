@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { openMemoryDb } from '../src/lib/db.js';
 import { jsonEncode } from '../src/lib/storedjson.js';
 import { adApi } from '../src/lib/ads.js';
-import { adsWorkerRun, metaAdsAccount } from '../src/lib/meta-ads.js';
+import { adsWorkerRun, metaAdsAccount, adPreview, previewFrame } from '../src/lib/meta-ads.js';
 
 const NOW = Date.parse('2026-10-21T17:00:00Z');
 const FILE = 'a'.repeat(40) + '.mp4';
@@ -46,6 +46,7 @@ function fakeMeta({ video = ['ready'], account = { account_status: 1, currency: 
     if (url.endsWith('/adsets')) return { status: 200, json: { id: '120200000000002' } };
     if (url.endsWith('/adcreatives')) return { status: 200, json: { id: '120200000000003' } };
     if (url.endsWith('/ads')) return { status: 200, json: { id: '120200000000004' } };
+    if (url.includes('/generatepreviews?')) return { status: 200, json: { data: [{ body: '<iframe src="https://www.facebook.com/ads/api/preview_iframe.php?d=AQ&amp;t=AQ" width="274" height="690" scrolling="yes" style="border: none;"></iframe>' }] } };
     if (url.includes('/120200000000001/insights')) return { status: 200, json: { data: [{ spend: '12.34', impressions: '3400', clicks: '41' }] } };
     if (/\/12020000000000[1-4]$/.test(url) && method === 'POST') return { status: 200, json: { success: true } };
     return { status: 404, json: { error: { message: 'unexpected ' + url } } };
@@ -162,5 +163,31 @@ test('a request cancelled before the worker reaches it is left alone', async () 
     const meta = fakeMeta();
     await adsWorkerRun(db, cfg, { transport: meta.transport, now: NOW });
     assert.deepEqual([list().status, meta.calls.length], ['canceled', 0]);
+  } finally { done(dir); }
+});
+
+test('previews: Meta draws the ad, nothing is created; the uploaded video is reused when the ad launches', async () => {
+  const { db, cfg, dir, id } = setup();
+  try {
+    assert.deepEqual(previewFrame('<iframe src="https://www.facebook.com/ads/api/preview_iframe.php?d=1&amp;t=2" width="274" height="690"></iframe>'), { src: 'https://www.facebook.com/ads/api/preview_iframe.php?d=1&t=2', width: 274, height: 690 });
+    assert.equal(previewFrame('<iframe src="https://evil.example/x"></iframe>'), null, 'only Meta\'s own frames');
+    const meta = fakeMeta({ video: ['processing', 'ready'] });
+    const inp = { id: 'job1', text: 'Take a look at this 2018 Volvo XC90.', headline: '2018 Volvo XC90 · $25,988', link: 'https://mygoldenauto.net' };
+    const opts = { allowed: ['golden-auto'], transport: meta.transport };
+    await assert.rejects(adPreview(db, cfg, inp, { ...opts, allowed: ['eastbay'] }), /no access/);
+    assert.deepEqual(await adPreview(db, cfg, inp, opts), { processing: true, message: 'Meta is processing the video for the preview (usually under a minute).' });
+    const r = await adPreview(db, cfg, inp, opts);
+    assert.deepEqual(r.previews.map((p) => p.format), ['MOBILE_FEED_STANDARD', 'FACEBOOK_REELS_MOBILE', 'INSTAGRAM_STANDARD', 'INSTAGRAM_REELS', 'DESKTOP_FEED_STANDARD']);
+    const call = new URL(meta.calls.find((c) => c.url.includes('/generatepreviews?')).url);
+    const spec = JSON.parse(call.searchParams.get('creative')).object_story_spec;
+    assert.deepEqual([spec.page_id, spec.video_data.video_id, spec.video_data.message, spec.video_data.title], ['1111111111', '8001', inp.text, inp.headline]);
+    assert.equal(meta.calls.filter((c) => c.url.endsWith('/advideos')).length, 1, 'uploaded once');
+    assert.ok(!meta.calls.some((c) => c.method === 'POST' && /\/(campaigns|adsets|adcreatives|ads)$/.test(c.url)), 'nothing created');
+    // The launch reuses the preview's video instead of uploading it again.
+    const launch = fakeMeta();
+    await adsWorkerRun(db, cfg, { transport: launch.transport, now: NOW });
+    assert.ok(!launch.calls.some((c) => c.url.endsWith('/advideos')), 'no second upload');
+    const p2 = await adPreview(db, cfg, { ad: id }, opts);
+    assert.equal(p2.previews.length, 5, 'a request can be previewed too');
   } finally { done(dir); }
 });

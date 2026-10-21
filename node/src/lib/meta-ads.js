@@ -13,7 +13,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { str, trim, gmdateC } from './text.js';
 import { facebookConfig, facebookConnection } from './facebook.js';
 import { metaFetch } from './social.js';
-import { adTables, adLoad, adLoadAll, adStore } from './ads.js';
+import { adTables, adLoad, adLoadAll, adStore, adSettings } from './ads.js';
+import { state, save } from './db.js';
 
 // A video still processing after this long is given up (nothing was created that can spend).
 const PROCESSING_MAX_MS = 60 * 60 * 1000;
@@ -53,6 +54,7 @@ function graph(cfg, transport, token) {
   const form = (params) => new URLSearchParams(Object.fromEntries(Object.entries(params).map(([k, x]) => [k, typeof x === 'object' ? JSON.stringify(x) : String(x)]))).toString();
   return {
     get: (path, fields) => call('GET', base + path + '?fields=' + encodeURIComponent(fields), auth, null),
+    previews: (account, format, creative) => call('GET', base + account + '/generatepreviews?ad_format=' + encodeURIComponent(format) + '&creative=' + encodeURIComponent(JSON.stringify(creative)), auth, null),
     post: (path, params) => call('POST', base + path, { ...auth, 'Content-Type': 'application/x-www-form-urlencoded' }, form(params)),
     // Ad videos are uploaded from this server (no public link needed): multipart to graph-video.
     upload: (account, file, name) => {
@@ -76,7 +78,7 @@ function videoPath(cfg, a) {
 const dayStart = (day, offsetHours) => Math.round((Date.parse(day + 'T00:00:00Z') - Number(offsetHours || 0) * 3600000) / 1000);
 
 /** One launch step for a request's Meta part (status requested/launching). Returns a log line or ''. */
-async function launchStep(g, cfg, acct, a, x, now) {
+async function launchStep(g, cfg, acct, a, x, now, db) {
   if (x.status === 'requested') {
     const info = await g.get(a.meta_account, 'account_status,currency,timezone_offset_hours_utc,name');
     // 1 = active; anything else (disabled, unsettled, closed…) cannot run ads.
@@ -84,6 +86,8 @@ async function launchStep(g, cfg, acct, a, x, now) {
     if (str(info.currency) !== 'USD') throw new MetaAdsError('The Meta ad account bills in ' + str(info.currency) + '; this dashboard sets budgets in US dollars.');
     x.tz_offset = Number(info.timezone_offset_hours_utc ?? 0);
     x.status = 'launching'; x.launching_at = gmdateC(new Date(now));
+    // A video already uploaded for a preview of this video in this ad account is reused.
+    if (!x.video_id) x.video_id = str(state(db, previewKey(a.meta_account, a.job_id))?.video_id ?? '');
     if (!x.video_id) {
       const v = await g.upload(a.meta_account, videoPath(cfg, a), a.vehicle + ' ' + a.stock);
       x.video_id = str(v.id ?? '');
@@ -166,7 +170,7 @@ export async function adsWorkerRun(db, cfg, opts = {}) {
       if (['requested', 'launching'].includes(x.status)) {
         if (!acct.token) throw new MetaAdsError('Facebook is not connected for this dealer. Connect Facebook & Instagram (with ad permissions) under the dealer\'s details, then press Retry.');
         if (!acct.page_id) throw new MetaAdsError('No Facebook Page found for the ads' + (a.meta_page ? ' (named "' + a.meta_page + '")' : '') + '. Check the Page name in Paid ads, or reconnect Facebook.');
-        const step = await launchStep(g, cfg, acct, a, x, now); save();
+        const step = await launchStep(g, cfg, acct, a, x, now, db); save();
         if (step && step !== 'build') log.push(tag + step);
         if (step !== 'build') continue;
         await build(g, acct, a, x, now, save);
@@ -204,4 +208,80 @@ export async function adsWorkerRun(db, cfg, opts = {}) {
     }
   }
   return log;
+}
+
+// ---- Previews ("Preview" in Run as ad): Meta draws the ad in each placement from its settings; nothing is created ----
+
+export const PREVIEW_FORMATS = [['MOBILE_FEED_STANDARD', 'Facebook feed'], ['FACEBOOK_REELS_MOBILE', 'Facebook Reels'], ['INSTAGRAM_STANDARD', 'Instagram feed'],
+  ['INSTAGRAM_REELS', 'Instagram Reels'], ['DESKTOP_FEED_STANDARD', 'Facebook feed (computer)']];
+const previewKey = (account, jobId) => 'ad_preview_video:' + account + ':' + jobId;
+/** Only Meta's own preview frames are shown in the dashboard. */
+export function previewFrame(body) {
+  const m = /<iframe[^>]*\ssrc="([^"]+)"[^>]*>/i.exec(str(body));
+  if (!m) return null;
+  const src = m[1].replace(/&amp;/g, '&');
+  const u = (() => { try { return new URL(src); } catch { return null; } })();
+  if (!u || u.protocol !== 'https:' || !/(^|\.)facebook\.com$/.test(u.hostname)) return null;
+  const w = Number(/width="(\d+)"/i.exec(m[0])?.[1] ?? 0), h = Number(/height="(\d+)"/i.exec(m[0])?.[1] ?? 0);
+  return { src, width: w || 320, height: h || 600 };
+}
+
+/**
+ * Previews of a Meta ad before it is requested (inp: id = job, text, headline, link) or switched on (inp: ad = request
+ * id). The video is uploaded to the dealer's ad account once (an upload is free and runs nothing) and reused by the
+ * launch; while Meta processes it the answer is { processing: true }. allowed = the account's client ids.
+ */
+export async function adPreview(db, cfg, inp, { allowed = [], transport = metaFetch } = {}) {
+  adTables(db);
+  let a;
+  if (str(inp.ad ?? '')) {
+    a = adLoad(db, str(inp.ad)); if (!a) throw new Error('Ad not found. Reload the list.');
+  } else {
+    const r = db.prepare('SELECT payload FROM jobs WHERE id=?').get(str(inp.id ?? ''));
+    if (!r) throw new Error('Video not found. Reload the library.');
+    const job = JSON.parse(r.payload), client = job.client ?? 'golden-auto';
+    if (job.finish_status !== 'completed' || !str(job.captioned_url ?? '').startsWith('https://')) throw new Error('This video is not finished yet.');
+    const s = adSettings(db, client);
+    a = { client, job_id: job.id, vehicle: str(job.vehicle), stock: str(job.stock), video_url: str(job.captioned_url), meta_account: s.meta_account, meta_page: s.meta_page,
+      text: trim(str(inp.text ?? '')), headline: trim(str(inp.headline ?? '')), link: trim(str(inp.link ?? '')) };
+  }
+  if (!allowed.includes(a.client)) throw new Error('Your account has no access to that client.');
+  if (!a.meta_account) throw new Error('No Meta ad account is set for this dealer yet (dealer details → Paid ads).');
+  if (!/^https:\/\/[^\s]+$/.test(a.link)) throw new Error('The ad link must be an https web address.');
+  const acct = metaAdsAccount(db, cfg, a.client, a.meta_page);
+  if (!acct.token) throw new Error('Facebook ads are not connected for this dealer yet.');
+  if (!acct.page_id) throw new Error('No Facebook Page found for the ads. Check the Page name in Paid ads, or reconnect Facebook.');
+  const g = graph(cfg, transport, acct.token);
+  try {
+    const key = previewKey(a.meta_account, a.job_id);
+    let v = state(db, key);
+    if (!v?.video_id) {
+      const up = await g.upload(a.meta_account, videoPath(cfg, a), a.vehicle + ' ' + a.stock);
+      v = { video_id: str(up.id ?? ''), at: gmdateC() };
+      if (!v.video_id) throw new MetaAdsError('Meta did not return a video id.');
+      save(db, key, v);
+    }
+    if (!v.thumbnail) {
+      const st = await g.get(v.video_id, 'status,thumbnails{uri,is_preferred}');
+      if (str(st.status?.video_status ?? '') === 'error') { save(db, key, {}); throw new MetaAdsError('Meta could not process the video. Try Preview again.'); }
+      if (str(st.status?.video_status ?? '') !== 'ready') return { processing: true, message: 'Meta is processing the video for the preview (usually under a minute).' };
+      const th = st.thumbnails?.data ?? [];
+      v.thumbnail = str((th.find((t) => t.is_preferred) ?? th[0])?.uri ?? '');
+      save(db, key, v);
+    }
+    const story = { page_id: acct.page_id, video_data: { video_id: v.video_id, image_url: v.thumbnail, message: a.text, call_to_action: { type: 'LEARN_MORE', value: { link: a.link } } } };
+    if (a.headline) story.video_data.title = a.headline;
+    if (acct.ig_user_id) story.instagram_user_id = acct.ig_user_id;
+    const previews = [];
+    for (const [format, label] of PREVIEW_FORMATS) {
+      try {
+        const p = await g.previews(a.meta_account, format, { object_story_spec: story });
+        const f = previewFrame(p.data?.[0]?.body);
+        if (f) previews.push({ format, label, ...f });
+      } catch (e) { previews.push({ format, label, error: e instanceof MetaAdsError ? e.message : 'Could not reach Meta.' }); }
+    }
+    return { previews };
+  } catch (e) {
+    throw new Error(e instanceof MetaAdsError ? e.message : 'Could not reach Meta: ' + e.message);
+  }
 }
