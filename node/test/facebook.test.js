@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openMemoryDb } from '../src/lib/db.js';
-import { facebookApi, facebookCallback, facebookConnection, connectedAccount } from '../src/lib/facebook.js';
+import { facebookApi, facebookCallback, facebookConnection, connectedAccount, facebookBouncePage } from '../src/lib/facebook.js';
 import { socialAccount } from '../src/lib/social.js';
 
 const NOW = Date.parse('2026-10-21T17:00:00Z');
@@ -84,4 +84,10 @@ test('several Pages: the dealer chooses one', async () => {
   assert.deepEqual([r.connected, r.page_name, r.instagram], [true, 'Other Page', false]);
   const a = socialAccount({}, 'golden-auto', db);
   assert.deepEqual([a.facebook, a.instagram], [true, false], 'a Page without Instagram posts to Facebook only');
+});
+
+test('Facebook\'s return is bounced to this origin so the SameSite=Strict session cookie is sent', () => {
+  const page = facebookBouncePage(new URLSearchParams({ code: 'AQ<b>&x', state: 'abc', other: 'dropped' }));
+  assert.ok(page.includes('<meta http-equiv="refresh" content="0;url=/api/node/facebook/return?code=AQ%3Cb%3E%26x&amp;state=abc">'), page);
+  assert.ok(!page.includes('other') && !page.includes('<script') && page.includes('name="referrer" content="no-referrer"'));
 });

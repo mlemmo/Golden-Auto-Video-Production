@@ -13,7 +13,7 @@ import { narrationRoutes } from './routes/narrations.js';
 import { jobRoutes, MULTIPART } from './routes/jobs.js';
 import { finishingRoutes } from './routes/finishing.js';
 import { socialApi, metaFetch } from './lib/social.js';
-import { facebookApi, facebookCallback, CALLBACK_PATH } from './lib/facebook.js';
+import { facebookApi, facebookCallback, facebookBouncePage, CALLBACK_PATH, RETURN_PATH } from './lib/facebook.js';
 import { parseMultipart } from './lib/multipart.js';
 import { CLIENT_DEFAULT, clientsLoad, clientFind, clientDetails, clientSpeechSites } from './lib/clients.js';
 import { withSpeechSites } from './lib/speech.js';
@@ -254,8 +254,10 @@ export const server = createServer(async (req, res) => {
       return sendText(res, 200, sharePage({ vehicle: String(j.vehicle ?? ''), stock: j.stock, price: j.price ?? null, url: j.captioned_url }, dealer));
     } catch (e) { console.error(e); return sendText(res, 500, 'Internal error', 'text/plain; charset=UTF-8'); }
   }
-  // Facebook Login for Business returns here (a browser redirect, not an API call): save the connection, back to the dashboard.
-  if (req.method === 'GET' && url.pathname === CALLBACK_PATH) {
+  // Facebook Login for Business returns to CALLBACK_PATH (cross-site: no session cookie), which bounces to RETURN_PATH on
+  // this origin; there the connection is saved and the browser goes back to the dashboard.
+  if (req.method === 'GET' && url.pathname === CALLBACK_PATH) return sendText(res, 200, facebookBouncePage(url.searchParams), 'text/html; charset=UTF-8', { 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer' });
+  if (req.method === 'GET' && url.pathname === RETURN_PATH) {
     try {
       const { https, allowed } = connection(req);
       if (!allowed) return sendText(res, 403, 'Use HTTPS to access this dashboard.', 'text/plain; charset=UTF-8');

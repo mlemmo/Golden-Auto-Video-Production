@@ -12,6 +12,21 @@ import { validateAppBase } from './media.js';
 
 const STATE_MS = 15 * 60 * 1000;
 export const CALLBACK_PATH = '/api/node/facebook/callback';
+// Facebook's redirect is a cross-site navigation, so the SameSite=Strict session cookie is not sent with it. The
+// callback answers with a page that moves on to this address from the dashboard's own origin (same-site), where the
+// cookie is sent, and the login is finished there.
+export const RETURN_PATH = '/api/node/facebook/return';
+
+/** The bounce page: only the parameters Facebook sends, passed on unchanged; no script, no referrer. */
+export function facebookBouncePage(query) {
+  const keep = new URLSearchParams();
+  for (const k of ['code', 'state', 'error', 'error_reason', 'error_description', 'error_code', 'error_message']) {
+    const v = query.get(k); if (v !== null) keep.set(k, v.slice(0, 2000));
+  }
+  const url = (RETURN_PATH + '?' + keep.toString()).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+  return '<!doctype html><meta charset="utf-8"><meta name="referrer" content="no-referrer"><meta http-equiv="refresh" content="0;url=' + url + '">'
+    + '<title>Connecting…</title><p style="font-family:sans-serif">Connecting Facebook… <a href="' + url + '">Continue</a></p>';
+}
 
 export function facebookConfig(cfg) {
   const f = cfg.facebook && typeof cfg.facebook === 'object' ? cfg.facebook : {};
