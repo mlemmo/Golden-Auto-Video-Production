@@ -329,11 +329,12 @@ export async function pollJob(db, cfg, id, get = higgsfieldRequest) {
 
 /** The client's 30 newest jobs among the last 200, as the stored JSON strings (the dashboard parses each). */
 export function jobsForClient(db, client) {
+  // The dashboard shows the selected vehicle's videos only, so older cars' videos must be in the list too.
   const out = [];
-  for (const { payload } of db.prepare('SELECT payload FROM jobs ORDER BY rowid DESC LIMIT 200').all()) {
+  for (const { payload } of db.prepare('SELECT payload FROM jobs ORDER BY rowid DESC').all()) {
     let c; try { c = JSON.parse(payload)?.client; } catch { c = undefined; }
     if ((c ?? CLIENT_DEFAULT) === client) out.push(payload);
-    if (out.length >= 30) break;
+    if (out.length >= 200) break;
   }
   return out;
 }

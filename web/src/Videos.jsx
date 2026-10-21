@@ -31,15 +31,18 @@ export default function Videos() {
       setTimeout(() => document.getElementById('captionEditor')?.scrollIntoView({ behavior: 'smooth' }), 0);
     } catch (e) { say(e.message, true); }
   };
-  const rows = newestFirst(s.jobs ?? []);
+  // Only the selected vehicle's videos (every finished video is in the Library).
+  const stock = s.chosen?.StockNumber ?? null;
+  const rows = stock === null ? [] : newestFirst((s.jobs ?? []).filter((j) => String(j.stock ?? '') === String(stock)));
   return (
     <section className={s.stepClass('videos')} id="videos">
       <StepHead id="videos" num="✓" title={<h2>Videos</h2>} sub={<p>Generation takes a few minutes; this list refreshes itself while a video is being made. Download finished videos promptly.</p>} />
       <Editable>
       <div className="actions"><button type="button" className="secondary" id="refreshJobs" onClick={async () => { await s.loadJobs(); say('List refreshed.'); }}>Refresh list</button></div>
       <div id="jobs" className="list">
-        {s.jobs && !rows.length && <p>No videos yet. Generate one in step 5.</p>}
-        <LatestFirst key={s.clients.current ?? ''} items={rows} noun="video" render={(j) => <Job key={j.id} j={j} say={say} openCaptions={openCaptions} />} />
+        {stock === null && <p>Choose a vehicle in step 1 to see its videos. All finished videos are in the Library.</p>}
+        {stock !== null && s.jobs && !rows.length && <p>No videos for this vehicle yet. Generate one in step 5.</p>}
+        <LatestFirst key={(s.clients.current ?? '') + '|' + (stock ?? '')} items={rows} noun="video" render={(j) => <Job key={j.id} j={j} say={say} openCaptions={openCaptions} />} />
       </div>
       {s.captionJob && <CaptionEditor draft={draft} setDraft={setDraft} />}
       </Editable>
