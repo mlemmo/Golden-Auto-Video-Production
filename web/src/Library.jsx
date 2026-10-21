@@ -5,6 +5,7 @@ import { api } from './api.js';
 import { useStudio } from './App.jsx';
 import { useStatus, DangerButton } from './ui.jsx';
 import { SocialPost } from './SocialPost.jsx';
+import { AdRequest } from './AdRequest.jsx';
 
 const REELS = ['instagram_reels', 'facebook_reels'];
 const FORMAT = { instagram_reels: 'Reels 9:16', facebook_reels: 'Reels 9:16', facebook_feed: 'Feed 4:5', square: 'Square 1:1' };
@@ -27,14 +28,15 @@ export function Library({ open, onClose }) {
   const [q, setQ] = useState('');
   const [playing, setPlaying] = useState(null);
   const [posting, setPosting] = useState(null);
+  const [advertising, setAdvertising] = useState(null);
   const { readOnly } = useStudio();
   useEffect(() => { if (open) api('library').then(setData).catch((e) => say(e.message, true)); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!open) return undefined;
-    const esc = (e) => { if (e.key === 'Escape') (posting ? setPosting(null) : playing ? setPlaying(null) : onClose()); };
+    const esc = (e) => { if (e.key === 'Escape') (advertising ? setAdvertising(null) : posting ? setPosting(null) : playing ? setPlaying(null) : onClose()); };
     document.addEventListener('keydown', esc); document.body.style.overflow = 'hidden';
     return () => { document.removeEventListener('keydown', esc); document.body.style.overflow = ''; };
-  }, [open, playing, posting, onClose]);
+  }, [open, playing, posting, advertising, onClose]);
   // Delete a video (job_delete): gone from the Library, the Videos step and this server; never undone.
   const remove = async (v) => {
     try {
@@ -81,6 +83,7 @@ export function Library({ open, onClose }) {
                 <a className="button small secondary-link" href={v.url} download={fileName(v)}>Download</a>
                 <button type="button" className="secondary small share-btn" onClick={() => shareVideo(v, say)}>Share</button>
                 {!readOnly && <button type="button" className="secondary small" title={REELS.includes(v.format) ? 'Post to Facebook & Instagram' : 'Make the Reels 9:16 format to post'} onClick={() => setPosting(v)}>Post</button>}
+                {!readOnly && <button type="button" className="secondary small" onClick={() => setAdvertising(v)}>Run as ad</button>}
                 {!readOnly && <DangerButton label="Delete" what={`this video of the ${v.vehicle}`} detail="It is removed from the Library, the Videos list and this server. Copies you downloaded or posts already published on Facebook or Instagram are not affected." onConfirm={() => remove(v)} />}
               </div>
             </article>
@@ -89,6 +92,7 @@ export function Library({ open, onClose }) {
       </div>
       {playing && <Player v={playing} client={names[playing.client]} onClose={() => setPlaying(null)} onShare={() => shareVideo(playing, say)} onPost={readOnly ? null : () => setPosting(playing)} />}
       {posting && <SocialPost v={posting} say={say} onClose={() => setPosting(null)} />}
+      {advertising && <AdRequest v={advertising} say={say} onClose={() => setAdvertising(null)} />}
     </div>
   );
 }

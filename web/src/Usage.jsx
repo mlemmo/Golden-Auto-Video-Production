@@ -6,7 +6,7 @@ import { useStatus } from './ui.jsx';
 // Activity kinds in a fixed order with their chart colours (validated on the dark surface: dataviz palette slots 1–4).
 const KINDS = [['generate', 'AI videos', 'var(--series-1)'], ['narration_preview', 'Voice previews', 'var(--series-2)'],
   ['narration_lipsync', 'Lip-syncs', 'var(--series-3)'], ['footage_build', 'Footage videos', 'var(--series-4)']];
-const ACTION = { generate: 'AI video', social_post: 'Social post', social_cancel: 'Social post cancelled', social_retry: 'Social post retried', spokesperson_picture: 'AI spokesperson picture', spokesperson_save_draft: 'AI spokesperson saved', narration_preview: 'Voice preview', narration_lipsync: 'Lip-sync', footage_build: 'Footage video', finish: 'Captions re-rendered',
+const ACTION = { generate: 'AI video', ad_request: 'Ad requested', ad_cancel: 'Ad request cancelled', ad_settings_save: 'Ad settings saved', social_post: 'Social post', social_cancel: 'Social post cancelled', social_retry: 'Social post retried', spokesperson_picture: 'AI spokesperson picture', spokesperson_save_draft: 'AI spokesperson saved', narration_preview: 'Voice preview', narration_lipsync: 'Lip-sync', footage_build: 'Footage video', finish: 'Captions re-rendered',
   narration_approve: 'Voice approved', job_delete: 'Video deleted', narration_delete: 'Preview deleted', narration_lipsync_delete: 'Lip-sync deleted', sync: 'Inventory import',
   import: 'ZIP import', client_add: 'Client added', client_details: 'Dealer details saved', client_analyze: 'Website analysed', spokesperson_upload: 'Spokesperson added',
   spokesperson_default: 'Default spokesperson', spokesperson_delete: 'Spokesperson deleted', user_create: 'Account created', user_update: 'Account changed',

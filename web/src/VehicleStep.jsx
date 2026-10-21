@@ -142,6 +142,7 @@ function ClientDetails() {
             <dt>Phone</dt><dd>{d.phone || <small>not set</small>}</dd>
           </dl>
           {!s.readOnly && <FacebookConnection key={c.id} />}
+          {!s.readOnly && <AdSettings key={'ads-' + c.id} />}
           {!editing && (
             <div className="actions">
               {s.isAdmin && <button type="button" className="secondary small" id="editDetails" onClick={() => setEditing(true)}>Edit details</button>}
@@ -210,6 +211,49 @@ function FacebookConnection() {
           : <small className="hint">Facebook login is not set up on this server yet.</small>}
         {s.isAdmin && (st.connected || st.pages.length > 0) && <button type="button" className="secondary small" id="facebookDisconnect" disabled={busy} onClick={() => act('facebook_disconnect')}>Disconnect</button>}
       </div>
+    </div>
+  );
+}
+
+/** Paid ads: the dealer's Meta and TikTok ad accounts and defaults for "Run as ad" (admins edit). */
+function AdSettings() {
+  const s = useStudio();
+  const [, say] = s.statuses.vehicle;
+  const [st, setSt] = useState(null);
+  const [form, setForm] = useState(null);
+  useEffect(() => { api('ad_settings').then(setSt).catch((e) => say(e.message, true)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!st) return null;
+  const field = (k) => ({ value: form[k], onChange: (e) => setForm({ ...form, [k]: e.target.value }) });
+  const save = async (e) => {
+    e.preventDefault();
+    try { const r = await api('ad_settings_save', { ...form, radius_km: Number(form.radius_km), daily_budget: Number(form.daily_budget), days: Number(form.days) }); setSt(r.settings); setForm(null); say(r.message); }
+    catch (err) { say(err.message, true); }
+  };
+  return (
+    <div className="facebook-connection" id="adSettings">
+      <h3>Paid ads</h3>
+      {!form ? (
+        <>
+          <p>{st.meta_account ? <>Meta ad account <b>{st.meta_account}</b>{st.meta_page && <> · Page {st.meta_page}</>}</> : 'No Meta ad account set'}{' · '}
+            {st.tiktok_account ? <>TikTok <b>{st.tiktok_account}</b></> : 'no TikTok ad account set'}
+            <small className="hint">{` · default ${st.radius_km} km around ${st.radius_address || '(no address)'}, $${st.daily_budget}/day for ${st.days} days`}</small></p>
+          {s.isAdmin && <div className="actions"><button type="button" className="secondary small" id="adSettingsEdit" onClick={() => setForm({ ...st })}>Edit ad settings</button></div>}
+        </>
+      ) : (
+        <form onSubmit={save}>
+          <div className="import-grid">
+            <label>Meta ad account id<input placeholder="act_1234567890" autoComplete="off" {...field('meta_account')} /></label>
+            <label>Facebook Page name (for ads)<input autoComplete="off" {...field('meta_page')} /></label>
+            <label>TikTok advertiser id<input placeholder="7690000000000000000" autoComplete="off" {...field('tiktok_account')} /></label>
+            <label>Target around (address)<input autoComplete="off" {...field('radius_address')} /></label>
+            <label>Radius (km)<input type="number" min="1" max="80" {...field('radius_km')} /></label>
+            <label>Default daily budget ($)<input type="number" min="5" max="1000" {...field('daily_budget')} /></label>
+            <label>Default days<input type="number" min="1" max="30" {...field('days')} /></label>
+          </div>
+          <p className="hint">Ad accounts must be the dealer's own, shared with your Meta Business portfolio or TikTok Business Center and connected in AdWhispr.</p>
+          <div className="actions"><button>Save ad settings</button><button type="button" className="secondary" onClick={() => setForm(null)}>Cancel</button></div>
+        </form>
+      )}
     </div>
   );
 }
