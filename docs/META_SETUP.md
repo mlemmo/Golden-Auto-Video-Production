@@ -95,8 +95,23 @@ While the app is in development mode this works for the app's own admins/develop
 manage; ads for other businesses need **Advanced access** for `ads_management` (App Review and Business verification).
 A failed launch shows Meta's message on the ad (for example a missing permission: reconnect, then press Retry).
 
-Without the login button, a token with ad permissions can be put in config:
-`"meta_accounts": { "golden-auto": { "ads_token": "…", "page_id": "…", "ig_user_id": "…" } }`.
+### Ads token from a system user (used for Golden Auto)
+
+On 2026-10-21 the Facebook Login system-user token for Golden Auto never received `ads_management`/`ads_read`, even
+with a configuration that asks for them. The ads worker therefore uses a token made in Business Settings when config
+`meta_accounts.<client>.ads_token` is set (the Page and Instagram account still come from the Facebook connection):
+
+1. business.facebook.com → the dealer's business portfolio → **Settings → Users → System users → Add**: name it (e.g.
+   "Golden Auto Ads"), role **Admin** (or Employee).
+2. Select the system user → **Assign assets**: the dealer's **ad account** with **Manage ad account / Full control**,
+   and the dealer's **Page** with at least **Create ads** (full control is fine).
+3. **Settings → Accounts → Apps**: make sure **Golden Auto Video Publisher** is listed (add it by its App ID if not), and
+   assign the app to the system user if asked.
+4. Select the system user → **Generate token** → app **Golden Auto Video Publisher**, expiration **Never**, permissions
+   `ads_management`, `ads_read`, `business_management`, `pages_show_list`, `pages_read_engagement` → **Generate**.
+   Copy the token (it is shown once). Keep it out of chat, email and the repository.
+5. Put it in the site's `private/config.json` under `"meta_accounts": { "golden-auto": { "ads_token": "…" } }`,
+   then redeploy or restart the site so it reads the file again, and press **Retry** on any failed ad.
 
 ## What the app does with it
 

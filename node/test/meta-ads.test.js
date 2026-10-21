@@ -59,6 +59,8 @@ test('the ad account and Page: the Page named in the ad settings, else the chose
     assert.deepEqual(metaAdsAccount(db, cfg, 'golden-auto', 'golden auto'), { token: 'SYSTEM-USER-TOKEN', page_id: '1111111111', ig_user_id: '17840000000000000' });
     assert.equal(metaAdsAccount(db, cfg, 'golden-auto', 'Other Page').page_id, '2222222222');
     assert.deepEqual(metaAdsAccount(db, { meta_accounts: { eastbay: { ads_token: 'T', page_id: '3333333333' } } }, 'eastbay'), { token: 'T', page_id: '3333333333', ig_user_id: '' });
+    assert.deepEqual(metaAdsAccount(db, { ...cfg, meta_accounts: { 'golden-auto': { ads_token: 'ADS-TOKEN' } } }, 'golden-auto', 'Golden Auto'),
+      { token: 'ADS-TOKEN', page_id: '1111111111', ig_user_id: '17840000000000000' }, 'a token made for ads wins; the Page still comes from the connection');
   } finally { done(dir); }
 });
 

@@ -3,7 +3,7 @@
 // creative → ad in the dealer's own ad account, switches it on or pauses it when the user asks in the dashboard, pauses
 // it after its end date and refreshes spend/views/clicks. Token: the dealer's "Connect Facebook & Instagram" login
 // (facebook.js; its Facebook Login for Business configuration must include ads_management and ads_read and the ad
-// account as an asset, docs/META_SETUP.md), else config meta_accounts[client].ads_token.
+// account as an asset, docs/META_SETUP.md); config meta_accounts[client].ads_token, when set, is used instead.
 //
 // Each run moves every request one step and saves every id the moment Meta returns it, so a run that stops halfway
 // never creates the same object twice: the next run (or a Retry) carries on from the last saved id. Everything is
@@ -27,7 +27,9 @@ export class MetaAdsError extends Error {}
 export function metaAdsAccount(db, cfg, client, pageName = '') {
   const c = facebookConnection(db, client);
   const fallback = cfg.meta_accounts && typeof cfg.meta_accounts === 'object' ? cfg.meta_accounts[client] ?? {} : {};
-  const token = trim(str(c?.token || fallback.ads_token || ''));
+  // A token made for ads in Business Settings (config meta_accounts[client].ads_token) comes first: the Facebook Login
+  // system-user token did not receive ads_management/ads_read (2026-10-21). The Page still comes from the connection.
+  const token = trim(str(fallback.ads_token || c?.token || ''));
   const want = trim(str(pageName)).toLowerCase();
   const p = (want && c?.pages?.find((x) => str(x.name).toLowerCase() === want)) || c?.pages?.find((x) => x.id === c.page_id) || null;
   const page_id = p?.id ?? (/^\d{5,25}$/.test(str(fallback.page_id ?? '')) ? str(fallback.page_id) : '');
