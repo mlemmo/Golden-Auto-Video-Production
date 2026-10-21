@@ -342,10 +342,17 @@ export function jobsForClient(db, client) {
 export const JOB_RUNNING = ['preparing_references', 'submitting', 'queued', 'in_progress'];
 
 /** Deleting a video job: the record and its finished captioned file (or uploaded footage). Running jobs are protected. */
-export function goldenJobDelete(db, cfg, id) {
+export function goldenJobDelete(db, cfg, id, allowed = null) {
   const row = db.prepare('SELECT payload FROM jobs WHERE id=?').get(id);
   if (!row) throw new Error('Video not found. Refresh the list.');
   const job = JSON.parse(row.payload);
+  // The Library lists every client the account may use: a video of any other client is refused.
+  if (allowed && !allowed.includes(job.client ?? CLIENT_DEFAULT)) throw new Error('Your account has no access to that video.');
+  if (db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='social_posts'").get()) {
+    const pending = db.prepare("SELECT payload FROM social_posts WHERE json_extract(payload,'$.job_id')=?").all(id).map((r) => JSON.parse(r.payload))
+      .some((p) => Object.values(p.platforms ?? {}).some((x) => ['scheduled', 'uploading', 'processing', 'publishing'].includes(x.status)));
+    if (pending) throw new Error('This video has a Facebook or Instagram post scheduled or in progress. Cancel it (Library → Post) or let it finish first.');
+  }
   if (JOB_RUNNING.includes(job.status ?? '')) throw new Error('This video is still being generated. Wait until it completes or fails before deleting, so a paid generation is not lost.');
   if ((job.finish_status ?? '') === 'rendering') throw new Error('This video is being captioned right now. Try again in a minute.');
   if (db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='narration_lipsync'").get()) {

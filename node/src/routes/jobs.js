@@ -7,6 +7,7 @@ import { trim, str } from '../lib/text.js';
 import { jsonEncode } from '../lib/storedjson.js';
 import { script, introBudget } from '../lib/scripts.js';
 import { speechScript, speechWordCount } from '../lib/speech.js';
+import { allowedClients } from '../lib/users.js';
 import { assetSheet, importMediaZip, sheetRebuild, sheetUpToDate } from '../lib/media.js';
 import { spokespersonApi, spokespersonFind, spokespersonDescribe, spokespersonPicture, spokespersonSaveDraft } from '../lib/spokespersons.js';
 import { enrich, referenceImageUrl, uploadReference, generateJob, pollJob, jobsForClient, goldenJobDelete, goldenFootageBuild } from '../lib/jobs.js';
@@ -82,7 +83,7 @@ export const jobRoutes = {
     message: 'Footage uploaded. The final video with your approved voice and captions is being built and appears under Videos in a few minutes. No paid generation was used.',
     job: goldenFootageBuild(db, cfg, { ...body, client }, files.footage ?? null),
   }),
-  job_delete: ({ cfg, db, body }) => goldenJobDelete(db, cfg, str(body.id ?? '')),
+  job_delete: ({ cfg, db, body, user }) => goldenJobDelete(db, cfg, str(body.id ?? ''), allowedClients(db, user)),
   jobs: ({ db, client }) => jobsForClient(db, client),
   poll: ({ cfg, db, body }) => pollJob(db, cfg, str(body.id ?? '')),
   // The paid generation: approval, fingerprint and reservation rules in src/lib/jobs.js.

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from './api.js';
 import { useStudio } from './App.jsx';
-import { useStatus } from './ui.jsx';
+import { useStatus, DangerButton } from './ui.jsx';
 import { SocialPost } from './SocialPost.jsx';
 
 const REELS = ['instagram_reels', 'facebook_reels'];
@@ -35,6 +35,15 @@ export function Library({ open, onClose }) {
     document.addEventListener('keydown', esc); document.body.style.overflow = 'hidden';
     return () => { document.removeEventListener('keydown', esc); document.body.style.overflow = ''; };
   }, [open, playing, posting, onClose]);
+  // Delete a video (job_delete): gone from the Library, the Videos step and this server; never undone.
+  const remove = async (v) => {
+    try {
+      const r = await api('job_delete', { id: v.id });
+      setData((d) => ({ ...d, videos: d.videos.filter((x) => x.id !== v.id) }));
+      if (playing?.id === v.id) setPlaying(null);
+      say(r.message || 'Video deleted.');
+    } catch (e) { say(e.message, true); }
+  };
   if (!open) return null;
   const names = Object.fromEntries((data?.clients ?? []).map((c) => [c.id, c.name]));
   const shown = (data?.videos ?? []).filter((v) => (!client || v.client === client) && (!q || `${v.vehicle} ${v.stock}`.toLowerCase().includes(q.toLowerCase())));
@@ -72,6 +81,7 @@ export function Library({ open, onClose }) {
                 <a className="button small secondary-link" href={v.url} download={fileName(v)}>Download</a>
                 <button type="button" className="secondary small share-btn" onClick={() => shareVideo(v, say)}>Share</button>
                 {!readOnly && <button type="button" className="secondary small" title={REELS.includes(v.format) ? 'Post to Facebook & Instagram' : 'Make the Reels 9:16 format to post'} onClick={() => setPosting(v)}>Post</button>}
+                {!readOnly && <DangerButton label="Delete" what={`this video of the ${v.vehicle}`} detail="It is removed from the Library, the Videos list and this server. Copies you downloaded or posts already published on Facebook or Instagram are not affected." onConfirm={() => remove(v)} />}
               </div>
             </article>
           ))}

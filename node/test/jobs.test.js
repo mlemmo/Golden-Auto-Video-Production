@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { openMemoryDb, save, state } from '../src/lib/db.js';
 import { jsonEncode } from '../src/lib/storedjson.js';
 import { narrationTables } from '../src/lib/narrations.js';
+import { socialTables } from '../src/lib/social.js';
 import { promptNative, prompt, SPOKESPERSON_DEFAULT_DESCRIPTION } from '../src/lib/prompts.js';
 import { speechScript } from '../src/lib/speech.js';
 import { spokespersonApi, spokespersonFind, spokespersonClean } from '../src/lib/spokespersons.js';
@@ -103,6 +104,14 @@ test('deleting video jobs', () => {
     goldenJobDelete(db, cfg, 'J5');
     assert.equal(count(db), 3, 'failed video deleted; foreign URLs never touch local files');
     assert.throws(() => goldenJobDelete(db, cfg, 'missing'), /not found/);
+    // From the Library: only the account's clients, and never under a scheduled Facebook/Instagram post.
+    put(db, 'jobs', { id: 'J6', client: 'eastbay', status: 'completed' });
+    assert.throws(() => goldenJobDelete(db, cfg, 'J6', ['golden-auto']), /no access/);
+    socialTables(db);
+    db.prepare('INSERT INTO social_posts VALUES (?,?)').run('P1', JSON.stringify({ id: 'P1', job_id: 'J6', platforms: { facebook: { status: 'scheduled' } } }));
+    assert.throws(() => goldenJobDelete(db, cfg, 'J6', ['eastbay']), /post scheduled or in progress/);
+    db.prepare('UPDATE social_posts SET payload=? WHERE id=?').run(JSON.stringify({ id: 'P1', job_id: 'J6', platforms: { facebook: { status: 'published' } } }), 'P1');
+    goldenJobDelete(db, cfg, 'J6', ['eastbay']);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
