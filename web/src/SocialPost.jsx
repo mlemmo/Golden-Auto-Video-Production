@@ -51,7 +51,7 @@ export function SocialPost({ v, onClose, say }) {
         <p className="hint">{v.vehicle}</p>
         {!status ? <p className="hint">Loading…</p> : !status.eligible ? <p className="note-important">{status.reason}</p> : (
           <>
-            {none && <p className="note-important">Facebook and Instagram are not connected for this dealer yet. An admin adds the Meta Page token in the server settings (docs/META_SETUP.md).</p>}
+            {none && <p className="note-important">Facebook and Instagram are not connected for this dealer yet. Choose the dealer at the top of the dashboard, open View details and press Connect Facebook &amp; Instagram.</p>}
             <div className="social-platforms">
               <label className="check"><input type="checkbox" checked={fb} disabled={!status.facebook} onChange={(e) => { setFb(e.target.checked); setConfirm(false); }} />Facebook Page{!status.facebook && ' (not connected)'}</label>
               <label className="check"><input type="checkbox" checked={ig} disabled={!status.instagram} onChange={(e) => { setIg(e.target.checked); setConfirm(false); }} />Instagram{!status.instagram && ' (not connected)'}</label>

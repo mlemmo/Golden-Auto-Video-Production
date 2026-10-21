@@ -19,5 +19,6 @@
   "anthropic_workspace_id": "",
   "intro_model": "claude-opus-5-5",
   "meta_graph_version": "v26.0",
+  "facebook": { "app_id": "", "app_secret": "", "config_id": "", "graph_version": "v26.0" },
   "meta_accounts": { "golden-auto": { "page_id": "", "page_token": "", "ig_user_id": "" } }
 }

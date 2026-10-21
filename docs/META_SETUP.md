@@ -1,8 +1,9 @@
 # Connecting Facebook and Instagram for posting
 
 The dashboard's **Library → Post** sends a finished Reels (9:16) video to a dealer's Facebook Page and Instagram
-account, now or at a scheduled time. The server needs, per dealer, a **Page access token**, the **Page id** and the
-**Instagram account id**. This is a one-time setup for each dealer. Meta changes its screens often: the names below
+account, now or at a scheduled time. Each dealer connects once with **Connect Facebook & Instagram** (Facebook Login
+for Business) under the dealer's details; the server keeps that dealer's token (table `client_secrets`, never sent to
+the browser). Meta changes its screens often: the names below
 were current in October 2026 (Graph API v26.0).
 
 ## 1. Instagram professional account, linked to the Page
@@ -11,49 +12,43 @@ were current in October 2026 (Graph API v26.0).
 2. Link it to the dealer's Facebook Page: in **Meta Business Suite** (business.facebook.com) → **Settings →
    Instagram accounts → Connect**, or on the Page: **Settings → Linked accounts → Instagram**.
 
-## 2. A Meta developer app
+## 2. The Meta app (done for Golden Auto)
 
-1. Go to **developers.facebook.com → My Apps → Create app**, and choose the **Business** app type (or the use case
-   for managing Pages and Instagram content). Connect it to the dealer's Business portfolio if asked.
-2. Add **Facebook Login for Business** and **Instagram** (the "Instagram API with Facebook Login" setup).
-3. The app needs these permissions:
-   - Facebook: `pages_show_list`, `pages_read_engagement`, `pages_manage_posts`
-   - Instagram: `instagram_basic`, `instagram_content_publish`
-   - If the Page belongs to a Business portfolio and the token cannot see it, also `business_management`.
-4. While the app is in **development mode**, it works for people who have a role on the app (you as the app admin)
-   and Pages you manage. For other people's Pages, Meta requires **App Review** of these permissions and usually
-   **Business verification**. For Golden Auto's own Page, posting as the app admin is enough.
+The app **Golden Auto Video Publisher** (App ID `1828647338557647`, business portfolio "Golden AUto") is in development
+mode with the use cases "Manage everything on your Page" and "Manage messaging & content on Instagram" and the
+permissions `pages_show_list`, `pages_read_engagement`, `pages_manage_posts`, `instagram_basic`,
+`instagram_content_publish`, `business_management`. Its Facebook Login for Business configuration "Video Publisher"
+(config id `1721634192854903`) gives a system-user token that never expires, with Pages and Instagram accounts as
+assets. Client OAuth login, Web OAuth login, Enforce HTTPS and Strict mode are on.
 
-## 3. Get the Page token and ids
+**Valid OAuth Redirect URIs** must match the dashboard address exactly, port included (strict mode). In the app:
+**Facebook Login for Business → Settings → Valid OAuth Redirect URIs**, add:
 
-1. Open the **Graph API Explorer** (developers.facebook.com/tools/explorer), choose your app, and under
-   **User or Page** choose **Get User Access Token** with the permissions above. Approve the Page and the Instagram
-   account in the pop-up.
-2. Make the user token long-lived: open the **Access Token Debugger** (developers.facebook.com/tools/debug/accesstoken),
-   paste the token and press **Extend Access Token**. Copy the new token into the Explorer.
-3. In the Explorer, run `GET me/accounts`. Find the dealer's Page: its `id` is the **Page id** and its
-   `access_token` is the **Page access token**. A Page token taken from a long-lived user token does not expire
-   (until the password changes or the app loses access).
-4. Run `GET <page id>?fields=instagram_business_account`. The returned `id` is the **Instagram account id**.
-5. Check the Page token in the Access Token Debugger: it should list the permissions above and "Expires: Never".
+- staging: `https://staging.mygoldenauto.net:4343/api/node/facebook/callback`
+- production (at release): `https://video.mygoldenauto.net:4343/api/node/facebook/callback`
 
-## 4. Put them on the server (staging first)
+(The saved `https://video.mygoldenauto.net/...` without `:4343` and the retired node.mygoldenauto.net address do not
+match the dashboard.)
 
-Keep the token secret: never paste it into chat, email or the repository.
+While the app is in development mode, only people with a role on the app (admin, developer, tester) can connect.
+Other dealers need **Business verification** and **App Review** (advanced access for the permissions) before the app
+goes Live.
 
-1. On the server, edit the staging settings file:
+## 3. Server settings (staging first)
+
+The app secret is in **App settings → Basic → App secret**. Keep it secret: never paste it into chat, email or the
+repository.
+
+1. Edit the staging settings file on the server:
 
    ```bash
    nano /srv/golden-auto-staging/private/config.json
    ```
 
-2. Add (keep the commas valid JSON; the client id for Golden Auto is `golden-auto`, other dealers use their client id
-   from the dashboard):
+2. Add (keep it valid JSON: commas between entries):
 
    ```json
-   "meta_accounts": {
-     "golden-auto": { "page_id": "1234567890", "page_token": "EAAB…", "ig_user_id": "17841400000000000" }
-   }
+   "facebook": { "app_id": "1828647338557647", "app_secret": "<App secret>", "config_id": "1721634192854903", "graph_version": "v26.0" }
    ```
 
 3. Restart the staging service so it reads the file again:
@@ -62,11 +57,25 @@ Keep the token secret: never paste it into chat, email or the repository.
    sudo systemctl restart golden-auto-staging-node
    ```
 
-4. In the dashboard: **Library → Post** on a Reels 9:16 video. The Facebook and Instagram boxes are enabled when the
-   settings are right. Post the first test as a scheduled post a little ahead, or post now and watch the status under
-   "Posts of this video" (the worker runs every minute; Instagram usually needs a few minutes to process a Reel).
+## 4. Connect a dealer
 
-Only Facebook: leave `ig_user_id` empty. Only Instagram: leave `page_id` empty (the Page token is still needed).
+1. In the dashboard choose the dealer (client) at the top, press **View details**, then **Connect Facebook &
+   Instagram**.
+2. Log in with Facebook and choose the dealer's Page and its Instagram account. Facebook returns you to the dashboard,
+   which shows "Connected to <Page> and Instagram @<account>". If several Pages were shared, choose the one to post to.
+3. **Library → Post** on a Reels 9:16 video now offers Facebook and Instagram. Post the first test as a scheduled post a
+   little ahead, or post now and watch the status under "Posts of this video" (the worker runs every minute;
+   Instagram usually needs a few minutes to process a Reel).
+
+**Reconnect** replaces the stored connection; admins can **Disconnect** (the app can also be removed in the Page's
+Facebook settings under Business integrations).
+
+### Without the login button (fallback)
+
+A Page token can also be put in the settings by hand: `"meta_accounts": { "golden-auto": { "page_id": "…",
+"page_token": "…", "ig_user_id": "…" } }` (Graph API Explorer: `GET me/accounts` gives the Page id and token;
+`GET <page id>?fields=instagram_business_account` the Instagram id). A dealer connected with the button uses the
+connection instead.
 
 ## What the app does with it
 
@@ -75,4 +84,4 @@ Only Facebook: leave `ig_user_id` empty. Only Instagram: leave `page_id` empty (
 - Instagram's API cannot schedule, so the app keeps the schedule for both platforms and publishes them together.
 - Meta's limits: 30 API-published Reels per Page and 100 posts per Instagram account in 24 hours.
 - If a publish answer is lost, the post is marked "Check the page" and never posted again automatically.
-- Errors such as an expired token show on the post ("Meta refused the request: …"); fix the token and press Retry.
+- Errors such as an expired token show on the post ("Meta refused the request: …"); reconnect and press Retry.

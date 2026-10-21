@@ -100,7 +100,8 @@ function ClientDetails() {
   const s = useStudio();
   const [, say] = s.statuses.vehicle;
   const c = s.client, a = c.analysis || {}, d = c.script_details || {};
-  const [open, setOpen] = useState(false);
+  // Back from Facebook login (/?facebook=1): open the details so the connection status is in view.
+  const [open, setOpen] = useState(() => new URLSearchParams(location.search).has('facebook'));
   const [editing, setEditing] = useState(false);
   const fromDetails = () => ({ name: d.name || '', city: d.city || '', website: d.website || '', website_spoken: d.website_spoken || '', phone: d.phone || '' });
   const [form, setForm] = useState(fromDetails);
@@ -140,6 +141,7 @@ function ClientDetails() {
             <dt>In scripts</dt><dd id="dealerSummary">{`${d.name}${d.city ? ' in ' + d.city : ''} · ${d.website}`} <small>(said “{d.website_spoken}”)</small></dd>
             <dt>Phone</dt><dd>{d.phone || <small>not set</small>}</dd>
           </dl>
+          {!s.readOnly && <FacebookConnection key={c.id} />}
           {!editing && (
             <div className="actions">
               {s.isAdmin && <button type="button" className="secondary small" id="editDetails" onClick={() => setEditing(true)}>Edit details</button>}
@@ -166,6 +168,49 @@ function ClientDetails() {
         </div>
       )}
     </>
+  );
+}
+
+/** Connect Facebook & Instagram for this dealer (Facebook Login for Business); posting uses the chosen Page. */
+function FacebookConnection() {
+  const s = useStudio();
+  const [, say] = s.statuses.vehicle;
+  const [st, setSt] = useState(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    api('facebook_status').then((r) => {
+      setSt(r);
+      if (r.message) say(r.message, /^Connected/.test(r.message) ? false : 'warn');
+      if (new URLSearchParams(location.search).has('facebook')) history.replaceState(null, '', location.pathname);
+    }).catch((e) => say(e.message, true));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const act = async (action, data = {}) => {
+    setBusy(true);
+    try { const r = await api(action, data); if (r.url) { location.href = r.url; return; } setSt(r); if (r.message) say(r.message); }
+    catch (e) { say(e.message, true); } finally { setBusy(false); }
+  };
+  if (!st) return null;
+  return (
+    <div className="facebook-connection" id="facebookConnection">
+      <h3>Facebook &amp; Instagram</h3>
+      {st.connected ? (
+        <p>Posting to <b>{st.page_name}</b>{st.instagram ? <> and Instagram <b>@{st.ig_username}</b></> : <> (no Instagram account is linked to this Page)</>}.
+          <small className="hint">{' Connected ' + new Date(st.connected_at).toLocaleDateString() + (st.connected_by ? ' by ' + st.connected_by : '')}</small></p>
+      ) : st.pages.length ? (
+        <label>Choose the Page to post to
+          <select defaultValue="" onChange={(e) => e.target.value && act('facebook_page', { page_id: e.target.value })}>
+            <option value="">Choose a Page</option>
+            {st.pages.map((p) => <option key={p.id} value={p.id}>{p.name + (p.ig_username ? ' · Instagram @' + p.ig_username : ' · no Instagram')}</option>)}
+          </select>
+        </label>
+      ) : <p className="hint">Not connected. Connect once to post finished videos to this dealer's Facebook Page and Instagram from the Library.</p>}
+      <div className="actions">
+        {st.available
+          ? <button type="button" className={st.connected ? 'secondary small' : 'small'} id="facebookConnect" disabled={busy} onClick={() => act('facebook_connect')}>{st.connected ? 'Reconnect' : 'Connect Facebook & Instagram'}</button>
+          : <small className="hint">Facebook login is not set up on this server yet.</small>}
+        {s.isAdmin && (st.connected || st.pages.length > 0) && <button type="button" className="secondary small" id="facebookDisconnect" disabled={busy} onClick={() => act('facebook_disconnect')}>Disconnect</button>}
+      </div>
+    </div>
   );
 }
 

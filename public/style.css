@@ -209,3 +209,6 @@ a.button.secondary-link{background:#262d3a;color:#fff;border:1px solid var(--lin
 .social-confirm p{margin:0 0 10px}
 .social-list h4{margin:6px 0}
 .social-row{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.facebook-connection{border-top:1px solid var(--line);margin-top:12px;padding-top:10px}
+.facebook-connection h3{margin:0 0 6px}
+.facebook-connection p{margin:0 0 8px}

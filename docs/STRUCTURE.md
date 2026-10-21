@@ -80,7 +80,7 @@ only then fast-forward `main` and deploy production (`bash /srv/golden-auto/ubun
 | `finishing.js`, `worker.js`, `autobuild.js` | Building the final captioned video (caption style, FFmpeg render, auto build) |
 | `jobs.js` | Paid generation, status checks, jobs list, My footage, library list |
 | `narrations.js` | Voice previews and lip-sync |
-| `social.js` | Posting to Facebook and Instagram: posts, schedule, the social worker's publishing steps |
+| `social.js`, `facebook.js` | Posting to Facebook and Instagram (posts, schedule, the social worker's steps); Connect Facebook & Instagram (login, stored tokens) |
 | `clients.js` | Clients, website analysis, dealer details |
 | `importers.js`, `website.js`, `dealercenter.js`, `photos.js`, `media.js`, `thumbs.js`, `images.js` | Inventory import, photos, asset sheets, thumbnails |
 | `users.js` | Accounts and roles |

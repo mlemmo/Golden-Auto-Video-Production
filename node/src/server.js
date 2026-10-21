@@ -12,7 +12,8 @@ import { clientRoutes } from './routes/clients.js';
 import { narrationRoutes } from './routes/narrations.js';
 import { jobRoutes, MULTIPART } from './routes/jobs.js';
 import { finishingRoutes } from './routes/finishing.js';
-import { socialApi } from './lib/social.js';
+import { socialApi, metaFetch } from './lib/social.js';
+import { facebookApi, facebookCallback, CALLBACK_PATH } from './lib/facebook.js';
 import { parseMultipart } from './lib/multipart.js';
 import { CLIENT_DEFAULT, clientsLoad, clientFind, clientDetails, clientSpeechSites } from './lib/clients.js';
 import { withSpeechSites } from './lib/speech.js';
@@ -41,6 +42,8 @@ const sessionRoutes = {
   // The Library page: every finished video of the clients this account may use.
   // Posting finished videos to Facebook and Instagram (src/lib/social.js); the video's client must be one of the account's.
   ...Object.fromEntries(['social_status', 'social_list', 'social_post', 'social_cancel', 'social_retry'].map((a) => [a, ({ db, cfg, user, body }) => socialApi(a, body, db, cfg, { allowed: allowedClients(db, user), user: user.email })])),
+  // Connect Facebook & Instagram for the current client (src/lib/facebook.js); tokens stay on the server.
+  ...Object.fromEntries(['facebook_status', 'facebook_connect', 'facebook_page', 'facebook_disconnect'].map((a) => [a, ({ db, cfg, body, session, client }) => facebookApi(a, body, db, cfg, session, client)])),
   library: ({ db, user }) => { const ids = allowedClients(db, user); return { videos: libraryVideos(db, ids), clients: clientsLoad(db).items.filter((c) => ids.includes(c.id)).map((c) => ({ id: c.id, name: c.name })) }; },
   password_change: async ({ db, user, body }) => { await passwordChange(db, user, body.current, body.password); return { message: 'Password changed.' }; },
   // Admins: accounts.
@@ -55,11 +58,11 @@ const sessionRoutes = {
 // What each role may do. Viewers only read; admins alone manage users, clients and the shared spokesperson library;
 // users do everything else (including paid steps) for the clients assigned to them.
 const VIEWER_ACTIONS = new Set(['library', 'scene_list', 'clients', 'client_select', 'inventory', 'sync_log', 'jobs', 'narration_list', 'spokesperson_list', 'detail', 'speech', 'logout', 'me', 'password_change']);
-const ADMIN_ACTIONS = new Set(['usage', 'spokesperson_describe', 'spokesperson_picture', 'spokesperson_save_draft', 'snapshot_import', 'scene_save', 'scene_delete', 'scene_default', 'scene_suggest', 'client_add', 'client_analyze', 'client_details', 'spokesperson_upload', 'spokesperson_default', 'spokesperson_delete', 'users_list', 'user_create', 'user_update', 'user_delete']);
+const ADMIN_ACTIONS = new Set(['usage', 'facebook_disconnect', 'spokesperson_describe', 'spokesperson_picture', 'spokesperson_save_draft', 'snapshot_import', 'scene_save', 'scene_delete', 'scene_default', 'scene_suggest', 'client_add', 'client_analyze', 'client_details', 'spokesperson_upload', 'spokesperson_default', 'spokesperson_delete', 'users_list', 'user_create', 'user_update', 'user_delete']);
 // Actions that need no current client (an account without clients can still use them).
 const NO_CLIENT = new Set(['library', 'social_status', 'social_list', 'social_post', 'social_cancel', 'social_retry', 'usage', 'clients', 'logout', 'me', 'password_change', 'users_list', 'user_create', 'user_update', 'user_delete', 'client_add']);
 // Actions recorded for the Usage dashboard (who, which client, what, when; never passwords).
-const TRACKED = new Set(['generate', 'social_post', 'social_cancel', 'social_retry', 'spokesperson_picture', 'spokesperson_save_draft', 'narration_preview', 'narration_lipsync', 'footage_build', 'finish', 'narration_approve', 'job_delete',
+const TRACKED = new Set(['generate', 'facebook_page', 'facebook_disconnect', 'social_post', 'social_cancel', 'social_retry', 'spokesperson_picture', 'spokesperson_save_draft', 'narration_preview', 'narration_lipsync', 'footage_build', 'finish', 'narration_approve', 'job_delete',
   'narration_delete', 'narration_lipsync_delete', 'sync', 'import', 'client_add', 'client_details', 'client_analyze', 'spokesperson_upload',
   'spokesperson_default', 'spokesperson_delete', 'user_create', 'user_update', 'user_delete', 'password_change']);
 function activityDetail(name, body, out) {
@@ -249,6 +252,21 @@ export const server = createServer(async (req, res) => {
       if (!j || j.finish_status !== 'completed' || !String(j.captioned_url ?? '').startsWith('https://')) return sendText(res, 404, 'This video is not available.', 'text/plain; charset=UTF-8');
       let dealer = null; try { dealer = clientDetails(clientFind(db, j.client ?? CLIENT_DEFAULT)); } catch { /* client removed */ }
       return sendText(res, 200, sharePage({ vehicle: String(j.vehicle ?? ''), stock: j.stock, price: j.price ?? null, url: j.captioned_url }, dealer));
+    } catch (e) { console.error(e); return sendText(res, 500, 'Internal error', 'text/plain; charset=UTF-8'); }
+  }
+  // Facebook Login for Business returns here (a browser redirect, not an API call): save the connection, back to the dashboard.
+  if (req.method === 'GET' && url.pathname === CALLBACK_PATH) {
+    try {
+      const { https, allowed } = connection(req);
+      if (!allowed) return sendText(res, 403, 'Use HTTPS to access this dashboard.', 'text/plain; charset=UTF-8');
+      const cfg = loadConfig(), db = openDb(cfg);
+      const { store, session } = openSession(cfg, req);
+      const user = sessionUser(db, session);
+      const message = await facebookCallback(db, cfg, session, user, url.searchParams, user ? allowedClients(db, user) : [], { transport: metaFetch });
+      if (user && /^Connected/.test(message)) recordActivity(db, { user: user.email, client: String(session.data.client ?? CLIENT_DEFAULT), action: 'facebook_connect', detail: {} });
+      session.data.fb_message = message;
+      res.writeHead(303, { Location: '/?facebook=1', 'Cache-Control': 'no-store', ...closeSession(store, session, https) });
+      return res.end();
     } catch (e) { console.error(e); return sendText(res, 500, 'Internal error', 'text/plain; charset=UTF-8'); }
   }
   if (req.method === 'GET' && url.pathname === '/api/node/health') return send(res, 200, { ok: true, service: pkg.name, version: pkg.version, node: process.version });

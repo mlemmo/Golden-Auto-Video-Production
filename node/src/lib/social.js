@@ -12,6 +12,7 @@ import { jsonEncode } from './storedjson.js';
 import { trim, str, toInt, gmdateC } from './text.js';
 import { CLIENT_DEFAULT, clientFind, clientDetails } from './clients.js';
 import { runProcess } from './finishing.js';
+import { connectedAccount, facebookConfig } from './facebook.js';
 
 export const PLATFORMS = ['facebook', 'instagram'];
 export const PLATFORM_NAME = { facebook: 'Facebook', instagram: 'Instagram' };
@@ -33,15 +34,18 @@ const load = (db, id) => { const r = db.prepare('SELECT payload FROM social_post
 const store = (db, p) => db.prepare('INSERT INTO social_posts (id, payload) VALUES (?, ?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload').run(p.id, jsonEncode(p));
 const allPosts = (db) => db.prepare('SELECT payload FROM social_posts ORDER BY rowid DESC').all().map((r) => JSON.parse(r.payload));
 
-/** The client's Meta account from config, checked; secrets stay on the server. */
-export function socialAccount(cfg, client) {
-  const a = (cfg.meta_accounts && typeof cfg.meta_accounts === 'object' ? cfg.meta_accounts[client] : null) ?? {};
+/**
+ * The client's Meta account: the Page chosen with "Connect Facebook & Instagram" (facebook.js), else config
+ * meta_accounts; checked. Secrets stay on the server.
+ */
+export function socialAccount(cfg, client, db = null) {
+  const a = (db && connectedAccount(db, client)) ?? (cfg.meta_accounts && typeof cfg.meta_accounts === 'object' ? cfg.meta_accounts[client] : null) ?? {};
   const id = (x) => (/^\d{5,25}$/.test(str(x ?? '')) ? str(x) : '');
   const token = trim(str(a.page_token ?? ''));
   const page = id(a.page_id), ig = id(a.ig_user_id);
   return { token, page_id: page, ig_user_id: ig, facebook: !!(token && page), instagram: !!(token && ig) };
 }
-const graphVersion = (cfg) => (/^v\d{1,3}\.\d$/.test(str(cfg.meta_graph_version ?? '')) ? str(cfg.meta_graph_version) : 'v26.0');
+const graphVersion = (cfg) => facebookConfig(cfg).version;
 
 function jobFor(db, id) {
   const r = db.prepare('SELECT payload FROM jobs WHERE id=?').get(str(id ?? ''));
@@ -80,7 +84,7 @@ export function socialApi(action, inp, db, cfg, { allowed = [CLIENT_DEFAULT], us
   const mine = (client) => { if (!allowed.includes(client)) throw new Error('Your account has no access to that client.'); };
   if (action === 'social_status') {
     const job = jobFor(db, inp.id), client = job.client ?? CLIENT_DEFAULT; mine(client);
-    const a = socialAccount(cfg, client), f = videoFile(cfg, job);
+    const a = socialAccount(cfg, client, db), f = videoFile(cfg, job);
     return { facebook: a.facebook, instagram: a.instagram, eligible: !f.reason, reason: f.reason ?? '', caption: socialCaption(db, job) };
   }
   if (action === 'social_list') {
@@ -90,10 +94,10 @@ export function socialApi(action, inp, db, cfg, { allowed = [CLIENT_DEFAULT], us
   if (action === 'social_post') {
     const job = jobFor(db, inp.id), client = job.client ?? CLIENT_DEFAULT; mine(client);
     const f = videoFile(cfg, job); if (f.reason) throw new Error(f.reason);
-    const a = socialAccount(cfg, client);
+    const a = socialAccount(cfg, client, db);
     const platforms = [...new Set(Array.isArray(inp.platforms) ? inp.platforms.map(str) : [])].filter((p) => PLATFORMS.includes(p));
     if (!platforms.length) throw new Error('Choose Facebook, Instagram or both.');
-    for (const p of platforms) if (!a[p]) throw new Error(PLATFORM_NAME[p] + ' is not connected for this dealer yet (see docs/META_SETUP.md).');
+    for (const p of platforms) if (!a[p]) throw new Error(PLATFORM_NAME[p] + ' is not connected for this dealer yet (Connect Facebook & Instagram under the dealer\'s details).');
     const caption = trim(str(inp.caption ?? '')).replace(/\r\n/g, '\n');
     if (!caption) throw new Error('Write a caption.');
     if ([...caption].length > CAPTION_MAX) throw new Error('The caption can be at most ' + CAPTION_MAX + ' characters.');
@@ -248,7 +252,7 @@ export async function socialWorkerRun(db, cfg, opts = {}) {
     }
     const active = Object.entries(post.platforms).filter(([, x]) => (x.status === 'scheduled' && Date.parse(post.scheduled_at) <= now) || x.status === 'processing');
     if (!active.length) continue;
-    const a = socialAccount(cfg, post.client);
+    const a = socialAccount(cfg, post.client, db);
     const g = graph(cfg, transport, a.token);
     let copy = '';
     const file = () => {
