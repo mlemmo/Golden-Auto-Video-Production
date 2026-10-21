@@ -6,7 +6,10 @@ import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { openMemoryDb } from '../src/lib/db.js';
 import { cutoutSheet } from '../src/lib/media.js';
-import { promptNative, finalWords } from '../src/lib/prompts.js';
+import { promptNative, prompt, finalWords, VEHICLE_DETAILS_RULE } from '../src/lib/prompts.js';
+import { probeImage } from '../src/lib/images.js';
+import { readFileSync } from 'node:fs';
+import { state } from '../src/lib/db.js';
 import { JPEG_1800x900 } from './fixtures/images.js';
 
 test('the cut-out sheet is built from the sheet photos, saved and reused', async () => {
@@ -23,6 +26,9 @@ test('the cut-out sheet is built from the sheet photos, saved and reused', async
     assert.equal(await cutoutSheet(v, cfg, db, sheet), null, 'not set up: the original sheet is used');
     const r = await cutoutSheet(v, cfg, db, sheet, { cut });
     assert.ok(r.url.startsWith(cfg.public_base_url + '/assets/') && existsSync(dir + '/' + r.url.split('/').pop()));
+    const size = probeImage(readFileSync(dir + '/' + r.url.split('/').pop()));
+    assert.deepEqual([size.width, size.height], [1800, 671], 'photos only: no title, stock number or labels for Seedance to copy onto the car');
+    assert.ok(state(db, 'sheet_cutout:v2:h1'), 'sheets made with text are not reused');
     const again = await cutoutSheet(v, cfg, db, sheet, { cut });
     assert.deepEqual([again.url, calls], [r.url, 1], 'reused for the same photos');
     await assert.rejects(cutoutSheet(v, cfg, db, { ...sheet, content_hash: 'h2' }, { cut: async () => { throw new Error('Background removal failed.'); } }), /Background removal failed/);
@@ -34,4 +40,12 @@ test('her final words are named and the talking window fits her real pace', () =
   assert.equal(finalWords(speech), 'Her final words are "at my golden auto dot net.": she says them only once, then immediately stops talking, closes her mouth and smiles warmly; she never says them again. ');
   const p = promptNative({ Year: 2015, Make: 'VW', Model: 'Golf' }, speech, 15, 'adult woman', 'speech', 10.96);
   assert.ok(p.includes('finishes by 10.6 seconds') && p.includes('Her final words are'), 'window ends when she really finishes (8% faster than the recording)');
+});
+
+test('every video prompt keeps the car\'s badges as photographed and asks for no subtitles', () => {
+  const v = { Year: 2016, Make: 'CHEVROLET', Model: 'SILVERADO 1500' };
+  for (const p of [promptNative(v, 'Hi there.', 30, 'adult woman', 'speech', 20), prompt(v, 'x', 'showroom', 30, 'adult woman'), prompt(v, 'x', 'dynamic', 15, 'adult woman')]) {
+    assert.ok(p.includes(VEHICLE_DETAILS_RULE) && /never put any lettering, decal, stripe or logo on the doors/.test(p), p.slice(0, 80));
+    assert.ok(p.includes('no captions or subtitles') && !/space at the bottom of the frame for captions|captions are added/.test(p), 'asking for caption space made Seedance draw fake subtitles');
+  }
 });

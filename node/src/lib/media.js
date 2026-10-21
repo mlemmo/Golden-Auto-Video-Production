@@ -228,29 +228,26 @@ export function cutoutPhotos(cfg, images) {
  */
 export async function cutoutSheet(v, cfg, db, sheet, { cut = cutoutPhotos, download = downloadPhotos } = {}) {
   if (!str(cfg.cutout_python ?? '') && cut === cutoutPhotos) return null;
-  const key = 'sheet_cutout:' + str(sheet.content_hash ?? '');
+  // v2: no text on the sheet (v1 printed the car's name, stock number and photo labels, and Seedance may copy text from a
+  // reference onto the car: invented door lettering on a Silverado, 2026-10-20).
+  const key = 'sheet_cutout:v2:' + str(sheet.content_hash ?? '');
   const saved = sheet.content_hash ? state(db, key) : null;
   if (saved?.url && existsSync(assetDir(cfg) + '/' + saved.url.split('/').pop())) return saved;
   const urls = sheet.photo_urls ?? [];
-  const all = v.photos ?? [];
   const bytes = await sheetBytes(urls, cfg, download);
   if (!urls.length || Object.keys(bytes).length !== urls.length) throw new Error('A vehicle photo could not be read for the video reference. Nothing was sent; try again.');
   const cutBytes = await cut(cfg, urls.map((_, i) => bytes[i]));
   const cols = urls.length <= 4 ? 2 : 3, width = 1800, tileW = Math.trunc(width / cols), boxW = tileW - 30, boxH = Math.round(boxW * 0.737);
-  const rows = Math.ceil(urls.length / cols), height = 100 + rows * (boxH + 40);
-  const tiles = [], texts = [
-    { text: title(v) + ' | STOCK ' + str(v.StockNumber ?? ''), x: 24, y: 20, size: 22, color: '#1b2230', bold: true },
-    { text: 'Original inventory photos, car only - source views only; no invented angles or features', x: 24, y: 52, size: 16, color: '#1b2230' },
-  ];
-  urls.forEach((url, i) => {
+  const rows = Math.ceil(urls.length / cols), height = 15 + rows * (boxH + 15);
+  const tiles = [];
+  urls.forEach((_, i) => {
     const size = probeImage(cutBytes[i]);
     if (!size) throw new Error('Background removal returned an unreadable photo.');
-    const x = (i % cols) * tileW + 15, y = 100 + Math.floor(i / cols) * (boxH + 40);
+    const x = (i % cols) * tileW + 15, y = 15 + Math.floor(i / cols) * (boxH + 15);
     const ratio = Math.min(boxW / size.width, boxH / size.height), w = Math.round(size.width * ratio), h = Math.round(size.height * ratio);
     tiles.push({ bytes: cutBytes[i], x: x + Math.trunc((boxW - w) / 2), y: y + Math.trunc((boxH - h) / 2), w, h });
-    texts.push({ text: 'SOURCE PHOTO ' + (all.indexOf(url) + 1), x, y: y + boxH + 8, size: 16, color: '#1b2230' });
   });
-  const jpg = renderSheet({ width, height, bg: '#dee0e3', tiles, texts, quality: 92 });
+  const jpg = renderSheet({ width, height, bg: '#dee0e3', tiles, texts: [], quality: 92 });
   const name = randomBytes(20).toString('hex') + '.jpg';
   mkdirSync(assetDir(cfg), { recursive: true, mode: 0o755 });
   writeFileSync(assetDir(cfg) + '/' + name, jpg, { mode: 0o644 });
