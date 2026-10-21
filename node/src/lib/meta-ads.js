@@ -255,6 +255,8 @@ export async function adPreview(db, cfg, inp, { allowed = [], transport = metaFe
   try {
     const key = previewKey(a.meta_account, a.job_id);
     let v = state(db, key);
+    // A request that already uploaded its video uses that one.
+    if (!v?.video_id && a.platforms?.meta?.video_id) { v = { video_id: a.platforms.meta.video_id, thumbnail: a.platforms.meta.thumbnail ?? '' }; save(db, key, v); }
     if (!v?.video_id) {
       const up = await g.upload(a.meta_account, videoPath(cfg, a), a.vehicle + ' ' + a.stock);
       v = { video_id: str(up.id ?? ''), at: gmdateC() };
