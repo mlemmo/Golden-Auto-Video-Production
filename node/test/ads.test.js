@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openMemoryDb, save } from '../src/lib/db.js';
 import { jsonEncode } from '../src/lib/storedjson.js';
-import { adApi, adPending, adRecord, adSettings } from '../src/lib/ads.js';
+import { adApi, adPending, adRecord, adSettings, adToday } from '../src/lib/ads.js';
 
 const NOW = Date.parse('2026-10-21T17:00:00Z');
 function setup(job = {}) {
@@ -89,4 +89,28 @@ test('radius in miles; the request also carries km for TikTok; old km settings a
   save(db, 'ad_settings:eastbay', { radius_km: 40 });
   assert.equal(adSettings(db, 'eastbay').radius_miles, 25, 'settings saved in km before become miles');
   assert.equal(adSettings(db, 'nobody').radius_miles, 15, 'default 15 miles');
+});
+
+test('start dates are California calendar days: an evening request for today is accepted', () => {
+  const evening = Date.parse('2026-10-22T02:26:00Z'); // 7:26 PM PDT on 10/21
+  assert.deepEqual([adToday(evening), adToday(Date.parse('2026-10-22T07:30:00Z'))], ['2026-10-21', '2026-10-22']);
+});
+
+test('an evening request in California can start today; an ad deleted in Meta can be removed from the list', () => {
+  const { db, api } = setup();
+  api('ad_settings_save', settings);
+  const evening = { now: Date.parse('2026-10-22T02:26:00Z') }; // 7:26 PM PDT on 10/21
+  const r = api('ad_request', request({ platforms: ['meta'], start_date: '2026-10-21' }), evening);
+  assert.equal(r.ad.start_date, '2026-10-21');
+  assert.throws(() => api('ad_remove', { id: r.ad.id, confirm_deleted: false }), /Confirm that you deleted/);
+  // Launched and paused in Meta, then deleted there by the user.
+  const stored = JSON.parse(db.prepare('SELECT payload FROM ad_requests WHERE id=?').get(r.ad.id).payload);
+  stored.platforms.meta = { status: 'paused', campaign_id: 'c1', want: 'active' };
+  db.prepare('UPDATE ad_requests SET payload=? WHERE id=?').run(jsonEncode(stored), r.ad.id);
+  assert.throws(() => api('ad_remove', { id: r.ad.id }), /Confirm that you deleted/);
+  assert.match(api('ad_remove', { id: r.ad.id, confirm_deleted: true }).message, /Nothing was changed in the ad account/);
+  assert.equal(api('ad_list', {}).ads.length, 0, 'gone from the list');
+  const after = JSON.parse(db.prepare('SELECT payload FROM ad_requests WHERE id=?').get(r.ad.id).payload);
+  assert.ok(after.removed && after.platforms.meta.status === 'removed' && !('want' in after.platforms.meta), 'the ads worker leaves it alone');
+  assert.equal(api('ad_request', request({ platforms: ['meta'], start_date: '2026-10-21' }), evening).ad.platforms.meta.status, 'requested', 'the video can be advertised again');
 });

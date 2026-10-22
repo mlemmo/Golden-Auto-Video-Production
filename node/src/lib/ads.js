@@ -13,7 +13,7 @@ import { CLIENT_DEFAULT, clientFind, clientDetails, clientInventory } from './cl
 export const AD_PLATFORMS = ['meta', 'tiktok'];
 export const AD_PLATFORM_NAME = { meta: 'Meta (Facebook & Instagram)', tiktok: 'TikTok' };
 // Request → (Meta: launching) → launched paused → active ⇄ paused → ended; or failed / canceled.
-export const AD_STATUSES = ['requested', 'launching', 'launched_paused', 'active', 'paused', 'ended', 'failed', 'canceled'];
+export const AD_STATUSES = ['requested', 'launching', 'launched_paused', 'active', 'paused', 'ended', 'failed', 'canceled', 'removed'];
 const MIN_BUDGET = { meta: 5, tiktok: 20 };
 // The dashboard uses miles (Meta's radius targeting takes 1–50 miles); the request also keeps km for TikTok Ads Manager.
 export const KM_PER_MILE = 1.609344;
@@ -80,6 +80,14 @@ const publicAd = (a) => ({ ...a });
  * (requests of one video or all of the account's clients), ad_cancel (a request not launched yet), ad_settings_save
  * (admins). allowed = the account's client ids.
  */
+/**
+ * Today's date (YYYY-MM-DD) where the dealers are. Start and end dates are the dealer's calendar days: on the UTC
+ * date, an evening request in California for "today" was refused as a past date (2026-10-21, 7:26 PM PDT = 10/22 UTC).
+ */
+export const AD_TIME_ZONE = 'America/Los_Angeles';
+export const adToday = (now = Date.now(), timeZone = AD_TIME_ZONE) =>
+  new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(now));
+
 export function adApi(action, inp, db, { allowed = [CLIENT_DEFAULT], user = '', now = Date.now(), random = randomBytes } = {}) {
   adTables(db);
   const mine = (client) => { if (!allowed.includes(client)) throw new Error('Your account has no access to that client.'); };
@@ -94,7 +102,7 @@ export function adApi(action, inp, db, { allowed = [CLIENT_DEFAULT], user = '', 
   if (action === 'ad_settings_save') { const client = str(inp.client ?? ''); mine(client); return { settings: adSettingsSave(db, client, inp), message: 'Ad settings saved.' }; }
   if (action === 'ad_list') {
     const id = str(inp.id ?? '');
-    return { ads: adLoadAll(db).filter((a) => allowed.includes(a.client) && (!id || a.job_id === id)).slice(0, 100).map(publicAd) };
+    return { ads: adLoadAll(db).filter((a) => allowed.includes(a.client) && !a.removed && (!id || a.job_id === id)).slice(0, 100).map(publicAd) };
   }
   if (action === 'ad_cancel') {
     const a = adLoad(db, str(inp.id ?? '')); if (!a) throw new Error('Ad request not found. Reload the list.');
@@ -104,6 +112,17 @@ export function adApi(action, inp, db, { allowed = [CLIENT_DEFAULT], user = '', 
     for (const x of open) x.status = 'canceled';
     adStore(db, a);
     return { ad: publicAd(a), message: 'Request cancelled.' };
+  }
+  // An ad deleted in Meta Ads Manager (or TikTok) leaves the list; the app stops tracking it and changes nothing there.
+  if (action === 'ad_remove') {
+    const a = adLoad(db, str(inp.id ?? '')); if (!a) throw new Error('Ad not found. Reload the list.');
+    mine(a.client);
+    if (inp.confirm_deleted !== true) throw new Error('Confirm that you deleted or stopped this ad in the ad account first.');
+    if (Object.values(a.platforms).some((x) => x.status === 'launching')) throw new Error('This ad is being created right now. Wait a minute, then remove it.');
+    for (const x of Object.values(a.platforms)) { if (!['ended', 'failed', 'canceled'].includes(x.status)) x.status = 'removed'; delete x.want; }
+    a.removed = true; a.removed_at = gmdateC(new Date(now)); a.removed_by = str(user);
+    adStore(db, a);
+    return { message: 'Removed from the list. Nothing was changed in the ad account.' };
   }
   if (action === 'ad_switch_on' || action === 'ad_pause' || action === 'ad_retry') {
     // Meta only: the ads worker applies it within a minute (meta-ads.js).
@@ -116,7 +135,7 @@ export function adApi(action, inp, db, { allowed = [CLIENT_DEFAULT], user = '', 
       return { ad: publicAd(a), message: 'Launching again (paused). It carries on from where it stopped.' };
     }
     if (!['launched_paused', 'active', 'paused'].includes(x.status)) throw new Error(x.status === 'ended' ? 'This ad has ended. Request a new ad to run it again.' : 'The ad is not created yet. Wait until it shows as created and paused.');
-    const today = new Date(now).toISOString().slice(0, 10);
+    const today = adToday(now);
     if (action === 'ad_switch_on' && a.end_date < today) throw new Error('This ad is past its end date.');
     x.want = action === 'ad_switch_on' ? 'active' : 'paused'; delete x.error;
     adStore(db, a);
@@ -138,8 +157,8 @@ export function adApi(action, inp, db, { allowed = [CLIENT_DEFAULT], user = '', 
     if (budget > 1000) throw new Error('The daily budget can be at most $1,000 here.');
     if (!(Number.isInteger(days) && days >= 1 && days <= 30)) throw new Error('Run the ad for 1–30 days.');
     const start = str(inp.start_date ?? '');
-    const today = new Date(now).toISOString().slice(0, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || start < today || Date.parse(start) > now + 30 * 86400000) throw new Error('Choose a start date from today up to 30 days ahead.');
+    const today = adToday(now);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || start < today || Date.parse(start) > Date.parse(today) + 30 * 86400000) throw new Error('Choose a start date from today up to 30 days ahead.');
     const text = trim(str(inp.text ?? '')), headline = trim(str(inp.headline ?? '')), tiktok = trim(str(inp.tiktok_text ?? ''));
     const link = trim(str(inp.link ?? ''));
     if (!text && platforms.includes('meta')) throw new Error('Write the ad text.');
@@ -169,7 +188,7 @@ export function adApi(action, inp, db, { allowed = [CLIENT_DEFAULT], user = '', 
 
 /** TikTok requests to launch by hand and TikTok ads past their end date to end. */
 export function adPending(db, now = Date.now()) {
-  const today = new Date(now).toISOString().slice(0, 10);
+  const today = adToday(now);
   const out = { launch: [], end: [] };
   for (const a of adLoadAll(db).reverse()) {
     for (const [p, x] of Object.entries(a.platforms)) {

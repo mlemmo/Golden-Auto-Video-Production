@@ -127,6 +127,7 @@ export function AdsWindow({ open, onClose }) {
                       </div>
                     ))}
                     {Object.values(a.platforms).some((x) => x.status === 'requested') && <div className="actions"><button type="button" className="secondary small" onClick={() => act('ad_cancel', { id: a.id })}>Cancel request</button></div>}
+                    {!Object.values(a.platforms).some((x) => ['requested', 'launching'].includes(x.status)) && <div className="actions"><button type="button" className="secondary small" onClick={() => { if (window.confirm('Remove this ad from the list? Do this only after deleting or stopping it in Meta Ads Manager (or TikTok). Nothing is changed in the ad account.')) act('ad_remove', { id: a.id, confirm_deleted: true }); }}>Remove from list</button></div>}
                   </div>
                 </article>
               ))}

@@ -13,7 +13,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { str, trim, gmdateC } from './text.js';
 import { facebookConfig, facebookConnection } from './facebook.js';
 import { metaFetch } from './social.js';
-import { adTables, adLoad, adLoadAll, adStore, adSettings } from './ads.js';
+import { adTables, adLoad, adLoadAll, adStore, adSettings, adToday } from './ads.js';
 import { state, save } from './db.js';
 
 // A video still processing after this long is given up (nothing was created that can spend).
@@ -157,7 +157,7 @@ export async function adsWorkerRun(db, cfg, opts = {}) {
   const { transport = metaFetch, now = Date.now() } = opts;
   adTables(db);
   const log = [];
-  const today = new Date(now).toISOString().slice(0, 10);
+  const today = adToday(now);
   for (const listed of adLoadAll(db).reverse()) {
     // Read again: the dashboard may have cancelled it or asked to switch it on since the list was read.
     const a = adLoad(db, listed.id); const x = a?.platforms.meta;
