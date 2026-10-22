@@ -20,6 +20,7 @@ import { state, save } from './db.js';
 import { CLIENT_DEFAULT, clientInventory, clientInventoryKey } from './clients.js';
 import { requestText, rawurlencode, goldenInventory } from './website.js';
 import { narrationTables, narrationLoad, narrationCheckAudio } from './narrations.js';
+import { narrationLines } from './finishing.js';
 import { nativeSpeech, speechScript } from './speech.js';
 import { promptNative, prompt } from './prompts.js';
 import { spokespersonFind } from './spokespersons.js';
@@ -269,8 +270,12 @@ export async function generateJob(db, cfg, client, inp, opts = {}) {
   const respell = cfg.respell && typeof cfg.respell === 'object' && !Array.isArray(cfg.respell) ? cfg.respell : {};
   // Background setting from the scene library (none chosen: the library's default; the showroom words are unchanged).
   const scene = sceneFind(db, inp.scene);
+  // With the approved recording, her lines are timed sentence by sentence from it ([AUDIO: Xs] she says "…"); when the
+  // recording cannot be split into sentences the whole line is one [Dialogue: "…"] block as before.
+  let lines = null;
+  if (voice === 'elevenlabs') { try { lines = await (opts.narrationLines ?? narrationLines)(cfg, approvedVoice, title(fresh)); } catch { lines = null; } }
   const promptText = voice === 'elevenlabs'
-    ? promptNative(fresh, str(approvedVoice.text), duration, presenter.description, 'speech', approvedVoice.audio_duration != null ? toFloat(approvedVoice.audio_duration) : null, respell, scene.description)
+    ? promptNative(fresh, str(approvedVoice.text), duration, presenter.description, 'speech', approvedVoice.audio_duration != null ? toFloat(approvedVoice.audio_duration) : null, respell, scene.description, lines)
     : voice === 'native' ? promptNative(fresh, nativeSpeech(spoken), duration, presenter.description, voiceRef !== '', null, respell, scene.description)
       : prompt(fresh, spoken, style, duration, presenter.description, scene.description);
   const fingerprint = jobFingerprint(v, spoken, sheet, avatar, presenter.description, format, style, duration, voice, promptText, voiceRef, resolution);

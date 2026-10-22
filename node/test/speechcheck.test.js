@@ -33,3 +33,16 @@ test('speech is split at pauses into pieces of up to 8 seconds', () => {
   assert.deepEqual(speechChunks([[0.5, 2], [2.3, 6], [6.4, 9.1], [9.5, 12], [12.2, 20]]), [[0.5, 6], [6.4, 12], [12.2, 20]]);
   assert.deepEqual(speechChunks([]), []);
 });
+
+test('timed dialogue: each sentence of the approved recording pinned to when she says it', async () => {
+  const { speechLines } = await import('../src/lib/finishing.js');
+  const { promptNative } = await import('../src/lib/prompts.js');
+  const text = 'Need a truck with style? Take a look at this twenty fifteen Ram, here at Golden Auto in San Ramon. Book your test drive today at my golden auto dot net.';
+  const cues = [{ start: 0, text: 'Need a truck with style?' }, { start: 1.8, text: 'Take a look at this\ntwenty fifteen Ram,' }, { start: 4, text: 'here at Golden Auto\nin San Ramon.' }, { start: 6.5, text: 'Book your test drive' }, { start: 7.6, text: 'at my golden auto\ndot net.' }];
+  const lines = speechLines(text, cues);
+  assert.deepEqual(lines.map((l) => l.at), [0, 1.8, 6.5]);
+  assert.equal(speechLines(text, cues.slice(0, 2)), null, 'sentences and pauses do not match: no timed lines');
+  const p = promptNative({ Make: 'RAM' }, text, 15, 'adult woman', 'speech', 9, {}, undefined, lines);
+  assert.ok(p.endsWith('[AUDIO: 0.5s] she says "Need a truck with style?" [AUDIO: 2.2s] she says "Take a look at this twenty fifteen Ram, here at Golden Auto in Sahn Ruh-mohn." [AUDIO: 6.5s] she says "Book your test drive today at my golden auto dot net." [clear diction, distinct syllables]'), p.slice(-400));
+  assert.ok(promptNative({ Make: 'RAM' }, text, 15, 'adult woman', 'speech', 9).includes('[Dialogue: "Need a truck'), 'without times: one dialogue block');
+});

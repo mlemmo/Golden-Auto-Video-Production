@@ -63,11 +63,22 @@ export function finalWords(speech) {
   return 'Her final words are "' + last + '": she says them only once, then immediately stops talking, closes her mouth and smiles warmly; she never says them again. ';
 }
 
+/**
+ * Her words, last in the prompt. With sentence times from the approved recording (lines: [{ at, text }]) each sentence
+ * is its own short line pinned to when she says it, "[AUDIO: 4.2s] she says "…"" (user suggestion 2026-10-21: one long
+ * quoted block let Seedance drop a phrase and say the price twice); the times follow her real pace on video (pace).
+ * Otherwise the whole line is one [Dialogue: "…"] tag.
+ */
+function dialogue(said, lines, speakFrom, pace, respell) {
+  if (!Array.isArray(lines) || !lines.length) return '[Dialogue: "' + said + '"]';
+  return lines.map((l) => '[AUDIO: ' + num(round(speakFrom + l.at * pace, 1)) + 's] she says "' + seedanceRespell(trim(str(l.text).replaceAll('"', "'").replace(/[\t\n\v\f\r ]+/g, ' ')), respell) + '"').join(' ');
+}
+
 /** The original background (the default setting); the scene library (src/lib/scenes.js) offers others. */
 export const SHOWROOM_SETTING = 'a bright, upscale modern showroom with polished floors, soft even lighting and tall windows, with open space all around the car, not a representation of the dealership’s actual building';
 const settingText = (setting) => rtrim(trim(str(setting ?? '') || SHOWROOM_SETTING), '.');
 
-export function promptNative(v, speech, duration = 30, presenter = SPOKESPERSON_DEFAULT_DESCRIPTION, voiceReference = false, speechSeconds = null, respell = {}, setting = SHOWROOM_SETTING) {
+export function promptNative(v, speech, duration = 30, presenter = SPOKESPERSON_DEFAULT_DESCRIPTION, voiceReference = false, speechSeconds = null, respell = {}, setting = SHOWROOM_SETTING, lines = null) {
   presenter = rtrim(trim(presenter), '.');
   speech = trim(speech.replaceAll('"', "'").replace(/[\t\n\v\f\r ]+/g, ' '));
   if (speech === '') throw new Error('Write the script the spokesperson will say.');
@@ -116,7 +127,7 @@ export function promptNative(v, speech, duration = 30, presenter = SPOKESPERSON_
     'She says only the dialogue below, word for word, and nothing else. She says each sentence exactly once, in this order, and then stops: she never repeats a sentence, the price or the website, and never adds words of her own. ' +
     finalWords(said) +
     (recorded ? recordingPronunciationGuide(speech, v, respell) : speechPronunciationGuide(speech)) +
-    '[Dialogue: "' + said + '"] [clear diction, distinct syllables]';
+    dialogue(said, lines, speakFrom, SEEDANCE_PACE, respell) + ' [clear diction, distinct syllables]';
 }
 
 /** Silent walkaround or dynamic sequence for the lip-sync method (no spoken script in the video). */

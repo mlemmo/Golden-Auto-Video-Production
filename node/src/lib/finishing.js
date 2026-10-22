@@ -132,6 +132,24 @@ export async function nativeCaptions(cfg, job, source, work, offset = 0.0, { pyt
 }
 
 /**
+ * The approved recording's sentences with the time each one starts, [{ at, text }] (seconds into the recording), for
+ * the timed dialogue lines of the Seedance prompt. Times come from the recording's pauses, as for the captions
+ * (captionCues); null when the sentences and the measured pauses cannot be matched one to one.
+ */
+export function speechLines(text, cues) {
+  const sentences = trim(str(text)).split(/(?<=[.?!])\s+/u).filter((x) => x !== '');
+  const starts = [];
+  let open = true;
+  for (const c of cues ?? []) { if (open) starts.push(c.start); open = /[.?!]["”']?$/u.test(trim(str(c.text))); }
+  return sentences.length && starts.length === sentences.length ? sentences.map((x, k) => ({ at: starts[k], text: x })) : null;
+}
+export async function narrationLines(cfg, narration, vehicle = '', { python = finishPython } = {}) {
+  const path = narrationCheckAudio(cfg, narration);
+  const timing = await python({ op: 'analyze', audio: path, audio_hash: narration.audio_hash, ffmpeg: str(cfg.ffmpeg_path ?? '/usr/bin/ffmpeg') });
+  return speechLines(str(narration.text), captionCues(str(narration.text), str(vehicle), timing.spans ?? [], toFloat(timing.speech_end)));
+}
+
+/**
  * Pieces of the speech for the speech check: voiced spans grouped into chunks of up to `max` seconds, split at pauses.
  * Whisper skips a repeated phrase when it hears the whole video at once (the Ram's price said twice was heard once)
  * but hears it in a short piece.
