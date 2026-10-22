@@ -16,6 +16,17 @@ function stage(j) {
   if (j.status === 'submission_uncertain') return ['Submission not confirmed — check Higgsfield history before retrying', 'bad'];
   return [j.status === 'failed' ? 'Failed' : j.status, j.status === 'failed' ? 'bad' : ''];
 }
+/** What she said compared with the approved script (caption worker, local whisper): a bad take is flagged before posting. */
+export function SpeechCheck({ check }) {
+  if (!check) return null;
+  if (check.ok) return <p className="speech-check ok">✓ Speech check: she said the script as approved.</p>;
+  return (
+    <div className="speech-check bad" role="note">
+      <strong>⚠ Speech check: {check.issues.length === 1 ? 'one difference' : check.issues.length + ' differences'} from the approved script. Watch before posting.</strong>
+      <ul>{check.issues.map((x, k) => <li key={k}>{x.message}</li>)}</ul>
+    </div>
+  );
+}
 const VOICE = { elevenlabs: 'approved voice', native: 'Seedance voice', narration: 'lip-sync' };
 
 export default function Videos() {
@@ -68,6 +79,7 @@ function Job({ j, say, openCaptions }) {
       <small>{details}</small>
       {j.error && <p>{j.error}</p>}
       {j.finish_error && <p>{j.finish_error}</p>}
+      <SpeechCheck check={j.speech_check} />
       <div className="actions">
         {j.captioned_url?.startsWith('https://') && <Link href={j.captioned_url} className="button">Download final video</Link>}
         {j.video_url?.startsWith('https://') && <Link href={j.video_url}>Open uncaptioned master</Link>}

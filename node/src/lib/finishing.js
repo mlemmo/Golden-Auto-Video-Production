@@ -12,6 +12,7 @@ import { captionCues, captionRetime, captionSpokenScript, captionCallForPrice, c
 import { narrationTables, narrationCheckAudio } from './narrations.js';
 import { CLIENT_DEFAULT, clientInventory } from './clients.js';
 import { priceMatches } from './price.js';
+import { speechCheck } from './speechcheck.js';
 
 const HELPER = fileURLToPath(new URL('../../../private/finish_video.py', import.meta.url));
 export const NARRATION_OFFSET = 0.5;
@@ -114,13 +115,60 @@ export function nativeCues(job, timing, heard, offset = 0.0) {
 }
 
 /** Captions for a native-voice video, timed from its speech (the master's audio, or the swapped-in narration). */
-export async function nativeCaptions(cfg, job, source, work, offset = 0.0, { python = finishPython, heard = heardWords } = {}) {
+export async function nativeCaptions(cfg, job, source, work, offset = 0.0, { python = finishPython, heard = heardWords, chunked = heardWordsChunked } = {}) {
   const ffmpeg = str(cfg.ffmpeg_path ?? '/usr/bin/ffmpeg'), wav = work + '/speech.wav';
   const r = await runProcess(ffmpeg, ['-nostdin', '-v', 'error', '-y', '-i', source, '-vn', '-ac', '1', '-ar', '16000', '-t', '61', wav], { stdio: 'ignore' });
   if (r.code !== 0 || !existsSync(wav)) throw new Error('No usable speech audio found for the captions.');
   const timing = await python({ op: 'analyze', audio: wav, audio_hash: sha256File(wav), ffmpeg });
   // Captions show the caption text; local speech recognition (when configured) tells where she added words.
-  return nativeCues(job, timing, await heard(cfg, wav, work), offset);
+  const srt = nativeCues(job, timing, await heard(cfg, wav, work), offset);
+  // Seedance's own speech is checked against the approved script (a swapped-in narration is the approved audio itself).
+  if (!truthy(job.audio_swap) && ['native', 'elevenlabs'].includes(str(job.voice ?? ''))) {
+    const words = await chunked(cfg, wav, work, timing.spans ?? []);
+    const check = words.length ? speechCheck(str(job.script), words) : null;
+    if (check) job.speech_check = check; else delete job.speech_check;
+  }
+  return srt;
+}
+
+/**
+ * Pieces of the speech for the speech check: voiced spans grouped into chunks of up to `max` seconds, split at pauses.
+ * Whisper skips a repeated phrase when it hears the whole video at once (the Ram's price said twice was heard once)
+ * but hears it in a short piece.
+ */
+export function speechChunks(spans, max = 8) {
+  const out = [];
+  for (const [a, b] of spans ?? []) {
+    const last = out.at(-1);
+    if (last && b - last[0] <= max) last[1] = b; else out.push([a, b]);
+  }
+  return out;
+}
+
+/** Recognized words of each chunk, in one whisper run, with times on the video's timeline; [] when unavailable. */
+export async function heardWordsChunked(cfg, wav, work, spans) {
+  const cli = str(cfg.whisper_cli ?? ''), model = str(cfg.whisper_model ?? ''), ffmpeg = str(cfg.ffmpeg_path ?? '/usr/bin/ffmpeg');
+  if (cli === '' || model === '') return [];
+  try { accessSync(cli, constants.X_OK); if (!statSync(model).isFile()) return []; } catch { return []; }
+  const chunks = speechChunks(spans).map(([a, b], k) => ({ from: Math.max(0, a - 0.2), to: b + 0.2, file: `${work}/chunk-${k}.wav` }));
+  if (!chunks.length) return [];
+  for (const c of chunks) {
+    try { unlinkSync(c.file + '.json'); } catch { /* none yet */ }
+    const r = await runProcess(ffmpeg, ['-nostdin', '-v', 'error', '-y', '-ss', c.from.toFixed(3), '-t', (c.to - c.from).toFixed(3), '-i', wav, c.file], { stdio: 'ignore' });
+    if (r.code !== 0) return [];
+  }
+  const r = await runProcess(cli, ['-m', model, ...chunks.flatMap((c) => ['-f', c.file]), '-l', 'en', '-t', String(Math.max(1, toInt(cfg.whisper_threads ?? 4))), '-ml', '1', '-sow', '-oj', '-np'], { stdio: 'ignore', timeoutMs: 300000 });
+  if (r.code === null || r.code === -1) return [];
+  const words = [];
+  for (const c of chunks) {
+    let d = null; try { d = JSON.parse(readFileSync(c.file + '.json', 'utf8')); } catch { return []; }
+    for (const seg of d?.transcription ?? []) {
+      const t = trim(str(seg.text ?? ''));
+      if (t === '' || seg.offsets?.from == null || seg.offsets?.to == null) continue;
+      words.push([t, c.from + seg.offsets.from / 1000, c.from + seg.offsets.to / 1000]);
+    }
+  }
+  return words;
 }
 
 /** Recognized words [[text, start, end], ...] from local whisper.cpp; [] when not configured or when it fails. */

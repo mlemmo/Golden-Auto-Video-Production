@@ -77,6 +77,7 @@ export function Library({ open, onClose }) {
                 <strong>{v.vehicle}</strong>
                 <span className="library-price">{money(v.price)}</span>
                 <small>{[names[v.client], FORMAT[v.format], v.duration ? v.duration + ' s' : '', v.created_at ? new Date(v.created_at).toLocaleDateString() : ''].filter(Boolean).join(' · ')}</small>
+                {v.speech_check?.ok === false && <span className="badge bad" title={v.speech_check.issues.map((x) => x.message).join('\n')}>⚠ Speech check: {v.speech_check.issues.length} difference{v.speech_check.issues.length === 1 ? '' : 's'}</span>}
               </div>
               <div className="actions">
                 <button type="button" className="small" onClick={() => setPlaying(v)}>Watch</button>

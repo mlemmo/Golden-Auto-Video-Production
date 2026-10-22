@@ -3,6 +3,7 @@
 // each post's progress and links, and lets the user cancel a scheduled post or retry a failed one.
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
+import { SpeechCheck } from './Videos.jsx';
 
 export const NAME = { facebook: 'Facebook', instagram: 'Instagram' };
 export const STATUS = { scheduled: 'Scheduled', uploading: 'Uploading', processing: 'Processing at Meta', publishing: 'Publishing', published: 'Published',
@@ -49,6 +50,7 @@ export function SocialPost({ v, onClose, say }) {
       <div className="social-panel" role="dialog" aria-label={'Post ' + v.vehicle}>
         <div className="social-head"><h3>Post to Facebook &amp; Instagram</h3><button type="button" className="secondary small" onClick={onClose}>Close</button></div>
         <p className="hint">{v.vehicle}</p>
+        <SpeechCheck check={v.speech_check?.ok === false ? v.speech_check : null} />
         {!status ? <p className="hint">Loading…</p> : !status.eligible ? <p className="note-important">{status.reason}</p> : (
           <>
             {none && <p className="note-important">Facebook and Instagram are not connected for this dealer yet. Choose the dealer at the top of the dashboard, open View details and press Connect Facebook &amp; Instagram.</p>}

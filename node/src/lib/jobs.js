@@ -455,7 +455,7 @@ export function libraryVideos(db, clientIds) {
     const client = j.client ?? CLIENT_DEFAULT;
     if (!clientIds.includes(client) || j.finish_status !== 'completed' || !String(j.captioned_url ?? '').startsWith('https://')) continue;
     out.push({ id: j.id, client, vehicle: str(j.vehicle), stock: str(j.stock), price: j.price ?? null, duration: j.duration ?? null, format: str(j.format),
-      url: j.captioned_url, created_at: j.finish_completed_at ?? j.created_at ?? '', approved_by: str(j.approved_by ?? '') });
+      url: j.captioned_url, created_at: j.finish_completed_at ?? j.created_at ?? '', approved_by: str(j.approved_by ?? ''), speech_check: j.speech_check ?? null });
   }
   return out.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
 }
