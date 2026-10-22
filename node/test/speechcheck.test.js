@@ -15,7 +15,7 @@ test('a clean take passes; numbers, prices, letters and the website compare as s
 });
 
 test('the 2015 Ram take: a phrase left out and the price said again are both reported with times', () => {
-  const heard = words('Need a truck with style? Take a look at this 2015 Ram 1500 Crew Cab Laramie Longhorn, here at Golden Auto in San Ramon. It comes with four-wheel drive, 154,000 miles, priced at $15,688 San Ramalers. At $15,688 dollars. Book your test drive today at mygoldenauto.net.');
+  const heard = words('Need a truck with style? Take a look at this 2015 Ram 1500 Crew Cab Laramie Longhorn, here at Golden Auto in San Ramon. It comes with four-wheel drive, 154,000 miles, priced at $15,688 San Ramalers. At $15,688, dollars. Book your test drive today at mygoldenauto.net.');
   const r = speechCheck(script, heard, now);
   assert.equal(r.ok, false);
   assert.deepEqual(r.issues.map((x) => x.kind), ['missing', 'repeat']);

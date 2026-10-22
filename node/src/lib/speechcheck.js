@@ -20,7 +20,8 @@ export function speechCheck(script, heard, now = gmdateC) {
   const want = narrationWords(String(script ?? ''));
   const got = [];
   heard.forEach(([text, start, end], i) => {
-    for (const w of narrationWords(String(text ?? ''))) {
+    // Trailing punctuation stops "$15,688," being read as a price.
+    for (const w of narrationWords(String(text ?? '').trim().replace(/[.,!?;:…]+$/u, ''))) {
       // Whisper writes "$15,688 dollars": the spelled-out price already ends in "dollars".
       if (/^dollars?$/.test(w) && got.at(-1)?.w === w && got.at(-1).i !== i) continue;
       got.push({ w, start, end, i });
