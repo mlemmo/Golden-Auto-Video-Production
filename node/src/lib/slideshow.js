@@ -17,7 +17,7 @@ import { sheetBytes } from './media.js';
 import { CLIENT_DEFAULT, clientInventory } from './clients.js';
 import { narrationTables, narrationLoad, narrationCheckAudio } from './narrations.js';
 import { NARRATION_OFFSET, finishPython } from './finishing.js';
-import { musicFind } from './music.js';
+import { musicFind, musicFilter } from './music.js';
 import { backdropFind, backdropsAvailable, aiBackdropsAvailable, applyBackdrop, photoLabels, AI_PRICE, AI_MAX } from './backdrops.js';
 
 export const FORMAT_SIZE = { instagram_reels: [1080, 1920], facebook_reels: [1080, 1920], facebook_feed: [1080, 1350], square: [1080, 1080], youtube: [1920, 1080] };
@@ -58,15 +58,23 @@ export function slideshowPlan({ total, speechEnd, photos, intro = true }) {
 const round3 = (x) => Math.round(x * 1000) / 1000;
 
 /**
- * The FFmpeg arguments that draw the silent master: one still per slide (inputs in slide order: files[i] with its
+ * The FFmpeg arguments that draw the slideshow: one still per slide (inputs in slide order: files[i] with its
  * fit), composed at the delivery size, zoomed slowly (zoompan on a 2× copy, so the motion stays smooth) and joined
  * with cross-fades. fit 'cover' fills the frame; 'contain' shows the whole photo over a blurred, darker copy of it
- * (a 4:3 photo in a tall frame keeps the whole car).
+ * (a 4:3 photo in a tall frame keeps the whole car). final: { narration, music, style, offsetMs } draws the finished
+ * video in the same run (captions.srt burned in, the voice and optional music mixed), so it is encoded only once;
+ * without it a silent master is drawn.
  */
-export function slideshowArgs(cfg, plan, inputs, [w, h], output) {
+export function slideshowArgs(cfg, plan, inputs, [w, h], output, final = null) {
   const args = [str(cfg.ffmpeg_path ?? 'ffmpeg'), '-nostdin', '-n', '-hide_banner', '-loglevel', 'error'];
   for (const x of inputs) args.push('-i', x.file);
+  const voiceIn = inputs.length, musicIn = inputs.length + 1;
+  if (final) {
+    args.push('-i', final.narration);
+    if (final.music) args.push('-stream_loop', '-1', '-i', final.music);
+  }
   const graph = [];
+  const lastLabel = final ? 'vraw' : 'v';
   plan.slides.forEach((s, i) => {
     // Every slide but the last also covers the cross-fade into the next one.
     const last = i === plan.slides.length - 1, len = s.end - s.start + (last ? 0 : SLIDE_FADE);
@@ -81,13 +89,21 @@ export function slideshowArgs(cfg, plan, inputs, [w, h], output) {
   });
   let prev = 's0';
   for (let i = 1; i < plan.slides.length; i++) {
-    const out = i === plan.slides.length - 1 ? 'v' : `x${i}`;
+    const out = i === plan.slides.length - 1 ? lastLabel : `x${i}`;
     graph.push(`[${prev}][s${i}]xfade=transition=fade:duration=${SLIDE_FADE}:offset=${plan.slides[i].start.toFixed(3)}[${out}]`);
     prev = out;
   }
-  if (plan.slides.length === 1) graph.push('[s0]null[v]');
-  args.push('-filter_complex', graph.join(';'), '-map', '[v]', '-t', plan.total.toFixed(3), '-r', String(SLIDE_FPS),
-    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '17', '-threads', '2', '-pix_fmt', 'yuv420p', '-an', output);
+  if (plan.slides.length === 1) graph.push(`[s0]null[${lastLabel}]`);
+  if (!final) {
+    args.push('-filter_complex', graph.join(';'), '-map', '[v]', '-t', plan.total.toFixed(3), '-r', String(SLIDE_FPS),
+      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '17', '-threads', '2', '-pix_fmt', 'yuv420p', '-an', output);
+    return args;
+  }
+  graph.push(`[vraw]subtitles=captions.srt:force_style='${final.style}'[v]`);
+  graph.push(final.music ? musicFilter(`${voiceIn}:a`, `${musicIn}:a`, final.offsetMs, plan.total)
+    : `[${voiceIn}:a]adelay=${final.offsetMs}:all=1,apad[a]`);
+  args.push('-filter_complex', graph.join(';'), '-map', '[v]', '-map', '[a]', '-t', plan.total.toFixed(3), '-r', String(SLIDE_FPS),
+    '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '19', '-threads', '2', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-movflags', '+faststart', output);
   return args;
 }
 
@@ -178,7 +194,7 @@ export function goldenSlideshowBuild(db, cfg, inp, dealer, { random = randomByte
  * Draws a slideshow job's silent master.mp4 in work: its photos (this server's copies, or the CDN), the two cards
  * (private/finish_video.py, op slideshow_card) and one FFmpeg run. opts: { photos(urls), python, ffmpeg(args, work, log) }.
  */
-export async function slideshowMaster(cfg, job, work, ffmpeg, { photos = (urls) => sheetBytes(urls, cfg), python = finishPython, backdrops = applyBackdrop, labels = photoLabels, db = null } = {}) {
+export async function slideshowMaster(cfg, job, work, ffmpeg, { photos = (urls) => sheetBytes(urls, cfg), python = finishPython, backdrops = applyBackdrop, labels = photoLabels, db = null, final = null } = {}) {
   const [w, h] = formatSize(job.format);
   const urls = (job.photos ?? []).slice(0, SLIDESHOW_MAX_PHOTOS);
   const bytes = await photos(urls);
@@ -215,7 +231,8 @@ export async function slideshowMaster(cfg, job, work, ffmpeg, { photos = (urls) 
   };
   const inputs = [];
   for (const s of plan.slides) inputs.push(s.kind === 'photo' ? files[s.photo] : await card(s.kind));
-  const status = await ffmpeg(slideshowArgs(cfg, plan, inputs, [w, h], `${work}/master.mp4`), work, `${work}/ffmpeg.log`);
+  // With final, the finished video is written straight to final.output (one encode); else a silent master.mp4.
+  const status = await ffmpeg(slideshowArgs(cfg, plan, inputs, [w, h], final ? final.output : `${work}/master.mp4`, final), work, `${work}/ffmpeg.log`);
   if (status !== 0) throw new Error('The slideshow could not be drawn (FFmpeg failed).');
   return plan;
 }

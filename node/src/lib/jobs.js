@@ -368,7 +368,10 @@ export function goldenJobDelete(db, cfg, id, allowed = null) {
   const base = str(cfg.public_base_url ?? '').replace(/\/+$/, '') + '/assets/', url = str(job.captioned_url ?? '');
   if (base !== '/assets/' && url.startsWith(base)) {
     const name = url.slice(base.length);
-    if (/^[a-f0-9]{40}\.mp4$/.test(name)) { const path = assetDir(cfg) + '/' + name; if (existsSync(path)) unlinkSync(path); }
+    if (/^[a-f0-9]{40}\.mp4$/.test(name)) {
+      const path = assetDir(cfg) + '/' + name; if (existsSync(path)) unlinkSync(path);
+      const poster = assetDir(cfg) + '/posters/' + name.replace(/\.mp4$/, '.jpg'); if (existsSync(poster)) unlinkSync(poster);
+    }
   }
   // Uploaded footage belongs to this job only.
   if ((job.provider ?? '') === 'footage' && /^[a-f0-9]{32}\.(mp4|mov)$/.test(str(job.footage_file ?? ''))) {
@@ -508,7 +511,7 @@ export function libraryVideos(db, clientIds) {
     const client = j.client ?? CLIENT_DEFAULT;
     if (!clientIds.includes(client) || j.finish_status !== 'completed' || !String(j.captioned_url ?? '').startsWith('https://')) continue;
     out.push({ id: j.id, client, kind: videoKind(j), vehicle: str(j.vehicle), stock: str(j.stock), price: j.price ?? null, duration: j.duration ?? null, format: str(j.format),
-      url: j.captioned_url, created_at: j.finish_completed_at ?? j.created_at ?? '', approved_by: str(j.approved_by ?? ''), speech_check: j.speech_check ?? null });
+      url: j.captioned_url, poster: str(j.poster_url ?? ''), created_at: j.finish_completed_at ?? j.created_at ?? '', approved_by: str(j.approved_by ?? ''), speech_check: j.speech_check ?? null });
   }
   return out.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
 }

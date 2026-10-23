@@ -131,15 +131,21 @@ test('caption worker draws slideshows instead of downloading', async () => {
     const opts = {
       autoBuildOpts: { poll: async () => ({}) },
       download: async () => { throw new Error('no download for slideshows'); },
-      slideshow: async (c, j, work) => { seen.push(j.id); writeFileSync(work + '/master.mp4', 'video'); },
+      // One encode: the slideshow is drawn after its captions, straight into the final file with voice and captions.
+      slideshow: async (c, j, work, ff, o) => { seen.push([j.id, o.final]); assert.ok(existsSync(work + '/captions.srt'), 'captions first'); writeFileSync(o.final.output, Buffer.alloc(2000)); },
       captions: async () => '1\n00:00:00,500 --> 00:00:02,000\nCaption words.\n',
-      ffmpeg: async (args) => { seen.push(args.join(' ')); writeFileSync(args.at(-1), Buffer.alloc(2000)); return 0; },
+      ffmpeg: async () => { throw new Error('no second encode for slideshows'); },
     };
     await captionWorkerRun(db, cfg, opts);
     const done = getJob(db, job.id);
     assert.equal(done.finish_status, 'completed', done.finish_error);
-    assert.equal(seen[0], job.id);
-    assert.ok(seen[1].includes('scale=1920:1080') && seen[1].includes('narrations/'), '16:9 render with the approved voice');
+    assert.equal(seen[0][0], job.id);
+    assert.ok(seen[0][1].narration.includes('narrations/') && seen[0][1].output.startsWith(cfg.asset_dir) && seen[0][1].style.includes('FontSize=11'));
+    // The one-run graph burns the captions in and mixes the voice.
+    const plan = slideshowPlan({ total: 8, speechEnd: 4, photos: 1, intro: false });
+    const args = slideshowArgs({}, plan, plan.slides.map((x, i) => ({ file: 'in' + i + '.jpg', fit: 'cover' })), [1920, 1080], 'out.mp4', { narration: 'v.mp3', music: null, style: 'X', offsetMs: 500 });
+    const g = args[args.indexOf('-filter_complex') + 1];
+    assert.ok(g.includes("[vraw]subtitles=captions.srt:force_style='X'[v]") && g.includes('[2:a]adelay=500') && args.includes('[a]') && !args.includes('-an'));
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
@@ -291,5 +297,50 @@ test('AI showroom background: paid approval, at most 8 new pictures, made once (
     const again = {};
     assert.equal(await applyBackdrop(cfg, files(), backdrop, [1080, 1920], { classify, ai, approved: false, stats: again }), 8, 'made before: reused without approval or cost; the 2 others stay as taken');
     assert.deepEqual([sent, again.calls], [8, 0]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('caption worker drains the queue with two renders side by side, each video once', async () => {
+  const { dir, cfg, db } = setup();
+  try {
+    const { captionWorkerDrain, queuedRenders } = await import('../src/lib/worker.js');
+    goldenSlideshowBuild(db, cfg, { client: 'golden-auto', stock: 'S1', narration_id: 'N1', confirm_current: '1', formats: ['instagram_reels', 'facebook_feed', 'youtube', 'square'] }, DEALER);
+    assert.equal(queuedRenders(db, cfg), 4);
+    let running = 0, most = 0; const made = [];
+    const opts = {
+      autoBuildOpts: { poll: async () => ({}) },
+      captions: async () => '1\n00:00:00,500 --> 00:00:02,000\nCaption words.\n',
+      slideshow: async (c, j, work, ff, o) => {
+        running++; most = Math.max(most, running); made.push(j.id);
+        await new Promise((r) => setTimeout(r, 20));
+        writeFileSync(o.final.output, Buffer.alloc(2000)); running--;
+      },
+    };
+    let touched = 0;
+    await captionWorkerDrain(db, cfg, { opts, touch: () => touched++ });
+    assert.equal(queuedRenders(db, cfg), 0, 'all four done in one run');
+    assert.equal(new Set(made).size, 4, 'each video made once');
+    assert.equal(made.length, 4);
+    assert.equal(most, 2, 'two at a time');
+    assert.ok(touched >= 4, 'the lock is kept fresh');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('posters: made from a finished video, shown in the Library, removed with the video', { skip: !hasFfmpeg }, async () => {
+  const { dir, cfg, db } = setup();
+  try {
+    const { makePoster, backfillPosters } = await import('../src/lib/worker.js');
+    const name = 'c'.repeat(40) + '.mp4', video = `${dir}/assets/${name}`;
+    spawnSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=gray:s=320x240:d=2:r=10', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', video]);
+    put(db, 'jobs', { id: 'P1', provider: 'slideshow', status: 'completed', finish_status: 'completed', captioned_url: 'https://example.com:4343/assets/' + name, vehicle: 'Golf', stock: 'S1' });
+    assert.equal(await backfillPosters(db, cfg), 1);
+    const job = JSON.parse(db.prepare("SELECT payload FROM jobs WHERE id='P1'").get().payload);
+    assert.equal(job.poster_url, 'https://example.com:4343/assets/posters/' + 'c'.repeat(40) + '.jpg');
+    assert.ok(existsSync(`${dir}/assets/posters/${'c'.repeat(40)}.jpg`));
+    assert.equal(libraryVideos(db, ['golden-auto'])[0].poster, job.poster_url);
+    assert.equal(await backfillPosters(db, cfg), 0, 'made once');
+    assert.equal(await makePoster(cfg, `${dir}/assets/not-a-video.mp4`), '');
+    goldenJobDelete(db, cfg, 'P1');
+    assert.ok(!existsSync(`${dir}/assets/posters/${'c'.repeat(40)}.jpg`), 'deleted with its video');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

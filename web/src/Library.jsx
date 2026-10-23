@@ -22,6 +22,7 @@ async function shareVideo(v, say) {
 }
 const fileName = (v, ext = '.mp4') => `${v.vehicle} ${v.stock}`.trim().replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '') + ext;
 // Library categories: [id, tab label, what an empty one says].
+const PAGE = 48;   // Library items per page
 const KIND = { ai: 'AI video', slideshow: 'Slideshow', footage: 'My footage' };
 const CATEGORIES = [['all', 'All'], ['ai', 'AI videos'], ['slideshow', 'Slideshows'], ['footage', 'My footage'], ['stills', 'Stills']];
 const EMPTY = { all: 'Nothing finished yet.', ai: 'No AI videos yet.', slideshow: 'No slideshow videos yet.', footage: 'No videos from your footage yet.',
@@ -42,6 +43,9 @@ export function Library({ open, onClose }) {
   const setView = (v) => { setViewRaw(v); try { localStorage.setItem('library-view', v); } catch { /* not stored */ } };
   const [selected, setSelected] = useState(() => new Set());   // keys "video:<id>" / "still:<id>"
   const [deleting, setDeleting] = useState(false);
+  // Pages: the newest PAGE items first, "Show more" for the next ones (back to one page when the filters change).
+  const [limit, setLimit] = useState(PAGE);
+  useEffect(() => { setLimit(PAGE); }, [client, q, category]);
   const { readOnly } = useStudio();
   useEffect(() => { if (open) api('library').then(setData).catch((e) => say(e.message, true)); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -94,7 +98,8 @@ export function Library({ open, onClose }) {
   const items = [...(data?.videos ?? []).map((v) => ({ type: 'video', cat: v.kind ?? 'ai', item: v })), ...(data?.stills ?? []).map((x) => ({ type: 'still', cat: 'stills', item: x }))]
     .filter((x) => match(x.item)).sort((a, b) => String(b.item.created_at).localeCompare(String(a.item.created_at)));
   const count = (c) => items.filter((x) => c === 'all' || x.cat === c).length;
-  const shown = items.filter((x) => category === 'all' || x.cat === category);
+  const matching = items.filter((x) => category === 'all' || x.cat === category);
+  const shown = matching.slice(0, limit);
   const keyOf = (x) => x.type + ':' + x.item.id;
   const shownKeys = shown.map(keyOf);
   const picked = shownKeys.filter((k) => selected.has(k));   // only what is on screen can be deleted
@@ -110,7 +115,7 @@ export function Library({ open, onClose }) {
       <div key={keyOf(x)} className={'library-row' + (selected.has(keyOf(x)) ? ' picked' : '')}>
         {pickBox(x)}
         <button type="button" className="library-mini" aria-label={(video ? 'Play ' : 'View ') + v.vehicle} onClick={() => (video ? setPlaying(v) : setViewing(v))}>
-          {video ? <video src={v.url + '#t=1'} preload="metadata" muted playsInline /> : <img src={v.url} alt="" loading="lazy" />}
+          {video && !v.poster ? <video src={v.url + '#t=1'} preload="metadata" muted playsInline /> : <img src={video ? v.poster : v.url} alt="" loading="lazy" />}
         </button>
         <div className="library-row-main">
           <strong>{v.vehicle}</strong>
@@ -133,7 +138,7 @@ export function Library({ open, onClose }) {
     <article key={v.id} className={'library-card' + (selected.has('video:' + v.id) ? ' picked' : '')}>
       {pickBox({ type: 'video', item: v })}
       <button type="button" className="library-thumb" aria-label={'Play ' + v.vehicle} onClick={() => setPlaying(v)}>
-        <video src={v.url + '#t=1'} preload="metadata" muted playsInline />
+        {v.poster ? <img src={v.poster} alt="" loading="lazy" /> : <video src={v.url + '#t=1'} preload="metadata" muted playsInline />}
         <span className="play" aria-hidden="true">▶</span>
       </button>
       <div className="library-meta">
@@ -184,7 +189,7 @@ export function Library({ open, onClose }) {
             </select>
           )}
           <input type="search" aria-label="Search" placeholder="Search by car or stock number" value={q} onChange={(e) => setQ(e.target.value)} />
-          <span className="library-count">{data ? `${shown.length} item${shown.length === 1 ? '' : 's'}` : 'Loading…'}</span>
+          <span className="library-count">{data ? `${matching.length} item${matching.length === 1 ? '' : 's'}` : 'Loading…'}</span>
           <span className="library-view" role="group" aria-label="View">
             <button type="button" className={'small' + (view === 'grid' ? '' : ' secondary')} aria-pressed={view === 'grid'} onClick={() => setView('grid')}>Grid</button>
             <button type="button" className={'small' + (view === 'list' ? '' : ' secondary')} aria-pressed={view === 'list'} onClick={() => setView('list')}>List</button>
@@ -211,7 +216,7 @@ export function Library({ open, onClose }) {
             </button>
           ))}
         </div>
-        {data && !shown.length && <p className="hint">{q || client ? 'Nothing matches.' : EMPTY[category]}</p>}
+        {data && !matching.length && <p className="hint">{q || client ? 'Nothing matches.' : EMPTY[category]}</p>}
         {sections.map(([title, xs]) => (
           <section key={title ?? 'all'} className="library-section">
             {title && <h3 className="library-section-title">{title}<small>{xs.length}</small></h3>}
@@ -220,6 +225,12 @@ export function Library({ open, onClose }) {
               : <div className="library-grid">{xs.map((x) => (x.type === 'still' ? stillCard(x.item) : videoCard(x.item)))}</div>}
           </section>
         ))}
+        {matching.length > shown.length && (
+          <div className="library-more">
+            <button type="button" className="secondary" onClick={() => setLimit((n) => n + PAGE)}>Show {Math.min(PAGE, matching.length - shown.length)} more</button>
+            <small>{shown.length} of {matching.length} shown</small>
+          </div>
+        )}
       </div>
       {playing && <Player v={playing} client={names[playing.client]} onClose={() => setPlaying(null)} onShare={() => shareVideo(playing, say)} onPost={readOnly ? null : () => setPosting(playing)} />}
       {viewing && <StillViewer x={viewing} client={names[viewing.client]} onClose={() => setViewing(null)} />}

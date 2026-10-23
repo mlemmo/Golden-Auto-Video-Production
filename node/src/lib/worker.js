@@ -72,6 +72,65 @@ export function renderArgs(cfg, job, narration, output, music = null) {
 }
 
 /**
+ * A small still from a finished video (assets/posters/<video name>.jpg, 360 px wide) for the Library's thumbnails, so
+ * the page shows pictures instead of loading every video. Returns its URL, or '' when it could not be made.
+ */
+export async function makePoster(cfg, videoPath) {
+  const name = videoPath.split('/').pop().replace(/\.mp4$/, '.jpg');
+  if (!/^[a-f0-9]{40}\.jpg$/.test(name)) return '';
+  const dir = str(cfg.asset_dir) + '/posters';
+  mkdirSync(dir, { recursive: true, mode: 0o755 });
+  const r = await runProcess(str(cfg.ffmpeg_path ?? 'ffmpeg'), ['-nostdin', '-v', 'error', '-y', '-ss', '1', '-i', videoPath, '-frames:v', '1', '-vf', 'scale=360:-2', '-q:v', '4', dir + '/' + name], { stdio: 'ignore', timeoutMs: 60000 });
+  if (r.code !== 0 || !existsSync(dir + '/' + name)) return '';
+  chmodSync(dir + '/' + name, 0o644);
+  return str(cfg.public_base_url).replace(/\/+$/, '') + '/assets/posters/' + name;
+}
+
+/** Posters for finished videos made before posters existed (a few per run). */
+export async function backfillPosters(db, cfg, limit = 20, poster = makePoster) {
+  let n = 0;
+  for (const { payload } of db.prepare('SELECT payload FROM jobs').all()) {
+    if (n >= limit) break;
+    const j = JSON.parse(payload), url = str(j.captioned_url ?? '');
+    if (j.finish_status !== 'completed' || j.poster_url || !url) continue;
+    const path = str(cfg.asset_dir) + '/' + url.split('/').pop();
+    if (!/^[a-f0-9]{40}\.mp4$/.test(url.split('/').pop()) || !existsSync(path)) continue;
+    const p = await poster(cfg, path); n++;
+    if (!p) continue;
+    // Re-read before saving: the video may have changed meanwhile.
+    const row = db.prepare('SELECT payload FROM jobs WHERE id=?').get(j.id); if (!row) continue;
+    const cur = JSON.parse(row.payload); if (cur.captioned_url !== j.captioned_url) continue;
+    cur.poster_url = p; saveRenderJob(db, cur);
+  }
+  return n;
+}
+
+/** Queued final renders waiting for this server. */
+export const queuedRenders = (db, cfg) => db.prepare('SELECT payload FROM jobs').all().map((r) => JSON.parse(r.payload))
+  .filter((j) => (j.finish_status ?? '') === 'queued' && (j.render_backend ?? cfg.render_backend ?? 'linux') === 'linux').length;
+
+/**
+ * The whole queue in one process: the auto build once, then `slots` renders side by side (config render_parallel,
+ * default 2; a slideshow uses about 1–2 GB and two CPU threads), each slot taking the next queued video as soon as it
+ * is free, until nothing is queued or `budgetMs` has passed (cron starts the next run a minute later). Each video is
+ * claimed by one slot only: picking and marking it "rendering" happen without a pause in between. touch() keeps the
+ * run's lock fresh. Returns the log lines.
+ */
+export async function captionWorkerDrain(db, cfg, { slots = Math.max(1, Math.min(4, Number(cfg.render_parallel ?? 2) || 2)), budgetMs = 50 * 60000, touch = () => {}, run = captionWorkerRun, now = () => Date.now(), opts = {} } = {}) {
+  const start = now(), out = [];
+  for (const line of await run(db, cfg, { ...opts, skipAutoBuild: false, renderLimit: 0 })) out.push(line);
+  const slot = async () => {
+    while (now() - start < budgetMs && queuedRenders(db, cfg) > 0) {
+      for (const line of await run(db, cfg, { ...opts, skipAutoBuild: true })) out.push(line);
+      touch();
+    }
+  };
+  await Promise.all(Array.from({ length: slots }, slot));
+  try { const n = await (opts.backfill ?? backfillPosters)(db, cfg); if (n) out.push('Posters made for ' + n + ' older videos'); } catch { /* next run */ }
+  return out;
+}
+
+/**
  * One worker run. opts: { download, autoBuildOpts, captions(cfg, job, source, work, offset), render(db, cfg, job, work,
  * output, w, h), slideshow(cfg, job, work, ffmpeg), ffmpeg(args, work, log), random, now } — replaceable in tests. Returns the log lines.
  */
@@ -83,9 +142,14 @@ export async function captionWorkerRun(db, cfg, opts = {}) {
   });
   const out = [];
   if (str(cfg.render_backend ?? 'linux') !== 'linux') return out;
-  try { for (const line of await autoBuild(db, cfg, opts.autoBuildOpts ?? {})) out.push(line); }
-  catch (e) { out.push('Auto-build step failed: ' + jobError(e.message)); }
+  // skipAutoBuild: a second render slot of the same run (the auto build runs once per run).
+  if (!opts.skipAutoBuild) {
+    try { for (const line of await autoBuild(db, cfg, opts.autoBuildOpts ?? {})) out.push(line); }
+    catch (e) { out.push('Auto-build step failed: ' + jobError(e.message)); }
+  }
 
+  // renderLimit 0: only the auto build (the drain's first step).
+  if (opts.renderLimit === 0) return out;
   let job = null;
   for (const { payload } of db.prepare('SELECT payload FROM jobs ORDER BY rowid').all()) {
     const j = JSON.parse(payload);
@@ -99,16 +163,18 @@ export async function captionWorkerRun(db, cfg, opts = {}) {
   let output = null;
   try {
     job.finish_status = 'rendering'; job.finish_started_at = gmdateC(); saveRenderJob(db, job);
-    // Uploaded footage is already on this server; slideshows are drawn here; generated videos are downloaded.
+    const isSlideshow = (job.provider ?? '') === 'slideshow';
+    // Uploaded footage is already on this server; generated videos are downloaded. A slideshow is drawn below, after
+    // its captions (they are timed from the approved voice), in one FFmpeg run with the captions and the sound.
     if ((job.provider ?? '') === 'footage') {
       const source = footageLocalPath(cfg, job);
       try { copyFileSync(source, work + '/master.mp4'); } catch { throw new Error('Cannot read the uploaded footage.'); }
     }
-    else if ((job.provider ?? '') === 'slideshow') await slideshow(cfg, job, work, ffmpeg, { db });
-    else await download(job.video_url, work + '/master.mp4');
+    else if (!isSlideshow) await download(job.video_url, work + '/master.mp4');
     let narration = null;
     // voice=elevenlabs keeps Seedance's own speech (its lips match it); audio_swap jobs replace it with the narration.
     if ((job.voice ?? '') === 'elevenlabs' && truthy(job.audio_swap)) narration = jobNarration(db, cfg, job);
+    if (isSlideshow && !narration) throw new Error('A slideshow needs its approved voice preview.');
     if (truthy(job.captions_from_audio)) {
       job.captions_srt = narration ? await captions(cfg, job, narration, work, NARRATION_OFFSET) : await captions(cfg, job, work + '/master.mp4', work, 0.0);
       saveRenderJob(db, job);
@@ -117,7 +183,10 @@ export async function captionWorkerRun(db, cfg, opts = {}) {
     const [w, h] = formatSize(job.format);
     const name = random(20).toString('hex') + '.mp4'; output = str(cfg.asset_dir) + '/' + name;
     if ((job.provider ?? '') === 'fal_lipsync') await render(db, cfg, job, work, output, w, h);
-    else {
+    else if (isSlideshow) {
+      await slideshow(cfg, job, work, ffmpeg, { db, final: { output, narration, music: jobMusic(cfg, job), style: CAPTION_STYLE_NATIVE, offsetMs: Math.round(NARRATION_OFFSET * 1000) } });
+      if (!existsSync(output) || statSync(output).size < 1000) throw new Error('The slideshow could not be drawn (no video written).');
+    } else {
       const status = await ffmpeg(renderArgs(cfg, job, narration, output, jobMusic(cfg, job)), work, work + '/ffmpeg.log');
       if (status !== 0 || !existsSync(output) || statSync(output).size < 1000) {
         let detail = ''; try { detail = readFileSync(work + '/ffmpeg.log').subarray(0, 1000).toString(); } catch { /* no log */ }
@@ -125,6 +194,7 @@ export async function captionWorkerRun(db, cfg, opts = {}) {
       }
     }
     chmodSync(output, 0o644);
+    job.poster_url = await (opts.poster ?? makePoster)(cfg, output);
     job.finish_status = 'completed'; job.finish_error = ''; job.captioned_url = str(cfg.public_base_url).replace(/\/+$/, '') + '/assets/' + name; job.finish_completed_at = gmdateC(); saveRenderJob(db, job);
     out.push('Caption render completed');
   } catch (e) {

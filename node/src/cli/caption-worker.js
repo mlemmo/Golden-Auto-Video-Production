@@ -1,11 +1,12 @@
 #!/usr/bin/env node
-// Caption worker (cron, every minute): auto build, then one queued final render (src/lib/worker.js). Node version of
-// One run at a time: a lock folder in data_dir, taken over when older than 20 minutes
+// Caption worker (cron, every minute): the auto build, then every queued final render, two at a time (config
+// render_parallel), the next one starting as soon as a slot is free (src/lib/worker.js captionWorkerDrain).
+// One run at a time: a lock folder in data_dir, kept fresh while rendering and taken over when older than 20 minutes
 // (a run that died; a render is marked stuck after 15).
-import { mkdirSync, rmSync, statSync } from 'node:fs';
+import { mkdirSync, rmSync, statSync, utimesSync } from 'node:fs';
 import { loadConfig } from '../lib/config.js';
 import { openDb } from '../lib/db.js';
-import { captionWorkerRun } from '../lib/worker.js';
+import { captionWorkerDrain } from '../lib/worker.js';
 
 const cfg = loadConfig();
 if (String(cfg.render_backend ?? 'linux') !== 'linux') process.exit(0);
@@ -16,7 +17,8 @@ catch {
   catch { process.exit(0); }
 }
 try {
-  for (const line of await captionWorkerRun(openDb(cfg), cfg)) console.log(line);
+  const touch = () => { try { const t = new Date(); utimesSync(lock, t, t); } catch { /* lock gone */ } };
+  for (const line of await captionWorkerDrain(openDb(cfg), cfg, { touch })) console.log(line);
 } finally {
   rmSync(lock, { recursive: true, force: true });
 }
