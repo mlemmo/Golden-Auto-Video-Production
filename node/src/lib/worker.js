@@ -111,12 +111,12 @@ export const queuedRenders = (db, cfg) => db.prepare('SELECT payload FROM jobs')
 
 /**
  * The whole queue in one process: the auto build once, then `slots` renders side by side (config render_parallel,
- * default 2; a slideshow uses about 1–2 GB and two CPU threads), each slot taking the next queued video as soon as it
- * is free, until nothing is queued or `budgetMs` has passed (cron starts the next run a minute later). Each video is
+ * default 1: on this 4-core server two at once took about 4 minutes for two slideshows against about 1 minute each
+ * one after the other, as both fight for the cores), each slot taking the next queued video as soon as it is free, until nothing is queued or `budgetMs` has passed (cron starts the next run a minute later). Each video is
  * claimed by one slot only: picking and marking it "rendering" happen without a pause in between. touch() keeps the
  * run's lock fresh. Returns the log lines.
  */
-export async function captionWorkerDrain(db, cfg, { slots = Math.max(1, Math.min(4, Number(cfg.render_parallel ?? 2) || 2)), budgetMs = 50 * 60000, touch = () => {}, run = captionWorkerRun, now = () => Date.now(), opts = {} } = {}) {
+export async function captionWorkerDrain(db, cfg, { slots = Math.max(1, Math.min(4, Number(cfg.render_parallel ?? 1) || 1)), budgetMs = 50 * 60000, touch = () => {}, run = captionWorkerRun, now = () => Date.now(), opts = {} } = {}) {
   const start = now(), out = [];
   for (const line of await run(db, cfg, { ...opts, skipAutoBuild: false, renderLimit: 0 })) out.push(line);
   const slot = async () => {

@@ -300,7 +300,7 @@ test('AI showroom background: paid approval, at most 8 new pictures, made once (
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('caption worker drains the queue with two renders side by side, each video once', async () => {
+test('caption worker drains the queue (two slots when configured), each video once', async () => {
   const { dir, cfg, db } = setup();
   try {
     const { captionWorkerDrain, queuedRenders } = await import('../src/lib/worker.js');
@@ -317,7 +317,7 @@ test('caption worker drains the queue with two renders side by side, each video 
       },
     };
     let touched = 0;
-    await captionWorkerDrain(db, cfg, { opts, touch: () => touched++ });
+    await captionWorkerDrain(db, cfg, { opts, slots: 2, touch: () => touched++ });
     assert.equal(queuedRenders(db, cfg), 0, 'all four done in one run');
     assert.equal(new Set(made).size, 4, 'each video made once');
     assert.equal(made.length, 4);
