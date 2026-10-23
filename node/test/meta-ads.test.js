@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { openMemoryDb } from '../src/lib/db.js';
+import { openMemoryDb, save } from '../src/lib/db.js';
 import { jsonEncode } from '../src/lib/storedjson.js';
 import { adApi } from '../src/lib/ads.js';
 import { adsWorkerRun, metaAdsAccount, adPreview, previewFrame } from '../src/lib/meta-ads.js';
@@ -16,6 +16,8 @@ function setup({ connected = true } = {}) {
   const cfg = { asset_dir: dir, data_dir: dir + '/data', facebook: { graph_version: 'v26.0' } };
   writeFileSync(dir + '/' + FILE, 'video');
   const db = openMemoryDb();
+  // The car as listed now: an ad must show its current price.
+  save(db, 'inventory', { vehicles: [{ StockNumber: '324492', Year: 2018, Make: 'VOLVO', Model: 'XC90', price: 25988 }] });
   db.prepare('INSERT INTO jobs VALUES (?,?,?)').run('job1', null, jsonEncode({ id: 'job1', client: 'golden-auto', vehicle: '2018 VOLVO XC90', stock: '324492', format: 'instagram_reels',
     duration: 30, price: 25988, finish_status: 'completed', captioned_url: 'https://staging.example.com:4343/assets/' + FILE, script: 'Take a look at this 2018 Volvo XC90.' }));
   if (connected) {

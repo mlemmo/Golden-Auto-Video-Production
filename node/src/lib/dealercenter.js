@@ -71,6 +71,9 @@ export function dcNormalize(raw) {
   }
   const photos = filterValidateInt(count ?? null);
   if (photos === false || photos < 0 || photos > 100) throw new Error(`Stock ${stock}: photo_count must be 0–100.`);
+  // The car's own page on the dealer's website (ads link to it); optional.
+  const pageUrl = trim(str(s.page_url ?? ''));
+  if (pageUrl !== '' && (!/^https:\/\/[^\s"'<>]+$/.test(pageUrl) || pageUrl.length > 500)) throw new Error(`Stock ${stock}: page_url must be an https web address.`);
   let sheet = null;
   if (s.sheet_photos !== undefined && s.sheet_photos !== null) {
     sheet = s.sheet_photos;
@@ -79,7 +82,7 @@ export function dcNormalize(raw) {
   }
   return { stock, vin, year, make, model, trim: trim(str(s.trim ?? '')), drivetrain: trim(str(s.drivetrain ?? '')), color: trim(str(s.color ?? '')),
     mileage: mileage === null || mileage === '' ? null : filterValidateInt(mileage), price: prices.length ? Math.max(...prices) : null,
-    description: dcCleanDescription(str(s.description ?? '')), photo_count: photos, photo_urls: urls, photo_key: key, sheet_photos: sheet };
+    description: dcCleanDescription(str(s.description ?? '')), photo_count: photos, photo_urls: urls, photo_key: key, sheet_photos: sheet, page_url: pageUrl };
 }
 /** True when the saved photo set no longer matches the snapshot (URL set when known, otherwise the count). */
 export function dcPhotosChanged(cur, s) {
@@ -103,6 +106,7 @@ export function dcApplyFields(v, s, feed = 'dealercenter') {
   v.Vin = s.vin || (v.Vin ?? 'stock:' + s.stock); v.Year = s.year; v.Make = s.make; v.Model = s.model; v.Trim = s.trim;
   v.Drivetrain = s.drivetrain; v.ExteriorColor = s.color; v.Odometer = s.mileage; v.VehiclePrice = s.price ?? 0; v.price = s.price;
   if (s.description !== '') v.description = s.description;
+  if (s.page_url) v.page_url = s.page_url;
   v.feed = feed; v.active = true; delete v.removed_at; v.dc_checked_at = gmdateC();
   return v;
 }

@@ -62,7 +62,7 @@ export function AdRequest({ v, onClose, say }) {
               <label>Radius (miles)<input type="number" min="1" max="50" value={f.radius_miles} onChange={set('radius_miles')} /></label>
             </div>
             <label>Target people around<input value={f.radius_address} placeholder="Dealership street address" onChange={set('radius_address')} /></label>
-            {f.meta && <label>Ad text (Meta)<textarea rows={4} maxLength={2000} value={f.text} onChange={set('text')} /></label>}
+            {f.meta && <label>Ad text (Meta)<textarea rows={4} maxLength={2000} value={f.text} onChange={set('text')} /><small className="hint">Meta’s advice for car ads: line 1 the car, miles and price; line 2 a benefit; line 3 where and the call to action. Keep the price the same as on the car’s page.</small></label>}
             {f.meta && <label>Headline (Meta)<input maxLength={80} value={f.headline} onChange={set('headline')} /></label>}
             {f.tiktok && <label>TikTok caption<input maxLength={100} value={f.tiktok_text} onChange={set('tiktok_text')} /><small className="hint">{f.tiktok_text.length} / 100 · no emoji</small></label>}
             <label>Link<input type="url" value={f.link} onChange={set('link')} /></label>

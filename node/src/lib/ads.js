@@ -9,6 +9,7 @@ import { jsonEncode } from './storedjson.js';
 import { state, save } from './db.js';
 import { trim, str, gmdateC } from './text.js';
 import { CLIENT_DEFAULT, clientFind, clientDetails, clientInventory } from './clients.js';
+import { adPrice } from './price.js';
 
 export const AD_PLATFORMS = ['meta', 'tiktok'];
 export const AD_PLATFORM_NAME = { meta: 'Meta (Facebook & Instagram)', tiktok: 'TikTok' };
@@ -59,18 +60,60 @@ function jobFor(db, id) {
   if (!r) throw new Error('Video not found. Reload the library.');
   return JSON.parse(r.payload);
 }
-/** Suggested ad copy and link for a video. */
+// Brand and model words kept in capitals when the listing's upper case is turned into title case.
+const KEEP_CAPS = new Set(['BMW', 'GMC', 'AMG', 'SUV', 'GT', 'GTI', 'TDI', 'TSI', 'XC90', 'XC60', 'XC40', 'CX-30', 'CX-5', 'CX-9', 'CR-V', 'HR-V', 'RAV4', 'XV', 'SE', 'LE', 'XLE', 'XLT', 'LT', 'LTZ', 'EX', 'LX', 'SR5', 'AWD', 'FWD', 'RWD', '4WD', '4X4', 'TRD', 'SV', 'SL', 'S', 'R']);
+const titleWord = (w) => (KEEP_CAPS.has(w.toUpperCase()) || /\d/.test(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+export const adTitle = (s) => trim(str(s)).split(/\s+/).map(titleWord).join(' ');
+const DRIVE_WORDS = { AWD: 'All-wheel drive', '4WD': 'Four-wheel drive', '4X4': 'Four-wheel drive', FWD: 'Front-wheel drive', RWD: 'Rear-wheel drive' };
+
+/**
+ * Suggested ad copy and link for a video, in the shape Meta recommends for auto ads: line 1 = the car, its miles and
+ * price; line 2 = a benefit from the listing (the car's fitted highlight line, else its drive and colour); line 3 =
+ * where it is and the call to action. Nothing is claimed that the listing does not say. The link is the car's own
+ * page on the dealer's website when the sync knows it (page_url), else the website.
+ */
 export function adDraft(db, job) {
   const client = job.client ?? CLIENT_DEFAULT;
   let dealer = { name: '', city: '', website: '' };
   try { dealer = clientDetails(clientFind(db, client)); } catch { /* client removed */ }
   const car = (clientInventory(db, client).vehicles ?? []).find((v) => str(v.StockNumber) === str(job.stock));
   const site = dealer.website ? 'https://' + dealer.website.replace(/^https?:\/\//, '') : '';
-  const link = /^https:\/\//.test(str(car?.url ?? '')) ? str(car.url) : site;
-  const name = str(job.vehicle).toLowerCase().replace(/\b[a-z]/g, (c) => c.toUpperCase());
-  const price = job.price ? ' · $' + Math.round(job.price).toLocaleString('en-US') : '';
-  const tiktok = (name + (dealer.name ? ' at ' + dealer.name : '') + '. Book your test drive today.').slice(0, 100);
-  return { text: trim(str(job.script ?? '')), headline: (name + price).slice(0, 80), tiktok_text: tiktok, link };
+  const page = [car?.page_url, car?.url].map((u) => str(u ?? '')).find((u) => /^https:\/\/[^\s]+$/.test(u));
+  const link = page ?? site;
+  const name = adTitle(job.vehicle);
+  // Trim without the body style ("Laramie Longhorn Crew Cab 4D" → "Laramie Longhorn"); "Base" is not worth saying.
+  const trimName = trim(str(car?.Trim ?? '').replace(/\b(sport utility|sedan|coupe|pickup|crew cab|quad cab|extended cab|regular cab|van|wagon|hatchback|convertible)\b.*$/gi, ''));
+  const full = name + (trimName && !/^base\b/i.test(trimName) && !name.toLowerCase().includes(trimName.toLowerCase()) ? ' ' + adTitle(trimName) : '');
+  const miles = car?.Odometer != null && Number(car.Odometer) >= 1000 ? Math.round(Number(car.Odometer) / 1000) + 'k miles' : '';
+  const price = job.price ? adPrice(Number(job.price)) : 'Call for price';
+  const line1 = full + ' — ' + [miles, price].filter(Boolean).join(', ');
+  let highlight = '';
+  try { highlight = str(state(db, 'intro:' + client + ':' + str(job.stock))?.highlight ?? ''); } catch { /* none */ }
+  const drive = DRIVE_WORDS[str(car?.Drivetrain ?? '').toUpperCase()] ?? '';
+  const color = trim(str(car?.ExteriorColor ?? ''));
+  const facts = [drive, color && !/^(other|unknown)$/i.test(color) ? color.toLowerCase() + ' exterior' : ''].filter(Boolean).join(', ');
+  const line2 = trim(highlight) || (facts ? facts.charAt(0).toUpperCase() + facts.slice(1) + '.' : '');
+  const where = dealer.name ? 'See it at ' + dealer.name + (dealer.city ? ' in ' + dealer.city : '') : 'See it in person';
+  const line3 = where + ' and book your test drive today.';
+  const text = [line1, line2, line3].filter(Boolean).join('\n');
+  const tiktok = (full + (dealer.name ? ' at ' + dealer.name : '') + '. Book your test drive today.').slice(0, 100);
+  return { text, headline: (name + (job.price ? ' · ' + adPrice(Number(job.price)) : '')).slice(0, 80), tiktok_text: tiktok, link };
+}
+
+/**
+ * An ad may only show the price the car is listed at now: the video's price (said and captioned) must match the
+ * current inventory, and the car must still be in it. Returns the reason it may not run, or ''.
+ */
+export function adPriceProblem(db, job) {
+  const car = (clientInventory(db, job.client ?? CLIENT_DEFAULT).vehicles ?? []).find((v) => str(v.StockNumber) === str(job.stock));
+  if (!car || car.active === false) return 'This car is no longer in the inventory, so it cannot be advertised.';
+  // Whole dollars, as the video says and shows it ($19,366.25 is advertised as $19,366).
+  const dollars = (p) => (p === null || p === undefined ? null : Math.floor(Number(p)));
+  if (dollars(job.price) !== dollars(car.price)) {
+    const say = (p) => (p === null || p === undefined ? 'no price' : adPrice(Number(p)));
+    return `The price changed since this video was made (video: ${say(job.price)}, listing now: ${say(car.price)}). Make a new video so the ad matches the listing.`;
+  }
+  return '';
 }
 
 const publicAd = (a) => ({ ...a });
@@ -95,8 +138,9 @@ export function adApi(action, inp, db, { allowed = [CLIENT_DEFAULT], user = '', 
     const job = jobFor(db, inp.id), client = job.client ?? CLIENT_DEFAULT; mine(client);
     const s = adSettings(db, client);
     const finished = job.finish_status === 'completed' && str(job.captioned_url ?? '').startsWith('https://');
-    return { settings: s, meta: !!s.meta_account, tiktok: !!s.tiktok_account, reels: REELS.includes(str(job.format)), eligible: finished,
-      reason: finished ? '' : 'This video is not finished yet.', draft: adDraft(db, job) };
+    const priceProblem = finished ? adPriceProblem(db, job) : '';
+    return { settings: s, meta: !!s.meta_account, tiktok: !!s.tiktok_account, reels: REELS.includes(str(job.format)), eligible: finished && !priceProblem,
+      reason: !finished ? 'This video is not finished yet.' : priceProblem, draft: adDraft(db, job) };
   }
   if (action === 'ad_settings') { const client = str(inp.client ?? ''); mine(client); return adSettings(db, client); }
   if (action === 'ad_settings_save') { const client = str(inp.client ?? ''); mine(client); return { settings: adSettingsSave(db, client, inp), message: 'Ad settings saved.' }; }
@@ -137,6 +181,11 @@ export function adApi(action, inp, db, { allowed = [CLIENT_DEFAULT], user = '', 
     if (!['launched_paused', 'active', 'paused'].includes(x.status)) throw new Error(x.status === 'ended' ? 'This ad has ended. Request a new ad to run it again.' : 'The ad is not created yet. Wait until it shows as created and paused.');
     const today = adToday(now);
     if (action === 'ad_switch_on' && a.end_date < today) throw new Error('This ad is past its end date.');
+    if (action === 'ad_switch_on') {
+      const row = db.prepare('SELECT payload FROM jobs WHERE id=?').get(a.job_id);
+      const problem = row ? adPriceProblem(db, JSON.parse(row.payload)) : 'The video of this ad was deleted.';
+      if (problem) throw new Error(problem + ' Pause or end this ad.');
+    }
     x.want = action === 'ad_switch_on' ? 'active' : 'paused'; delete x.error;
     adStore(db, a);
     return { ad: publicAd(a), message: action === 'ad_switch_on'
@@ -146,6 +195,7 @@ export function adApi(action, inp, db, { allowed = [CLIENT_DEFAULT], user = '', 
   if (action === 'ad_request') {
     const job = jobFor(db, inp.id), client = job.client ?? CLIENT_DEFAULT; mine(client);
     if (job.finish_status !== 'completed' || !str(job.captioned_url ?? '').startsWith('https://')) throw new Error('This video is not finished yet.');
+    const priceProblem = adPriceProblem(db, job); if (priceProblem) throw new Error(priceProblem);
     const s = adSettings(db, client);
     const platforms = [...new Set(Array.isArray(inp.platforms) ? inp.platforms.map(str) : [])].filter((p) => AD_PLATFORMS.includes(p));
     if (!platforms.length) throw new Error('Choose Meta, TikTok or both.');

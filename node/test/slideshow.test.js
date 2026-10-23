@@ -16,7 +16,8 @@ import { backdropApi, applyBackdrop } from '../src/lib/backdrops.js';
 import { goldenJobDelete } from '../src/lib/jobs.js';
 import { script } from '../src/lib/scripts.js';
 import { speechWordCount } from '../src/lib/speech.js';
-import { slideshowPlan, slideshowArgs, slideFit, cardPrice, formatSize, goldenSlideshowBuild, slideshowMaster } from '../src/lib/slideshow.js';
+import { slideshowPlan, slideshowArgs, slideFit, cardPrice, formatSize, goldenSlideshowBuild, slideshowMaster, heroOrder } from '../src/lib/slideshow.js';
+import { dcNormalize } from '../src/lib/dealercenter.js';
 import { JPEG_40x30, JPEG_1800x900 } from './fixtures/images.js';
 
 const hasFfmpeg = spawnSync('ffmpeg', ['-version']).status === 0;
@@ -209,4 +210,25 @@ test('showroom backdrops: library, build option, only outside photos replaced, c
     backdropApi('backdrop_delete', { id: up.items[0].id }, cfg, db);
     assert.equal(backdropApi('backdrop_list', {}, cfg, db).items.length, 0);
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('ad cut: no intro card, hero exterior then interior and detail first', async () => {
+  assert.deepEqual(heroOrder(['a', 'b', 'c', 'd', 'e'], ['text', 'interior', 'exterior', 'detail', 'exterior']), ['c', 'b', 'd', 'a', 'e']);
+  assert.deepEqual(heroOrder(['a', 'b'], ['interior', 'interior']), ['a', 'b'], 'missing kinds are skipped');
+  const { dir, cfg, db } = setup();
+  try {
+    const [job] = goldenSlideshowBuild(db, cfg, { client: 'golden-auto', stock: 'S1', narration_id: 'N1', confirm_current: '1', formats: ['facebook_feed'], ad_cut: '1' }, DEALER);
+    assert.ok(job.ad_cut === true && job.intro_card === false);
+    job.duration = 12; job.speech_end = 6;
+    const seen = [];
+    const ffmpeg = async (args) => { seen.push(args.filter((a, i) => args[i - 1] === '-i')); return 0; };
+    const labels = (c, files) => ({ labels: ['interior', 'detail', 'exterior'], sums: files.map(() => 'x') });
+    const plan = await slideshowMaster(cfg, job, dir + '/data', ffmpeg, { labels, python: async () => ({}) });
+    assert.equal(plan.slides[0].kind, 'photo', 'opens on a photo');
+    assert.deepEqual(seen[0].slice(0, 3).map((f) => f.split('/').pop()), ['photo-2.jpg', 'photo-0.jpg', 'photo-1.jpg'], 'exterior first, then interior, then detail');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+  const car = { stock: 'S1', year: 2015, make: 'RAM', model: '1500', photo_count: 0 };
+  assert.equal(dcNormalize({ ...car, page_url: 'https://www.mygoldenauto.net/inventory/ram/1500-crew-cab/666777/' }).page_url, 'https://www.mygoldenauto.net/inventory/ram/1500-crew-cab/666777/');
+  assert.throws(() => dcNormalize({ ...car, page_url: 'javascript:alert(1)' }), /page_url/);
+  assert.equal(dcNormalize(car).page_url, '');
 });

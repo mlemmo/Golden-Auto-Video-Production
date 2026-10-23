@@ -111,6 +111,7 @@ export default function App() {
   const [shapes, setShapes] = useState(['instagram_reels', 'facebook_feed', 'youtube']);
   const [music, setMusic] = useState('');   // background track id ('' = none)
   const [background, setBackground] = useState('');   // showroom backdrop id ('' = original photos)
+  const [adCut, setAdCut] = useState(false);   // slideshow for paid ads: no intro card, hero photos first
   const [approve, setApprove] = useState(false);
   const [confirmCurrent, setConfirmCurrent] = useState(false);
   const [resolution, setResolution] = useState('720p');
@@ -289,7 +290,7 @@ export default function App() {
     boot, client, clients, setClients, inventory, setInventory, syncLog, jobs, narr, spokespersons, spokesperson, scenes, scene, sceneId, setSceneId, showScenes,
     chosen, setChosen, duration, setDuration, script, setScript, voice, setVoice, style, setStyle, source, setSource,
     format, setFormat, spokespersonId, setSpokespersonId, approvedVoice, setApprovedVoice, approvedPreviews,
-    sheetUrl, setSheetUrl, footage, setFootage, shapes, setShapes, music, setMusic, background, setBackground, approve, setApprove, confirmCurrent, setConfirmCurrent, resolution, setResolution,
+    sheetUrl, setSheetUrl, footage, setFootage, shapes, setShapes, music, setMusic, background, setBackground, adCut, setAdCut, approve, setApprove, confirmCurrent, setConfirmCurrent, resolution, setResolution,
     captionJob, setCaptionJob, tool, setTool, collapsed, toggleStep, openStep, closeStep, stepClass,
     busy, run, statuses, loadClients, loadInventory, loadJobs, loadSyncLog, refreshNarrations, showSpokespersons,
     clearVehicle, switchClient, formStore, defaultScript,

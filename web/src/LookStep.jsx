@@ -96,6 +96,7 @@ function SlideshowShapes() {
       ))}
       <p className="hint">{photos ? `Uses this car's ${photos} listing photos in gallery order (about one every 2–3 seconds; a long gallery is cut to what fits), each with a slow zoom and a soft cross-fade. ` : 'This car has no photos yet. '}
         A dealer card with the price opens the video and a test-drive card with the website and phone number closes it. Captions are the approved caption text, timed from the voice. Free to build.</p>
+      <label className="check"><input type="checkbox" id="adCut" checked={s.adCut} onChange={(e) => s.setAdCut(e.target.checked)} /><b>Ad cut</b>&nbsp;— for paid ads: opens on the best outside shot, then the interior and a detail (no intro card; the dealer card still closes the video)</label>
       <ShowroomBackground />
       <BackgroundMusic />
     </div>

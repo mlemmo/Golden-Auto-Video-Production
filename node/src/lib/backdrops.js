@@ -100,24 +100,35 @@ export function backdropLayout(backdrop, [w, h]) {
 }
 
 /**
+ * Labels of photo files from the local CLIP sorter ('exterior', 'interior', 'detail', 'open', 'text', …), cached by
+ * photo content in data_dir/backdrop-cache; null when the sorter is not installed or fails.
+ */
+export function photoLabels(cfg, files, classify = (paths) => photoClassify(cfg, paths)) {
+  const cache = str(cfg.data_dir ?? '') + '/backdrop-cache';
+  mkdirSync(cache, { recursive: true, mode: 0o700 });
+  const sums = files.map((f) => createHash('sha256').update(readFileSync(f.file)).digest('hex'));
+  const labels = sums.map((h) => { try { return readFileSync(`${cache}/${h}.label`, 'utf8'); } catch { return null; } });
+  const unknown = files.map((f, i) => (labels[i] === null ? i : -1)).filter((i) => i >= 0);
+  if (unknown.length) {
+    const got = classify(unknown.map((i) => files[i].file));
+    if (!got) return null;
+    for (const i of unknown) { labels[i] = str(got[files[i].file] ?? 'error'); writeFileSync(`${cache}/${sums[i]}.label`, labels[i]); }
+  }
+  return { labels, sums };
+}
+
+/**
  * The slideshow's photo files with the backdrop applied to whole-car exterior shots (in place: files[i].file is
  * replaced by the composed picture). Labels and pictures are cached by photo content; without a classifier no photo
  * is changed (a cut-out interior would look broken). Returns the number of photos replaced.
  */
 export async function applyBackdrop(cfg, files, backdrop, size, { classify = (paths) => photoClassify(cfg, paths), compose = backdropCompose } = {}) {
   const cache = str(cfg.data_dir ?? '') + '/backdrop-cache';
-  mkdirSync(cache, { recursive: true, mode: 0o700 });
   const layout = backdropLayout(backdrop, size);
   const key = backdrop.id + (backdrop.file ? ':' + backdrop.file : '') + `:${layout.width}x${layout.height}`;
-  const sums = files.map((f) => createHash('sha256').update(readFileSync(f.file)).digest('hex'));
-  // Labels: cached ones, then one classifier run for the rest.
-  const labels = sums.map((h) => { try { return readFileSync(`${cache}/${h}.label`, 'utf8'); } catch { return null; } });
-  const unknown = files.map((f, i) => (labels[i] === null ? i : -1)).filter((i) => i >= 0);
-  if (unknown.length) {
-    const got = classify(unknown.map((i) => files[i].file));
-    if (!got) return 0;
-    for (const i of unknown) { labels[i] = str(got[files[i].file] ?? 'error'); writeFileSync(`${cache}/${sums[i]}.label`, labels[i]); }
-  }
+  const sorted = photoLabels(cfg, files, classify);
+  if (!sorted) return 0;
+  const { labels, sums } = sorted;
   const outs = sums.map((h) => `${cache}/${createHash('sha256').update(VERSION + '|' + key + '|' + h).digest('hex')}.jpg`);
   const todo = files.map((f, i) => i).filter((i) => labels[i] === 'exterior' && !existsSync(outs[i]));
   if (todo.length) await compose(cfg, todo.map((i) => ({ src: files[i].file, out: outs[i] })), backdrop.spec, layout);

@@ -7,8 +7,12 @@ import { jsonEncode } from '../src/lib/storedjson.js';
 import { adApi, adPending, adRecord, adSettings, adToday } from '../src/lib/ads.js';
 
 const NOW = Date.parse('2026-10-21T17:00:00Z');
-function setup(job = {}) {
+// The car as it is listed now (the ad's price must match it).
+const CAR = { StockNumber: '217723', Year: 2016, Make: 'CHEVROLET', Model: 'SILVERADO 1500', Trim: 'LT Crew Cab 4D', Drivetrain: '4WD', ExteriorColor: 'Black', Odometer: 118400, price: 19366.25,
+  page_url: 'https://www.mygoldenauto.net/inventory/chevrolet/silverado-1500-crew-cab/217723/' };
+function setup(job = {}, car = CAR) {
   const db = openMemoryDb();
+  if (car) save(db, 'inventory', { vehicles: [car] });
   const j = { id: 'job1', client: 'golden-auto', vehicle: '2016 CHEVROLET SILVERADO 1500', stock: '217723', format: 'instagram_reels', duration: 30, price: 19366,
     finish_status: 'completed', captioned_url: 'https://staging.example.com:4343/assets/' + 'a'.repeat(40) + '.mp4', script: 'Take a look at this 2016 Chevrolet Silverado. Priced at $19,366.', ...job };
   db.prepare('INSERT INTO jobs VALUES (?,?,?)').run(j.id, null, jsonEncode(j));
@@ -28,8 +32,34 @@ test('dealer ad settings: checked ids; suggested copy and link for a video', () 
   api('ad_settings_save', settings);
   const s = api('ad_status', { id: 'job1' });
   assert.deepEqual([s.meta, s.tiktok, s.reels, s.eligible], [true, true, true, true]);
-  assert.deepEqual(s.draft, { text: 'Take a look at this 2016 Chevrolet Silverado. Priced at $19,366.', headline: '2016 Chevrolet Silverado 1500 · $19,366',
-    tiktok_text: '2016 Chevrolet Silverado 1500 at Golden Auto. Book your test drive today.', link: 'https://mygoldenauto.net' });
+  // Meta's three lines: the car, miles and price; a benefit from the listing; where and the call to action.
+  assert.deepEqual(s.draft, { text: '2016 Chevrolet Silverado 1500 LT — 118k miles, $19,366\nFour-wheel drive, black exterior.\nSee it at Golden Auto in San Ramon and book your test drive today.',
+    headline: '2016 Chevrolet Silverado 1500 · $19,366', tiktok_text: '2016 Chevrolet Silverado 1500 LT at Golden Auto. Book your test drive today.',
+    link: 'https://www.mygoldenauto.net/inventory/chevrolet/silverado-1500-crew-cab/217723/' }, 'links to the car\'s own page');
+  // The car's fitted highlight line is the benefit when there is one; without a page link the website is used.
+  const other = setup({}, { ...CAR, page_url: undefined });
+  save(other.db, 'intro:golden-auto:217723', { hook: 'Need a truck?', highlight: 'It is ready for work during the week and adventures on the weekend.' });
+  const d = other.api('ad_status', { id: 'job1' }).draft;
+  assert.ok(d.text.split('\n')[1] === 'It is ready for work during the week and adventures on the weekend.' && d.link === 'https://mygoldenauto.net');
+  assert.ok(setup({ price: null }, { ...CAR, price: null }).api('ad_status', { id: 'job1' }).draft.text.startsWith('2016 Chevrolet Silverado 1500 LT — 118k miles, Call for price'));
+});
+
+test('an ad must show the current price of a car still in the inventory', () => {
+  const changed = setup({}, { ...CAR, price: 18500 });
+  changed.api('ad_settings_save', settings);
+  const st = changed.api('ad_status', { id: 'job1' });
+  assert.ok(!st.eligible && /video: \$19,366, listing now: \$18,500/.test(st.reason));
+  assert.throws(() => changed.api('ad_request', request({ platforms: ['meta'] })), /price changed/);
+  const sold = setup({}, { ...CAR, active: false });
+  sold.api('ad_settings_save', settings);
+  assert.throws(() => sold.api('ad_request', request({ platforms: ['meta'] })), /no longer in the inventory/);
+  // A price change after the ad was created stops it from being switched on.
+  const later = setup();
+  later.api('ad_settings_save', settings);
+  const ad = later.api('ad_request', request({ platforms: ['meta'] })).ad;
+  adRecord(later.db, ad.id, 'meta', { status: 'launched_paused' });
+  save(later.db, 'inventory', { vehicles: [{ ...CAR, price: 18500 }] });
+  assert.throws(() => later.api('ad_switch_on', { id: ad.id }), /price changed.*Pause or end this ad/);
 });
 
 test('a request is checked, recorded, and never spends: budgets, dates, TikTok rules, credit wording, duplicates', () => {

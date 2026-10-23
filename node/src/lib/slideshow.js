@@ -17,7 +17,7 @@ import { CLIENT_DEFAULT, clientInventory } from './clients.js';
 import { narrationTables, narrationLoad, narrationCheckAudio } from './narrations.js';
 import { NARRATION_OFFSET, finishPython } from './finishing.js';
 import { musicFind } from './music.js';
-import { backdropFind, backdropsAvailable, applyBackdrop } from './backdrops.js';
+import { backdropFind, backdropsAvailable, applyBackdrop, photoLabels } from './backdrops.js';
 
 export const FORMAT_SIZE = { instagram_reels: [1080, 1920], facebook_reels: [1080, 1920], facebook_feed: [1080, 1350], square: [1080, 1080], youtube: [1920, 1080] };
 /** Width and height of a finished video in this publish format (9:16 when unknown). */
@@ -90,6 +90,12 @@ export function slideshowArgs(cfg, plan, inputs, [w, h], output) {
   return args;
 }
 
+/** Photos reordered for an ad: first exterior, first interior, first detail, then the others in gallery order. */
+export function heroOrder(items, labels) {
+  const first = ['exterior', 'interior', 'detail'].map((l) => labels.indexOf(l)).filter((i) => i >= 0);
+  return [...first, ...items.map((_, i) => i).filter((i) => !first.includes(i))].map((i) => items[i]);
+}
+
 /** 'cover' when the photo's shape is close to the frame's (a 4:3 photo in 16:9), else 'contain'. */
 export function slideFit(size, [w, h]) {
   if (!size) return 'contain';
@@ -130,13 +136,14 @@ export function goldenSlideshowBuild(db, cfg, inp, dealer, { random = randomByte
     vehicle: title(v), price: cardPrice(v.price ?? null) };
   const jobs = [];
   for (const format of formats) {
-    const intro = format !== 'youtube';
+    // The ad cut (paid ads) and 16:9 open on the car itself; the dealer card closes the video.
+    const intro = format !== 'youtube' && !truthy(inp.ad_cut ?? false);
     const plan = slideshowPlan({ total: length, speechEnd, photos: photos.length, intro });
     const id = random(12).toString('hex');
     const job = { id, client, stock: v.StockNumber, vehicle: title(v), spokesperson: '', format, style: 'slideshow',
       duration: plan.total, speech_end: round3(speechEnd), status: 'completed', provider: 'slideshow', created_at: gmdateC(), approved_by: str(inp.approved_by ?? ''),
       script: str(voice.caption_script), speech_script: str(voice.text), price: v.price ?? null, voice: 'elevenlabs',
-      narration_id: voice.id, audio_swap: true, captions_from_audio: true, photos, cards, intro_card: intro, ...(music ? { music_id: music.id, music_file: music.file, music_name: music.name } : {}),
+      narration_id: voice.id, audio_swap: true, captions_from_audio: true, photos, cards, intro_card: intro, ...(truthy(inp.ad_cut ?? false) ? { ad_cut: true } : {}), ...(music ? { music_id: music.id, music_file: music.file, music_name: music.name } : {}),
       ...(backdrop ? { background: backdrop.id, background_name: backdrop.name } : {}), video_url: '',
       finish_status: 'queued', render_backend: 'linux', finish_error: '', captioned_url: null, auto_queued_at: gmdateC() };
     db.prepare('INSERT INTO jobs VALUES (?,?,?)').run(id, null, jsonEncode(job));
@@ -149,20 +156,26 @@ export function goldenSlideshowBuild(db, cfg, inp, dealer, { random = randomByte
  * Draws a slideshow job's silent master.mp4 in work: its photos (this server's copies, or the CDN), the two cards
  * (private/finish_video.py, op slideshow_card) and one FFmpeg run. opts: { photos(urls), python, ffmpeg(args, work, log) }.
  */
-export async function slideshowMaster(cfg, job, work, ffmpeg, { photos = (urls) => sheetBytes(urls, cfg), python = finishPython, backdrops = applyBackdrop, db = null } = {}) {
+export async function slideshowMaster(cfg, job, work, ffmpeg, { photos = (urls) => sheetBytes(urls, cfg), python = finishPython, backdrops = applyBackdrop, labels = photoLabels, db = null } = {}) {
   const [w, h] = formatSize(job.format);
   const urls = (job.photos ?? []).slice(0, SLIDESHOW_MAX_PHOTOS);
-  // The same plan as at build time (its total already fits the voice).
-  const plan = slideshowPlan({ total: job.duration, speechEnd: toFloat(job.speech_end ?? 0), photos: urls.length, intro: job.intro_card !== false });
-  const used = plan.slides.filter((s) => s.kind === 'photo').map((s) => urls[s.photo]);
-  const bytes = await photos(used);
-  const files = [];
-  used.forEach((_, i) => {
+  const bytes = await photos(urls);
+  let gallery = [];
+  urls.forEach((_, i) => {
     if (!bytes[i]) return;
     const file = `${work}/photo-${i}.jpg`; writeFileSync(file, bytes[i]);
-    files.push({ file, size: probeImage(bytes[i]) });
+    gallery.push({ file, size: probeImage(bytes[i]) });
   });
-  if (files.length !== used.length) throw new Error('A car photo could not be read for the slideshow. Reopen the car to refresh its photos and build again.');
+  if (gallery.length !== urls.length) throw new Error('A car photo could not be read for the slideshow. Reopen the car to refresh its photos and build again.');
+  // The ad cut opens on the best angles, as Meta recommends for auto ads: an exterior hero shot, then the interior and
+  // a detail, then the rest in gallery order (unchanged when the photo sorter is not installed).
+  if (job.ad_cut) {
+    const sorted = labels(cfg, gallery);
+    if (sorted) gallery = heroOrder(gallery, sorted.labels);
+  }
+  // The same plan as at build time (its total already fits the voice).
+  const plan = slideshowPlan({ total: job.duration, speechEnd: toFloat(job.speech_end ?? 0), photos: gallery.length, intro: job.intro_card !== false });
+  const files = plan.slides.filter((s) => s.kind === 'photo').map((s) => gallery[s.photo]);
   // Showroom backdrop: whole-car exterior shots get the car on the chosen backdrop; the rest stay as they are.
   if (str(job.background ?? '') !== '') {
     const backdrop = backdropFind(db, cfg, job.background);
