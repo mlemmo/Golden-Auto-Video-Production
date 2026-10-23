@@ -57,7 +57,8 @@ export function Library({ open, onClose }) {
       const gap = parseFloat(style.rowGap) || 0;
       const cols = view === 'list' ? 1 : Math.max(1, style.gridTemplateColumns.split(' ').filter(Boolean).length);
       const top = holder.getBoundingClientRect().top - box.getBoundingClientRect().top;
-      const room = box.clientHeight - top - (pagerRef.current?.offsetHeight ?? 56) - 16;
+      // Room left for items: below the filters, above the pager (and its margin and the page's bottom padding).
+      const room = box.clientHeight - top - (pagerRef.current?.offsetHeight ?? 34) - 56;
       const rows = Math.max(1, Math.floor((room + gap) / (first.offsetHeight + gap)));
       setPerPage((n) => (n === cols * rows ? n : cols * rows));
     };

@@ -278,3 +278,5 @@ a.button.secondary-link{background:#262d3a;color:#fff;border:1px solid var(--lin
 .library-pager > span { display: inline-flex; align-items: center; gap: 6px; }
 .library-pager-gap { padding: 0 2px; }
 .library-pager small { margin-left: 8px; }
+.library-card .actions { gap: 6px; }
+.library-card .actions button, .library-card .actions .button { padding: 5px 10px; font-size: 13px; }
