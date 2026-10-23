@@ -1,7 +1,7 @@
 // The Library: every finished video and still for the clients this account may use, in a clean full-page gallery for
 // showing customers — by category (AI videos, slideshows, footage, stills) and, across clients, one section per
 // client; watch inline, open a large player (with full screen) or picture, download.
-import { useEffect, useRef, useState } from 'react';
+import { cloneElement, useEffect, useRef, useState } from 'react';
 import { api } from './api.js';
 import { useStudio } from './App.jsx';
 import { useStatus, DangerButton } from './ui.jsx';
@@ -22,7 +22,6 @@ async function shareVideo(v, say) {
 }
 const fileName = (v, ext = '.mp4') => `${v.vehicle} ${v.stock}`.trim().replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '') + ext;
 // Library categories: [id, tab label, what an empty one says].
-const PAGE = 48;   // Library items per page
 const KIND = { ai: 'AI video', slideshow: 'Slideshow', footage: 'My footage' };
 const CATEGORIES = [['all', 'All'], ['ai', 'AI videos'], ['slideshow', 'Slideshows'], ['footage', 'My footage'], ['stills', 'Stills']];
 const EMPTY = { all: 'Nothing finished yet.', ai: 'No AI videos yet.', slideshow: 'No slideshow videos yet.', footage: 'No videos from your footage yet.',
@@ -43,9 +42,31 @@ export function Library({ open, onClose }) {
   const setView = (v) => { setViewRaw(v); try { localStorage.setItem('library-view', v); } catch { /* not stored */ } };
   const [selected, setSelected] = useState(() => new Set());   // keys "video:<id>" / "still:<id>"
   const [deleting, setDeleting] = useState(false);
-  // Pages: the newest PAGE items first, "Show more" for the next ones (back to one page when the filters change).
-  const [limit, setLimit] = useState(PAGE);
-  useEffect(() => { setLimit(PAGE); }, [client, q, category]);
+  // Pages sized to the screen: as many whole cards (or list rows) as fit below the filters, measured from the real
+  // layout and again whenever the window or the view changes; back to page 1 when the filters change.
+  const [page, setPage] = useState(0);
+  const [perPage, setPerPage] = useState(12);
+  const scrollRef = useRef(null), firstRef = useRef(null), pagerRef = useRef(null);
+  useEffect(() => { setPage(0); }, [client, q, category, view]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const measure = () => {
+      const box = scrollRef.current, first = firstRef.current;
+      if (!box || !first) return;
+      const holder = first.parentElement, style = getComputedStyle(holder);
+      const gap = parseFloat(style.rowGap) || 0;
+      const cols = view === 'list' ? 1 : Math.max(1, style.gridTemplateColumns.split(' ').filter(Boolean).length);
+      const top = holder.getBoundingClientRect().top - box.getBoundingClientRect().top;
+      const room = box.clientHeight - top - (pagerRef.current?.offsetHeight ?? 56) - 16;
+      const rows = Math.max(1, Math.floor((room + gap) / (first.offsetHeight + gap)));
+      setPerPage((n) => (n === cols * rows ? n : cols * rows));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    if (scrollRef.current) ro.observe(scrollRef.current);
+    window.addEventListener('resize', measure);
+    return () => { ro.disconnect(); window.removeEventListener('resize', measure); };
+  }, [open, view, data, category, client, q]);
   const { readOnly } = useStudio();
   useEffect(() => { if (open) api('library').then(setData).catch((e) => say(e.message, true)); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -99,7 +120,9 @@ export function Library({ open, onClose }) {
     .filter((x) => match(x.item)).sort((a, b) => String(b.item.created_at).localeCompare(String(a.item.created_at)));
   const count = (c) => items.filter((x) => c === 'all' || x.cat === c).length;
   const matching = items.filter((x) => category === 'all' || x.cat === category);
-  const shown = matching.slice(0, limit);
+  const pages = Math.max(1, Math.ceil(matching.length / perPage));
+  const at = Math.min(page, pages - 1);
+  const shown = matching.slice(at * perPage, (at + 1) * perPage);
   const keyOf = (x) => x.type + ':' + x.item.id;
   const shownKeys = shown.map(keyOf);
   const picked = shownKeys.filter((k) => selected.has(k));   // only what is on screen can be deleted
@@ -109,6 +132,8 @@ export function Library({ open, onClose }) {
   const pickBox = (x) => !readOnly && (
     <input type="checkbox" className="library-pick" aria-label={'Select ' + x.item.vehicle} checked={selected.has(keyOf(x))} onChange={(e) => toggle(keyOf(x), e.target.checked)} />
   );
+  // The first item on the page is measured to size the pages.
+  const withRef = (el, title, i) => (i === 0 && title === (sections[0]?.[0] ?? null) ? cloneElement(el, { ref: firstRef }) : el);
   const listRow = (x) => {
     const v = x.item, video = x.type === 'video';
     return (
@@ -176,7 +201,7 @@ export function Library({ open, onClose }) {
     </article>
   );
   return (
-    <div className="library" id="library" role="dialog" aria-modal="true" aria-label="Library">
+    <div className="library" id="library" role="dialog" aria-modal="true" aria-label="Library" ref={scrollRef}>
       <div className="tool-window-head">
         <h2>Library</h2>
         <button type="button" className="secondary" id="libraryClose" onClick={onClose}>Close</button>
@@ -221,22 +246,37 @@ export function Library({ open, onClose }) {
           <section key={title ?? 'all'} className="library-section">
             {title && <h3 className="library-section-title">{title}<small>{xs.length}</small></h3>}
             {view === 'list'
-              ? <div className="library-list">{xs.map(listRow)}</div>
-              : <div className="library-grid">{xs.map((x) => (x.type === 'still' ? stillCard(x.item) : videoCard(x.item)))}</div>}
+              ? <div className="library-list">{xs.map((x, i) => withRef(listRow(x), title, i))}</div>
+              : <div className="library-grid">{xs.map((x, i) => withRef(x.type === 'still' ? stillCard(x.item) : videoCard(x.item), title, i))}</div>}
           </section>
         ))}
-        {matching.length > shown.length && (
-          <div className="library-more">
-            <button type="button" className="secondary" onClick={() => setLimit((n) => n + PAGE)}>Show {Math.min(PAGE, matching.length - shown.length)} more</button>
-            <small>{shown.length} of {matching.length} shown</small>
-          </div>
-        )}
+        {pages > 1 && <Pager at={at} pages={pages} onPage={(n) => { setPage(n); scrollRef.current?.scrollTo({ top: 0 }); }}
+          from={at * perPage + 1} to={at * perPage + shown.length} total={matching.length} pagerRef={pagerRef} />}
       </div>
       {playing && <Player v={playing} client={names[playing.client]} onClose={() => setPlaying(null)} onShare={() => shareVideo(playing, say)} onPost={readOnly ? null : () => setPosting(playing)} />}
       {viewing && <StillViewer x={viewing} client={names[viewing.client]} onClose={() => setViewing(null)} />}
       {posting && <SocialPost v={posting} say={say} onClose={() => setPosting(null)} />}
       {advertising && <AdRequest v={advertising} say={say} onClose={() => setAdvertising(null)} />}
     </div>
+  );
+}
+
+/** Page buttons: Previous, the page numbers (with … between far ones), Next, and which items are shown. */
+function Pager({ at, pages, onPage, from, to, total, pagerRef }) {
+  const near = new Set([0, pages - 1, at - 1, at, at + 1].filter((n) => n >= 0 && n < pages));
+  const list = [...near].sort((a, b) => a - b);
+  return (
+    <nav className="library-pager" aria-label="Pages" ref={pagerRef}>
+      <button type="button" className="secondary small" disabled={at === 0} onClick={() => onPage(at - 1)}>‹ Previous</button>
+      {list.map((n, i) => (
+        <span key={n}>
+          {i > 0 && n - list[i - 1] > 1 && <span className="library-pager-gap">…</span>}
+          <button type="button" className={'small' + (n === at ? '' : ' secondary')} aria-current={n === at ? 'page' : undefined} onClick={() => onPage(n)}>{n + 1}</button>
+        </span>
+      ))}
+      <button type="button" className="secondary small" disabled={at === pages - 1} onClick={() => onPage(at + 1)}>Next ›</button>
+      <small>{from}–{to} of {total}</small>
+    </nav>
   );
 }
 
