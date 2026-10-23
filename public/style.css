@@ -241,3 +241,4 @@ a.button.secondary-link{background:#262d3a;color:#fff;border:1px solid var(--lin
 /* Photo slideshow: background music preview and upload */
 .music-preview { width: 100%; margin: 4px 0 8px; }
 .music-upload { display: grid; gap: 8px; }
+.backdrop-preview { width: 100%; max-height: 220px; object-fit: cover; border-radius: 8px; margin: 4px 0 8px; }

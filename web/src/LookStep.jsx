@@ -96,8 +96,63 @@ function SlideshowShapes() {
       ))}
       <p className="hint">{photos ? `Uses this car's ${photos} listing photos in gallery order (about one every 2–3 seconds; a long gallery is cut to what fits), each with a slow zoom and a soft cross-fade. ` : 'This car has no photos yet. '}
         A dealer card with the price opens the video and a test-drive card with the website and phone number closes it. Captions are the approved caption text, timed from the voice. Free to build.</p>
+      <ShowroomBackground />
       <BackgroundMusic />
     </div>
+  );
+}
+
+/**
+ * Showroom background: the car in its whole-car outside photos is cut out (local model) and stood on a studio sweep
+ * or the dealer's own showroom photo; interior and close-up photos stay as they are.
+ */
+function ShowroomBackground() {
+  const s = useStudio();
+  const [, say] = s.statuses.studio;
+  const [lib, setLib] = useState(null);
+  const formRef = useRef(null);
+  useEffect(() => { api('backdrop_list').then(setLib).catch((e) => say(e.message, true)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const all = [...(lib?.builtin ?? []), ...(lib?.items ?? [])];
+  const uploaded = (lib?.items ?? []).find((t) => t.id === s.background) ?? null;
+  useEffect(() => { if (lib && s.background && !all.some((b) => b.id === s.background)) s.setBackground(''); }, [lib]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (lib && !lib.available) return <p className="hint">Showroom backgrounds are not set up on this server (needs the local cut-out model), so the original photos are used.</p>;
+  const add = (e) => {
+    e.preventDefault();
+    s.run(async () => {
+      say('Uploading the background photo…');
+      try {
+        const d = await upload('backdrop_upload', new FormData(formRef.current));
+        setLib(d); s.setBackground(d.items.at(-1)?.id ?? ''); formRef.current.reset(); say('Background added.');
+      } catch (err) { say(err.message, true); }
+    });
+  };
+  const remove = () => s.run(async () => {
+    if (!uploaded || !confirm(`Delete the background “${uploaded.name}” for everyone?`)) return;
+    try { setLib(await api('backdrop_delete', { id: uploaded.id })); s.setBackground(''); say('Background deleted.'); } catch (err) { say(err.message, true); }
+  });
+  return (
+    <>
+      <label>Background behind the car
+        <select id="background" value={s.background} onChange={(e) => s.setBackground(e.target.value)}>
+          <option value="">Original photos</option>
+          {all.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+        </select>
+      </label>
+      {uploaded && <img src={uploaded.url} alt={uploaded.name} className="backdrop-preview" />}
+      <p className="hint">{s.background ? 'Only the outside photos of the whole car get the new background (the car is cut out and stood on the floor with a soft shadow). Interior, open-door and close-up photos stay as they are. Adds about a minute to the first build of a car.'
+        : 'The photos are shown as taken.'}</p>
+      {s.isAdmin && (
+        <details className="sub"><summary>Add or delete showroom photos (admins)</summary>
+          <form ref={formRef} onSubmit={add} className="music-upload">
+            <label>Name<input name="name" maxLength={60} required placeholder="e.g. Our showroom floor" /></label>
+            <label>Photo — JPG, PNG or WebP, landscape, at least 1200 × 700<input type="file" name="backdrop" accept="image/jpeg,image/png,image/webp" required /></label>
+            <p className="hint">An empty floor shot straight on works best; the car stands on the floor about one-seventh up from the bottom of the photo, centred.</p>
+            <button type="submit" className="secondary small" disabled={s.busy}>Upload background</button>
+            {uploaded && <button type="button" className="secondary small" disabled={s.busy} onClick={remove}>Delete “{uploaded.name}”</button>}
+          </form>
+        </details>
+      )}
+    </>
   );
 }
 

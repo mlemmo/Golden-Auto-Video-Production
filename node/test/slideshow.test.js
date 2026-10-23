@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, mkdirSync, writeFileSync, existsSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { openMemoryDb, save } from '../src/lib/db.js';
 import { jsonEncode } from '../src/lib/storedjson.js';
@@ -12,11 +12,12 @@ import { narrationTables, narrationVoiceSettings } from '../src/lib/narrations.j
 import { runProcess } from '../src/lib/finishing.js';
 import { captionWorkerRun, renderArgs, jobMusic } from '../src/lib/worker.js';
 import { musicApi, musicFilter } from '../src/lib/music.js';
+import { backdropApi, applyBackdrop } from '../src/lib/backdrops.js';
 import { goldenJobDelete } from '../src/lib/jobs.js';
 import { script } from '../src/lib/scripts.js';
 import { speechWordCount } from '../src/lib/speech.js';
 import { slideshowPlan, slideshowArgs, slideFit, cardPrice, formatSize, goldenSlideshowBuild, slideshowMaster } from '../src/lib/slideshow.js';
-import { JPEG_40x30 } from './fixtures/images.js';
+import { JPEG_40x30, JPEG_1800x900 } from './fixtures/images.js';
 
 const hasFfmpeg = spawnSync('ffmpeg', ['-version']).status === 0;
 const sha = (b) => createHash('sha256').update(b).digest('hex');
@@ -168,5 +169,44 @@ test('background music library and mix', { skip: !hasFfmpeg }, async () => {
     musicApi('music_delete', { id: t.id }, cfg, db);
     assert.throws(() => jobMusic(cfg, job), /music for this video was deleted/);
     assert.deepEqual(musicApi('music_list', {}, cfg, db).items, []);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('showroom backdrops: library, build option, only outside photos replaced, cached', async () => {
+  const { dir, cfg, db } = setup();
+  try {
+    assert.equal(backdropApi('backdrop_list', {}, cfg, db).available, false, 'no cut-out model configured');
+    const inp = { client: 'golden-auto', stock: 'S1', narration_id: 'N1', confirm_current: '1', formats: ['square'] };
+    assert.throws(() => goldenSlideshowBuild(db, cfg, { ...inp, background: 'studio' }, DEALER), /not set up/);
+    cfg.cutout_python = process.execPath;   // any executable: the composer itself is faked below
+    const list = backdropApi('backdrop_list', {}, cfg, db);
+    assert.ok(list.available && list.builtin.map((b) => b.id).join() === 'studio,white' && list.items.length === 0);
+    const img = `${dir}/data/showroom.jpg`; writeFileSync(img, Buffer.from(JPEG_1800x900, 'base64'));
+    assert.throws(() => backdropApi('backdrop_upload', { name: 'Floor' }, cfg, db, { backdrop: { name: 'a.jpg', tmp_name: `${dir}/assets/${'a'.repeat(40)}.jpg`, size: 10, error: 0 } }), /at least 1200/);
+    const up = backdropApi('backdrop_upload', { name: 'Our showroom' }, cfg, db, { backdrop: { name: 's.jpg', tmp_name: img, size: 10, error: 0 } });
+    assert.ok(up.items.length === 1 && up.items[0].url.includes('/assets/backdrops/backdrop-'));
+    assert.throws(() => backdropApi('backdrop_delete', { id: 'studio' }, cfg, db), /Built-in/);
+    const [job] = goldenSlideshowBuild(db, cfg, { ...inp, background: up.items[0].id }, DEALER);
+    assert.ok(job.background === up.items[0].id && job.background_name === 'Our showroom');
+    assert.throws(() => goldenSlideshowBuild(db, cfg, { ...inp, background: 'nope' }, DEALER), /removed/);
+    // Three photos: exterior, interior, exterior. Only the two exteriors are composed, and only once.
+    const photo = (n, body) => { const f = `${dir}/data/p${n}.jpg`; writeFileSync(f, body); return { file: f, size: { width: 40, height: 30 } }; };
+    const files = () => [photo(0, 'ext-a'), photo(1, 'int'), photo(2, 'ext-b')];
+    const label = { 'ext-a': 'exterior', int: 'interior', 'ext-b': 'exterior' };
+    let classified = 0, composed = 0;
+    const opts = {
+      classify: (paths) => { classified += paths.length; return Object.fromEntries(paths.map((p) => [p, label[readFileSync(p, 'utf8')]])); },
+      compose: async (c, items, spec, layout) => { composed += items.length; assert.equal(spec, 'studio'); assert.deepEqual(layout, { width: 1080, height: 1920, floor: 0.64 }); for (const it of items) writeFileSync(it.out, 'composed'); return items.map((it) => it.out); },
+    };
+    const first = files();
+    assert.equal(await applyBackdrop(cfg, first, { id: 'studio', spec: 'studio' }, [1080, 1920], opts), 2);
+    assert.ok(first[0].file.includes('backdrop-cache') && first[1].file.endsWith('p1.jpg') && first[2].file.includes('backdrop-cache'));
+    assert.deepEqual(first[0].size, { width: 1080, height: 1920 }, 'a studio sweep is drawn at the video size');
+    const again = files();
+    assert.equal(await applyBackdrop(cfg, again, { id: 'studio', spec: 'studio' }, [1080, 1920], opts), 2);
+    assert.deepEqual([classified, composed], [3, 2], 'the second shape reuses labels and pictures');
+    assert.equal(await applyBackdrop(cfg, [photo(3, 'new')], { id: 'white', spec: 'white' }, [1080, 1920], { ...opts, classify: () => null }), 0, 'no classifier: photos unchanged');
+    backdropApi('backdrop_delete', { id: up.items[0].id }, cfg, db);
+    assert.equal(backdropApi('backdrop_list', {}, cfg, db).items.length, 0);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

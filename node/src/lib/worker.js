@@ -104,7 +104,7 @@ export async function captionWorkerRun(db, cfg, opts = {}) {
       const source = footageLocalPath(cfg, job);
       try { copyFileSync(source, work + '/master.mp4'); } catch { throw new Error('Cannot read the uploaded footage.'); }
     }
-    else if ((job.provider ?? '') === 'slideshow') await slideshow(cfg, job, work, ffmpeg);
+    else if ((job.provider ?? '') === 'slideshow') await slideshow(cfg, job, work, ffmpeg, { db });
     else await download(job.video_url, work + '/master.mp4');
     let narration = null;
     // voice=elevenlabs keeps Seedance's own speech (its lips match it); audio_swap jobs replace it with the narration.

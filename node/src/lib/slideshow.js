@@ -17,6 +17,7 @@ import { CLIENT_DEFAULT, clientInventory } from './clients.js';
 import { narrationTables, narrationLoad, narrationCheckAudio } from './narrations.js';
 import { NARRATION_OFFSET, finishPython } from './finishing.js';
 import { musicFind } from './music.js';
+import { backdropFind, backdropsAvailable, applyBackdrop } from './backdrops.js';
 
 export const FORMAT_SIZE = { instagram_reels: [1080, 1920], facebook_reels: [1080, 1920], facebook_feed: [1080, 1350], square: [1080, 1080], youtube: [1920, 1080] };
 /** Width and height of a finished video in this publish format (9:16 when unknown). */
@@ -122,6 +123,9 @@ export function goldenSlideshowBuild(db, cfg, inp, dealer, { random = randomByte
   const length = toInt(voice.duration), speechEnd = NARRATION_OFFSET + toFloat(voice.audio_duration ?? length);
   // Optional background music from the library (src/lib/music.js); '' = none.
   const music = musicFind(db, cfg, str(inp.music ?? ''));
+  // Optional showroom backdrop behind the car in its outside photos (src/lib/backdrops.js); '' = original photos.
+  const backdrop = backdropFind(db, cfg, str(inp.background ?? ''));
+  if (backdrop && !backdropsAvailable(cfg)) throw new Error('Background replacement is not set up on this server. Choose "Original photos".');
   const cards = { dealer: str(dealer?.name ?? ''), website: str(dealer?.website ?? ''), phone: str(dealer?.phone ?? ''), city: str(dealer?.city ?? ''),
     vehicle: title(v), price: cardPrice(v.price ?? null) };
   const jobs = [];
@@ -132,7 +136,8 @@ export function goldenSlideshowBuild(db, cfg, inp, dealer, { random = randomByte
     const job = { id, client, stock: v.StockNumber, vehicle: title(v), spokesperson: '', format, style: 'slideshow',
       duration: plan.total, speech_end: round3(speechEnd), status: 'completed', provider: 'slideshow', created_at: gmdateC(), approved_by: str(inp.approved_by ?? ''),
       script: str(voice.caption_script), speech_script: str(voice.text), price: v.price ?? null, voice: 'elevenlabs',
-      narration_id: voice.id, audio_swap: true, captions_from_audio: true, photos, cards, intro_card: intro, ...(music ? { music_id: music.id, music_file: music.file, music_name: music.name } : {}), video_url: '',
+      narration_id: voice.id, audio_swap: true, captions_from_audio: true, photos, cards, intro_card: intro, ...(music ? { music_id: music.id, music_file: music.file, music_name: music.name } : {}),
+      ...(backdrop ? { background: backdrop.id, background_name: backdrop.name } : {}), video_url: '',
       finish_status: 'queued', render_backend: 'linux', finish_error: '', captioned_url: null, auto_queued_at: gmdateC() };
     db.prepare('INSERT INTO jobs VALUES (?,?,?)').run(id, null, jsonEncode(job));
     jobs.push(job);
@@ -144,7 +149,7 @@ export function goldenSlideshowBuild(db, cfg, inp, dealer, { random = randomByte
  * Draws a slideshow job's silent master.mp4 in work: its photos (this server's copies, or the CDN), the two cards
  * (private/finish_video.py, op slideshow_card) and one FFmpeg run. opts: { photos(urls), python, ffmpeg(args, work, log) }.
  */
-export async function slideshowMaster(cfg, job, work, ffmpeg, { photos = (urls) => sheetBytes(urls, cfg), python = finishPython } = {}) {
+export async function slideshowMaster(cfg, job, work, ffmpeg, { photos = (urls) => sheetBytes(urls, cfg), python = finishPython, backdrops = applyBackdrop, db = null } = {}) {
   const [w, h] = formatSize(job.format);
   const urls = (job.photos ?? []).slice(0, SLIDESHOW_MAX_PHOTOS);
   // The same plan as at build time (its total already fits the voice).
@@ -155,9 +160,15 @@ export async function slideshowMaster(cfg, job, work, ffmpeg, { photos = (urls) 
   used.forEach((_, i) => {
     if (!bytes[i]) return;
     const file = `${work}/photo-${i}.jpg`; writeFileSync(file, bytes[i]);
-    files.push({ file, fit: slideFit(probeImage(bytes[i]), [w, h]) });
+    files.push({ file, size: probeImage(bytes[i]) });
   });
   if (files.length !== used.length) throw new Error('A car photo could not be read for the slideshow. Reopen the car to refresh its photos and build again.');
+  // Showroom backdrop: whole-car exterior shots get the car on the chosen backdrop; the rest stay as they are.
+  if (str(job.background ?? '') !== '') {
+    const backdrop = backdropFind(db, cfg, job.background);
+    job.background_photos = await backdrops(cfg, files, backdrop, [w, h]);
+  }
+  for (const f of files) f.fit = slideFit(f.size, [w, h]);
   const c = job.cards ?? {};
   const card = async (kind) => {
     const output = `${work}/${kind}.png`;
