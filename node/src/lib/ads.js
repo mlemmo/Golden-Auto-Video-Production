@@ -84,7 +84,7 @@ export function adDraft(db, job) {
   // Trim without the body style ("Laramie Longhorn Crew Cab 4D" → "Laramie Longhorn"); "Base" is not worth saying.
   const trimName = trim(str(car?.Trim ?? '').replace(/\b(sport utility|sedan|coupe|pickup|crew cab|quad cab|extended cab|regular cab|van|wagon|hatchback|convertible)\b.*$/gi, ''));
   const full = name + (trimName && !/^base\b/i.test(trimName) && !name.toLowerCase().includes(trimName.toLowerCase()) ? ' ' + adTitle(trimName) : '');
-  const miles = car?.Odometer != null && Number(car.Odometer) >= 1000 ? Math.round(Number(car.Odometer) / 1000) + 'k miles' : '';
+  const miles = car?.Odometer != null && Number(car.Odometer) >= 1000 ? Math.floor(Number(car.Odometer) / 1000) + 'k miles' : '';
   const price = job.price ? adPrice(Number(job.price)) : 'Call for price';
   const line1 = full + ' — ' + [miles, price].filter(Boolean).join(', ');
   let highlight = '';
