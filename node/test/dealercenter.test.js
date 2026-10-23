@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { openMemoryDb, save, state } from '../src/lib/db.js';
-import { dcNormalize, dcPhotoId, dcSync, syncLogKey, snapshotImportStart } from '../src/lib/dealercenter.js';
+import { dcNormalize, dcCleanDescription, dcPhotoId, dcSync, syncLogKey, snapshotImportStart } from '../src/lib/dealercenter.js';
 import { downloadPhotos } from '../src/lib/media.js';
 import { JPEG_1800x900 } from './fixtures/images.js';
 
@@ -74,4 +74,12 @@ test('snapshot from the dashboard: checked, saved, one import per client at a ti
     snapshotImportStart(db, cfg, 'eastbay-motorcars', [car('E1', [ddc('p1')])], run);
     assert.equal(runs.length, 2, 'next import once the previous one finished');
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('descriptions lose the website\'s Cloudflare script text', () => {
+  const text = 'Reach out to us for more details or to schedule a test drive today!';
+  const cf = " window.__CF$cv$params={r:'a4d99104affbaf1b',t:'MTc5MjUxNTQ5Nw==',i:60};(function(){if(!document.body)return;var s=document.createElement('script');s.src='/cdn-cgi/challenge-platform/scripts/precursor/main.js';document.head.appendChild(s);})();";
+  assert.equal(dcCleanDescription(text + cf), text);
+  assert.equal(dcCleanDescription(text + " (function(){if(!document.body)return;var s=1;})();"), text);
+  assert.equal(dcCleanDescription('A great car (function and form).'), 'A great car (function and form).', 'ordinary brackets stay');
 });

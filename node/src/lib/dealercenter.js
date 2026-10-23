@@ -23,6 +23,9 @@ const unlinkQuiet = (f) => { try { unlinkSync(f); } catch { /* gone */ } };
 
 /** DealerCenter descriptions open with a tax/registration price disclaimer; it never belongs in ad copy. */
 export function dcCleanDescription(s) {
+  // The website's Cloudflare protection puts a small script inside the description area of the page, and reading the
+  // page's text picks it up ("window.__CF$cv$params={…};(function(){…})();"): everything from it on is dropped.
+  s = s.replace(/\s*(window\.__CF\$cv\$params\b|\(function\s*\(\)\s*\{\s*if\s*\(!document\.body\))[\s\S]*$/u, '');
   s = s.replace(new RegExp('Total price does not include State Sales Tax or Registration fees,?' + U_SPACE + '*please call us for the total price\\.?', 'giu'), '');
   return mbSafeText(s.replace(new RegExp('^' + U_SPACE + '+', 'u'), ''));
 }
