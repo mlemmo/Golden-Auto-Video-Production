@@ -27,7 +27,7 @@ export default function VoiceStep() {
         <select id="approvedVoice" value={s.approvedVoice} onChange={(e) => s.setApprovedVoice(e.target.value)}>
           {!s.chosen ? <option value="">Choose a vehicle first</option>
             : <option value="">{s.approvedPreviews.length ? 'Choose an approved preview' : `No approved ${s.duration}-second preview for this car yet — make one above`}</option>}
-          {s.approvedPreviews.map((p) => <option key={p.id} value={p.id}>{`${p.duration}s · ${(p.text || '').slice(0, 70)}… · ${p.id.slice(0, 8)}`}</option>)}
+          {s.approvedPreviews.map((p) => <option key={p.id} value={p.id}>{[`Take ${takeNo(p, s.narr.previews)}`, p.voice_name, p.audio_duration ? p.audio_duration.toFixed(1) + 's of speech' : '', made(p), previewCode(p)].filter(Boolean).join(' · ')}</option>)}
         </select>
       </label>
       <StepContinue from="stepVoice" to="stepLook" label="Continue to step 4: Look"
@@ -151,17 +151,29 @@ function voiceLabel(p, voices) {
   return p.voice_id ? 'voice ' + p.voice_id.slice(0, 8) + '… (no longer in your ElevenLabs voices)' : 'unknown';
 }
 
+/**
+ * How a preview is told apart, the same on its card and in the "Approved voice preview" list: its take number among
+ * this car's previews of the same length (oldest = Take 1), its short code and when it was made.
+ */
+const takeNo = (p, all) => all.filter((x) => x.stock === p.stock && x.duration === p.duration && String(x.created_at ?? '') <= String(p.created_at ?? '')).length || 1;
+const previewCode = (p) => '#' + p.id.slice(0, 8);
+const made = (p) => (p.created_at ? new Date(p.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '');
+
 function Preview({ p, act, voices }) {
+  const s = useStudio();
   const [reviewed, setReviewed] = useState(false);
+  const chosen = s.approvedVoice === p.id && s.chosen?.StockNumber === p.stock && String(p.duration) === s.duration;
   const state = p.status !== 'ready' ? [p.status, 'busy'] : p.too_long ? ['Too long', 'bad'] : p.approved ? ['Approved', 'ok'] : ['Listen and approve', 'busy'];
   return (
-    <div className="job">
+    <div className={'job' + (chosen ? ' chosen' : '')} id={'preview-' + p.id.slice(0, 8)}>
       <div className="job-head">
-        <strong>{`${p.vehicle} · ${p.duration}s${p.audio_duration ? ' · ' + p.audio_duration.toFixed(1) + 's of speech' : ''}`}</strong>
-        <span className={'badge ' + state[1]}>{state[0]}</span>
+        <strong>{`Take ${takeNo(p, s.narr.previews)} · ${p.vehicle} · ${p.duration}s${p.audio_duration ? ' · ' + p.audio_duration.toFixed(1) + 's of speech' : ''}`}</strong>
+        <span>
+          {chosen && <span className="badge ok">Chosen for this video</span>} <span className={'badge ' + state[1]}>{state[0]}</span>
+        </span>
       </div>
       <p className="preview-voice"><b>Voice:</b> {voiceLabel(p, voices)}</p>
-      {p.approved_by && <small>Made by {p.approved_by}</small>}
+      <small className="preview-code">{[previewCode(p), made(p) && 'made ' + made(p), p.approved_by && 'by ' + p.approved_by].filter(Boolean).join(' · ')}</small>
       <p>Spoken: {p.text}</p>
       <p>Captions: {p.caption_script}</p>
       {p.text_mismatch?.length > 0 && <p className="mismatch">{'Caption text and spoken text differ: ' + p.text_mismatch.slice(0, 5).join('; ') + '. Captions show the caption text, so fix one of them if they should match.'}</p>}
@@ -172,6 +184,9 @@ function Preview({ p, act, voices }) {
         <label className="check note-important"><input type="checkbox" checked={reviewed} onChange={(e) => setReviewed(e.target.checked)} />I listened to the whole preview and every word, number and name sounds right.</label>
       )}
       <div className="actions">
+        {p.approved && !chosen && s.chosen?.StockNumber === p.stock && String(p.duration) === s.duration && (
+          <button type="button" className="small secondary" onClick={() => s.setApprovedVoice(p.id)}>Use for this video</button>
+        )}
         {p.status === 'ready' && p.audio_url && !p.too_long && !p.approved && (
           <button type="button" className="small" disabled={!reviewed} title={reviewed ? undefined : 'Tick “I listened to the whole preview” first'} onClick={() => act('narration_approve', { id: p.id, reviewed })}>Approve this voice</button>
         )}
