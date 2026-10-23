@@ -13,7 +13,7 @@ import { probeImage } from './images.js';
 import { photoClassify } from './photos.js';
 
 const COMPOSER = fileURLToPath(new URL('../../../private/backdrop.py', import.meta.url));
-const VERSION = 2;   // bump when backdrop.py changes how pictures look, so cached ones are redrawn
+const VERSION = 3;   // bump when backdrop.py changes how pictures look, so cached ones are redrawn
 export const BUILTIN_BACKDROPS = [{ id: 'studio', name: 'Studio — charcoal' }, { id: 'white', name: 'Studio — white' }];
 const backdropDir = (cfg) => str(cfg.asset_dir ?? '') + '/backdrops';
 const library = (db) => state(db, 'backdrops') ?? { items: [] };
@@ -90,13 +90,15 @@ export function backdropCompose(cfg, items, spec, layout = {}) {
 }
 
 /**
- * How a backdrop picture is drawn for a video of size [w, h]: built-in sweeps at the video's own size (in a tall frame
- * the car stands a little below the middle, clear of the captions); an uploaded showroom photo at 4:3 with the car on
- * its floor line (the slideshow shows it like any other photo).
+ * How a backdrop picture is drawn for a video of size [w, h]: at the video's own size, so the backdrop fills the
+ * frame (an uploaded showroom photo is cropped to it); in a tall frame the car stands higher, clear of the captions.
  */
 export function backdropLayout(backdrop, [w, h]) {
-  if (BUILTIN_BACKDROPS.some((b) => b.id === backdrop.id)) return { width: w, height: h, floor: h > w * 1.2 ? 0.64 : 0.86 };
-  return { width: 1600, height: 1200, floor: 0.86 };
+  const tall = h > w * 1.2;
+  if (BUILTIN_BACKDROPS.some((b) => b.id === backdrop.id)) return { width: w, height: h, floor: tall ? 0.64 : 0.86 };
+  // An uploaded showroom photo fills the frame too (cropped to its shape); in a tall frame the car stands on the floor
+  // above the captions.
+  return { width: w, height: h, floor: tall ? 0.73 : 0.86 };
 }
 
 /**

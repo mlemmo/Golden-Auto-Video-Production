@@ -70,17 +70,32 @@ def place(cut, bg, floor):
     if not box or (box[2] - box[0]) * (box[3] - box[1]) < cut.width * cut.height * 0.05:
         return None   # nothing car-sized found: keep the original photo
     car = cut.crop(box)
-    scale = min(W * .84 / car.width, H * .6 / car.height)
+    # Wide frames: smaller, so the showroom around it shows; tall frames: as wide as fits.
+    scale = min(W * (.84 if H > W else .7) / car.width, H * (.6 if H > W else .5) / car.height)
     car = car.resize((max(1, round(car.width * scale)), max(1, round(car.height * scale))), Image.LANCZOS)
     x, bottom = (W - car.width) // 2, round(H * floor)
     y = bottom - car.height
     out = bg.convert('RGBA')
-    shade = Image.new('RGBA', (W, H), (0, 0, 0, 0))
-    s = ImageDraw.Draw(shade)
-    # A wide soft shadow and a darker narrow one where the tyres meet the floor.
-    s.ellipse([x + car.width * .02, bottom - car.height * .1, x + car.width * .98, bottom + car.height * .04], fill=(0, 0, 0, 90))
-    s.ellipse([x + car.width * .08, bottom - car.height * .05, x + car.width * .92, bottom + car.height * .012], fill=(0, 0, 0, 160))
-    out.alpha_composite(shade.filter(ImageFilter.GaussianBlur(max(4, car.height * .03))))
+    mask = car.split()[3]
+    cw, ch = car.size
+
+    def squash(top, height, alpha, blur):
+        """The bottom part of the car's own outline, flattened onto the floor: a shadow that follows the wheels."""
+        part = mask.crop((0, round(ch * top), cw, ch)).resize((cw, max(2, round(ch * height))), Image.LANCZOS)
+        layer = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+        layer.paste(Image.new('RGBA', part.size, (0, 0, 0, alpha)), (x, bottom - part.height // 2), part)
+        return layer.filter(ImageFilter.GaussianBlur(max(2, ch * blur)))
+
+    # A soft ambient shadow under the whole car, the body's outline flattened, and dark spots where the tyres touch.
+    ambient = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    ImageDraw.Draw(ambient).ellipse([x - cw * .02, bottom - ch * .06, x + cw * 1.02, bottom + ch * .06], fill=(0, 0, 0, 70))
+    out.alpha_composite(ambient.filter(ImageFilter.GaussianBlur(max(4, ch * .05))))
+    out.alpha_composite(squash(0.7, 0.10, 110, 0.025))
+    # Contact shadow where each tyre really is (the far wheel of a three-quarter view stands higher in the picture):
+    # the car's own outline nudged down and blurred, so it shows only just under the tyres and the sills.
+    drop = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    drop.paste(Image.new('RGBA', car.size, (0, 0, 0, 200)), (x, y + max(2, round(ch * .018))), mask)
+    out.alpha_composite(drop.filter(ImageFilter.GaussianBlur(max(2, ch * .012))))
     out.alpha_composite(car, (x, y))
     return out.convert('RGB')
 
