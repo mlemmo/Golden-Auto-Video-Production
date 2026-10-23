@@ -153,9 +153,9 @@ function voiceLabel(p, voices) {
 
 /**
  * How a preview is told apart, the same on its card and in the "Approved voice preview" list: its take number among
- * this car's previews of the same length (oldest = Take 1), its short code and when it was made.
+ * all of this car's previews, whatever their length (the earliest made = Take 1), its short code and when it was made.
  */
-const takeNo = (p, all) => all.filter((x) => x.stock === p.stock && x.duration === p.duration && String(x.created_at ?? '') <= String(p.created_at ?? '')).length || 1;
+const takeNo = (p, all) => all.filter((x) => x.stock === p.stock && String(x.created_at ?? '') <= String(p.created_at ?? '')).length || 1;
 const previewCode = (p) => '#' + p.id.slice(0, 8);
 const made = (p) => (p.created_at ? new Date(p.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '');
 
