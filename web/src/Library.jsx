@@ -37,6 +37,11 @@ export function Library({ open, onClose }) {
   const [viewing, setViewing] = useState(null);
   const [posting, setPosting] = useState(null);
   const [advertising, setAdvertising] = useState(null);
+  // Grid (large cards) or list (small thumbnails, several can be selected and deleted together); remembered per browser.
+  const [view, setViewRaw] = useState(() => { try { return localStorage.getItem('library-view') === 'list' ? 'list' : 'grid'; } catch { return 'grid'; } });
+  const setView = (v) => { setViewRaw(v); try { localStorage.setItem('library-view', v); } catch { /* not stored */ } };
+  const [selected, setSelected] = useState(() => new Set());   // keys "video:<id>" / "still:<id>"
+  const [deleting, setDeleting] = useState(false);
   const { readOnly } = useStudio();
   useEffect(() => { if (open) api('library').then(setData).catch((e) => say(e.message, true)); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -63,6 +68,25 @@ export function Library({ open, onClose }) {
       say(r.message || 'Still deleted.');
     } catch (e) { say(e.message, true); }
   };
+  /**
+   * Delete everything selected, one at a time: stills first (deleting a slideshow video also removes its own stills),
+   * then videos. Ones the server refuses (a post still scheduled, a render running) stay and are reported.
+   */
+  const removeSelected = async (keys) => {
+    setDeleting(true);
+    const order = [...keys].sort((a, b) => (a.startsWith('still:') ? 0 : 1) - (b.startsWith('still:') ? 0 : 1));
+    let done = 0; const failed = [];
+    for (const key of order) {
+      const [type, ...rest] = key.split(':'); const id = rest.join(':');
+      try { await api(type === 'still' ? 'still_delete' : 'job_delete', { id }); done++; }
+      catch (e) { if (!(type === 'still' && /not found/i.test(e.message))) failed.push(e.message); else done++; }
+    }
+    try { setData(await api('library')); } catch (e) { say(e.message, true); }
+    setSelected(new Set()); setDeleting(false);
+    setPlaying(null); setViewing(null);
+    if (failed.length) say(`Deleted ${done} of ${order.length}. Not deleted: ${[...new Set(failed)].join(' ')}`, true);
+    else say(`Deleted ${done} item${done === 1 ? '' : 's'}.`);
+  };
   if (!open) return null;
   const names = Object.fromEntries((data?.clients ?? []).map((c) => [c.id, c.name]));
   const match = (v) => (!client || v.client === client) && (!q || `${v.vehicle} ${v.stock}`.toLowerCase().includes(q.toLowerCase()));
@@ -71,13 +95,43 @@ export function Library({ open, onClose }) {
     .filter((x) => match(x.item)).sort((a, b) => String(b.item.created_at).localeCompare(String(a.item.created_at)));
   const count = (c) => items.filter((x) => c === 'all' || x.cat === c).length;
   const shown = items.filter((x) => category === 'all' || x.cat === category);
+  const keyOf = (x) => x.type + ':' + x.item.id;
+  const shownKeys = shown.map(keyOf);
+  const picked = shownKeys.filter((k) => selected.has(k));   // only what is on screen can be deleted
+  const allPicked = shown.length > 0 && picked.length === shown.length;
+  const toggle = (k, on) => setSelected((cur) => { const next = new Set(cur); if (on) next.add(k); else next.delete(k); return next; });
+  const pickAll = (on) => setSelected(on ? new Set(shownKeys) : new Set());
+  const pickBox = (x) => !readOnly && (
+    <input type="checkbox" className="library-pick" aria-label={'Select ' + x.item.vehicle} checked={selected.has(keyOf(x))} onChange={(e) => toggle(keyOf(x), e.target.checked)} />
+  );
+  const listRow = (x) => {
+    const v = x.item, video = x.type === 'video';
+    return (
+      <div key={keyOf(x)} className={'library-row' + (selected.has(keyOf(x)) ? ' picked' : '')}>
+        {pickBox(x)}
+        <button type="button" className="library-mini" aria-label={(video ? 'Play ' : 'View ') + v.vehicle} onClick={() => (video ? setPlaying(v) : setViewing(v))}>
+          {video ? <video src={v.url + '#t=1'} preload="metadata" muted playsInline /> : <img src={v.url} alt="" loading="lazy" />}
+        </button>
+        <div className="library-row-main">
+          <strong>{v.vehicle}</strong>
+          <small>{[video ? KIND[v.kind ?? 'ai'] : 'Still' + (v.background ? ' · ' + v.background : ''), FORMAT[v.format], v.duration ? v.duration + ' s' : '', money(v.price)].filter(Boolean).join(' · ')}</small>
+        </div>
+        <small className="library-row-date">{v.created_at ? new Date(v.created_at).toLocaleDateString() : ''}</small>
+        <div className="actions">
+          <button type="button" className="small secondary" onClick={() => (video ? setPlaying(v) : setViewing(v))}>{video ? 'Watch' : 'View'}</button>
+          <a className="button small secondary-link" href={v.url} download={fileName(v, video ? '.mp4' : '.jpg')}>Download</a>
+        </div>
+      </div>
+    );
+  };
   // Across several clients: one section per client (in the client list's order); one client: a single grid.
   const sections = !client && (data?.clients.length ?? 0) > 1
     ? data.clients.map((c) => [c.name, shown.filter((x) => x.item.client === c.id)]).filter(([, xs]) => xs.length)
     : [[null, shown]];
   const meta = (v, extra) => [extra, FORMAT[v.format], v.duration ? v.duration + ' s' : '', v.created_at ? new Date(v.created_at).toLocaleDateString() : ''].filter(Boolean).join(' · ');
   const videoCard = (v) => (
-    <article key={v.id} className="library-card">
+    <article key={v.id} className={'library-card' + (selected.has('video:' + v.id) ? ' picked' : '')}>
+      {pickBox({ type: 'video', item: v })}
       <button type="button" className="library-thumb" aria-label={'Play ' + v.vehicle} onClick={() => setPlaying(v)}>
         <video src={v.url + '#t=1'} preload="metadata" muted playsInline />
         <span className="play" aria-hidden="true">▶</span>
@@ -99,7 +153,8 @@ export function Library({ open, onClose }) {
     </article>
   );
   const stillCard = (x) => (
-    <article key={x.id} className="library-card">
+    <article key={x.id} className={'library-card' + (selected.has('still:' + x.id) ? ' picked' : '')}>
+      {pickBox({ type: 'still', item: x })}
       <button type="button" className="library-thumb still" aria-label={'View ' + x.vehicle} onClick={() => setViewing(x)}>
         <img src={x.url} alt={x.vehicle} loading="lazy" />
       </button>
@@ -130,7 +185,25 @@ export function Library({ open, onClose }) {
           )}
           <input type="search" aria-label="Search" placeholder="Search by car or stock number" value={q} onChange={(e) => setQ(e.target.value)} />
           <span className="library-count">{data ? `${shown.length} item${shown.length === 1 ? '' : 's'}` : 'Loading…'}</span>
+          <span className="library-view" role="group" aria-label="View">
+            <button type="button" className={'small' + (view === 'grid' ? '' : ' secondary')} aria-pressed={view === 'grid'} onClick={() => setView('grid')}>Grid</button>
+            <button type="button" className={'small' + (view === 'list' ? '' : ' secondary')} aria-pressed={view === 'list'} onClick={() => setView('list')}>List</button>
+          </span>
         </div>
+        {!readOnly && data && shown.length > 0 && (
+          <div className="library-select">
+            <label className="check"><input type="checkbox" checked={allPicked} onChange={(e) => pickAll(e.target.checked)} />Select all {shown.length}</label>
+            {picked.length > 0 && <>
+              <span>{picked.length} selected</span>
+              <button type="button" className="small secondary" onClick={() => pickAll(false)}>Clear</button>
+              {deleting ? <span>Deleting…</span> : (
+                <DangerButton label={`Delete selected (${picked.length})`} what={`${picked.length} selected item${picked.length === 1 ? '' : 's'}`}
+                  detail="Videos are removed from the Library, the Videos list and this server (with their stills unless another video uses them); stills are removed from the Library and this server. Downloads and published posts are not affected. A video with a post scheduled or still being made is skipped."
+                  onConfirm={() => removeSelected(picked)} />
+              )}
+            </>}
+          </div>
+        )}
         <div className="library-tabs" role="tablist" aria-label="Category">
           {CATEGORIES.map(([id, label]) => (
             <button key={id} type="button" role="tab" aria-selected={category === id} className={'library-tab' + (category === id ? ' on' : '')} onClick={() => setCategory(id)}>
@@ -142,7 +215,9 @@ export function Library({ open, onClose }) {
         {sections.map(([title, xs]) => (
           <section key={title ?? 'all'} className="library-section">
             {title && <h3 className="library-section-title">{title}<small>{xs.length}</small></h3>}
-            <div className="library-grid">{xs.map((x) => (x.type === 'still' ? stillCard(x.item) : videoCard(x.item)))}</div>
+            {view === 'list'
+              ? <div className="library-list">{xs.map(listRow)}</div>
+              : <div className="library-grid">{xs.map((x) => (x.type === 'still' ? stillCard(x.item) : videoCard(x.item)))}</div>}
           </section>
         ))}
       </div>
