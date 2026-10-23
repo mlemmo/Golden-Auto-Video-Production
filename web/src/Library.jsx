@@ -8,7 +8,7 @@ import { SocialPost } from './SocialPost.jsx';
 import { AdRequest } from './AdRequest.jsx';
 
 const REELS = ['instagram_reels', 'facebook_reels'];
-const FORMAT = { instagram_reels: 'Reels 9:16', facebook_reels: 'Reels 9:16', facebook_feed: 'Feed 4:5', square: 'Square 1:1' };
+const FORMAT = { instagram_reels: 'Reels 9:16', facebook_reels: 'Reels 9:16', facebook_feed: 'Feed 4:5', square: 'Square 1:1', youtube: 'YouTube 16:9' };
 const money = (p) => (p == null ? 'Call for price' : '$' + Math.round(p).toLocaleString('en-US'));
 /** Share a video's public page: the phone's share sheet when there is one, else copy the link. */
 async function shareVideo(v, say) {

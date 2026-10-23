@@ -13,7 +13,7 @@ export default function VoiceStep() {
       <StepHead id="stepVoice" num="3" title={<h2>Voice</h2>} sub={<p>Choose how the spokesperson's voice is made.</p>} />
       <Editable>
       <label>Voice
-        <select id="voice" value={s.voice} disabled={s.source === 'footage'} onChange={(e) => s.setVoice(e.target.value)}>
+        <select id="voice" value={s.voice} disabled={s.source !== 'ai'} onChange={(e) => s.setVoice(e.target.value)}>
           <option value="elevenlabs">Approved ElevenLabs voice — guides the voice and words (recommended)</option>
           <option value="native">Seedance voice — made in the video, wording may vary</option>
           <option value="narration">ElevenLabs narration + lip-sync — older two-step method</option>

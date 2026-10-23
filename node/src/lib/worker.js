@@ -1,5 +1,5 @@
 // Caption worker run (every minute): the one-approval auto build, then one queued final render — download the
-// generated video (or copy uploaded footage), time captions from real speech when asked, and burn them in with
+// generated video (or copy uploaded footage, or draw a photo slideshow), time captions from real speech when asked, and burn them in with
 // FFmpeg (or the intro/closing-card render for lip-synced videos). Free: status
 // checks, a download of our own finished video, and local tools only.
 import { request } from 'node:https';
@@ -12,6 +12,7 @@ import { validateSrt } from './captions.js';
 import { isPublicIPv4, pinnedLookup } from './clients.js';
 import { jobError, footageLocalPath } from './jobs.js';
 import { autoBuild } from './autobuild.js';
+import { formatSize, slideshowMaster } from './slideshow.js';
 import { NARRATION_OFFSET, runProcess, nativeCaptions, finishRender, jobNarration } from './finishing.js';
 
 const saveRenderJob = (db, j) => db.prepare('UPDATE jobs SET payload=? WHERE id=?').run(jsonEncode(j), j.id);
@@ -43,7 +44,7 @@ export const CAPTION_STYLE_PLAIN = 'FontName=DejaVu Sans,FontSize=10,PrimaryColo
 
 /** The FFmpeg arguments for a captioned render (everything except the fal intro/closing-card path). */
 export function renderArgs(cfg, job, narration, output) {
-  const [w, h] = job.format === 'facebook_feed' ? [1080, 1350] : job.format === 'square' ? [1080, 1080] : [1080, 1920];
+  const [w, h] = formatSize(job.format);
   // Native-voice videos: bold white words, no box or outline, with a faint soft shadow so they stay readable.
   const style = ['native', 'elevenlabs'].includes(job.voice ?? '') ? CAPTION_STYLE_NATIVE : CAPTION_STYLE_PLAIN;
   const filter = `scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},setsar=1,subtitles=captions.srt:force_style='${style}'`;
@@ -58,10 +59,10 @@ export function renderArgs(cfg, job, narration, output) {
 
 /**
  * One worker run. opts: { download, autoBuildOpts, captions(cfg, job, source, work, offset), render(db, cfg, job, work,
- * output, w, h), ffmpeg(args, work, log), random, now } — replaceable in tests. Returns the log lines.
+ * output, w, h), slideshow(cfg, job, work, ffmpeg), ffmpeg(args, work, log), random, now } — replaceable in tests. Returns the log lines.
  */
 export async function captionWorkerRun(db, cfg, opts = {}) {
-  const { download = downloadMaster, captions = nativeCaptions, render = finishRender, random = randomBytes, now = () => Date.now() } = opts;
+  const { download = downloadMaster, captions = nativeCaptions, render = finishRender, slideshow = slideshowMaster, random = randomBytes, now = () => Date.now() } = opts;
   const ffmpeg = opts.ffmpeg ?? (async (args, work, log) => {
     const fd = openSync(log, 'a');
     try { return (await runProcess(args[0], args.slice(1), { cwd: work, stdio: ['ignore', fd, fd] })).code; } finally { closeSync(fd); }
@@ -84,11 +85,12 @@ export async function captionWorkerRun(db, cfg, opts = {}) {
   let output = null;
   try {
     job.finish_status = 'rendering'; job.finish_started_at = gmdateC(); saveRenderJob(db, job);
-    // Uploaded footage is already on this server; generated videos are downloaded.
+    // Uploaded footage is already on this server; slideshows are drawn here; generated videos are downloaded.
     if ((job.provider ?? '') === 'footage') {
       const source = footageLocalPath(cfg, job);
       try { copyFileSync(source, work + '/master.mp4'); } catch { throw new Error('Cannot read the uploaded footage.'); }
     }
+    else if ((job.provider ?? '') === 'slideshow') await slideshow(cfg, job, work, ffmpeg);
     else await download(job.video_url, work + '/master.mp4');
     let narration = null;
     // voice=elevenlabs keeps Seedance's own speech (its lips match it); audio_swap jobs replace it with the narration.
@@ -98,7 +100,7 @@ export async function captionWorkerRun(db, cfg, opts = {}) {
       saveRenderJob(db, job);
     }
     writeFileSync(work + '/captions.srt', validateSrt(str(job.captions_srt), toFloat(job.duration ?? 15)));
-    const [w, h] = job.format === 'facebook_feed' ? [1080, 1350] : job.format === 'square' ? [1080, 1080] : [1080, 1920];
+    const [w, h] = formatSize(job.format);
     const name = random(20).toString('hex') + '.mp4'; output = str(cfg.asset_dir) + '/' + name;
     if ((job.provider ?? '') === 'fal_lipsync') await render(db, cfg, job, work, output, w, h);
     else {

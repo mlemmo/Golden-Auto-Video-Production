@@ -1,4 +1,4 @@
-// Ad scripts built only from inventory facts (15- and 30-second versions).
+// Ad scripts built only from inventory facts (15-, 30- and 60-second versions).
 import { adPrice, title } from './price.js';
 import { speechWordCount } from './speech.js';
 import { intdiv, lower, numberFormat, str, toFloat, toInt, trim, truthy, upper } from './text.js';
@@ -14,6 +14,7 @@ export const DEALER_DEFAULT = Object.freeze({ name: 'Golden Auto', city: 'San Ra
  */
 export function script(v, duration = 15, dealer = DEALER_DEFAULT, intro = null) {
   if (duration === 30) return script30(v, dealer, intro);
+  if (duration === 60) return script60(v, dealer, intro);
   const name = title(v);
   const drive = v.Drivetrain ?? '';
   // Keep drive codes uppercase so speech spells them ("A-W-D") and captions keep "AWD".
@@ -40,6 +41,14 @@ const DRIVES = { AWD: 'all-wheel drive', '4WD': 'four-wheel drive', '4X4': 'four
  * the 2 s intro card; optional sentences are dropped for long vehicle names.
  */
 export function script30(v, dealer = DEALER_DEFAULT, intro = null) {
+  const parts = script30Parts(v, dealer, intro);
+  for (const optional of ['use', 'hook']) if (speechWordCount(joinParts(parts)) > 62) delete parts[optional];
+  return joinParts(parts);
+}
+const joinParts = (p) => trim(Object.values(p).filter(truthy).join(' ').replace(/[\t\n\v\f\r ]+/g, ' '));
+
+// The sentences of the 30-second script, by name (the 60-second script adds to them).
+function script30Parts(v, dealer, intro) {
   const trimRaw = trim(str(v.Trim ?? ''));
   const body = /pickup|crew cab|truck/i.test(trimRaw + ' ' + str(v.Model ?? '')) ? 'truck'
     : /sport utility|suv/i.test(trimRaw) ? 'SUV'
@@ -70,9 +79,34 @@ export function script30(v, dealer = DEALER_DEFAULT, intro = null) {
     price: hasPrice(v) ? 'Priced at ' + adPrice(toFloat(v.price)) + '.' : '',
     cta: 'Book your test drive today at ' + str(dealer.website) + '.',
   };
-  const join = (p) => trim(Object.values(p).filter(truthy).join(' ').replace(/[\t\n\v\f\r ]+/g, ' '));
-  for (const optional of ['use', 'hook']) if (speechWordCount(join(parts)) > 62) delete parts[optional];
-  return join(parts);
+  return Object.defineProperty(parts, 'body', { value: body, enumerable: false });
+}
+
+const ROOMY = {
+  truck: 'From the job site to the campground, it is built to handle real work.',
+  SUV: 'There is room for passengers, gear, and everything in between.',
+  van: 'There is room for the whole crew and everything they bring along.',
+};
+
+/**
+ * 60-second script for the photo slideshow (Facebook, Marketplace, YouTube): the 30-second sentences plus a line
+ * about the kind of vehicle, a pointer to the photos and an invitation to visit. Targets about 105–120 spoken
+ * words (roughly 50 s at the slower preview speed), leaving room for the closing card; nothing is claimed that
+ * the listing does not say.
+ */
+export function script60(v, dealer = DEALER_DEFAULT, intro = null) {
+  const p = script30Parts(v, dealer, intro);
+  const city = str(dealer.city ?? '') !== '' ? ' in ' + str(dealer.city) : '';
+  const parts = {
+    hook: p.hook, name: p.name, facts: p.facts, use: p.use,
+    roomy: ROOMY[p.body] ?? 'It is comfortable on the highway and easy to park around town.',
+    photos: 'Check out the photos to see it inside and out.',
+    price: p.price,
+    visit: 'Come see it in person at ' + str(dealer.name) + city + ', and take it for a drive.',
+    cta: 'Book your test drive today at ' + str(dealer.website) + '.',
+  };
+  for (const optional of ['roomy', 'use', 'hook']) if (speechWordCount(joinParts(parts)) > 122) delete parts[optional];
+  return joinParts(parts);
 }
 /** Spoken words left for a fitted opener and highlight in the 30-second script (its budget is 60). */
 export function introBudget(v, dealer = DEALER_DEFAULT) {

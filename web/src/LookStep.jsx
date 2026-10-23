@@ -1,11 +1,12 @@
-// Step 4: video source, spokesperson, background setting, style, publish format and the car photos sent to the video model.
+// Step 4: video source, spokesperson, background setting, style, publish format and the car photos sent to the video model
+// (a photo slideshow instead chooses its shapes).
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
 import { StepContinue, StepHead, useStudio, Editable } from './App.jsx';
 
 export default function LookStep() {
   const s = useStudio();
-  const footage = s.source === 'footage', narration = s.voice === 'narration';
+  const footage = s.source === 'footage', slideshow = s.source === 'slideshow', ai = s.source === 'ai', narration = s.voice === 'narration';
   const beats = s.style === 'dynamic' ? [['00–04', 'Low tracking hook'], ['04–09', 'Interior macro glide'], ['09–15', 'Drone pull-away + offer']]
     : narration ? [['Rear corner', 'Starts walking'], ['Near side', 'Walks and presents'], ['Front corner', 'Offer + test drive']]
       : [['Shot 1', 'Front corner, wide'], ['Shot 2', 'Side, walking'], ['Shot 3', 'Rear corner'], ['Shot 4', 'Front, price + call to action']];
@@ -16,7 +17,8 @@ export default function LookStep() {
       <Editable>
       <label>Video source
         <select id="source" value={s.source} onChange={(e) => s.setSource(e.target.value)}>
-          <option value="ai">AI showroom video — Seedance films the car and the spokesperson</option>
+          <option value="ai" disabled={s.duration === '60'}>AI showroom video — Seedance films the car and the spokesperson (15 or 30 seconds)</option>
+          <option value="slideshow">Photo slideshow — the car's listing photos with your approved voice (no spokesperson, no generation cost)</option>
           <option value="footage">My footage — a video I filmed of this car (no spokesperson, no generation cost)</option>
         </select>
       </label>
@@ -26,7 +28,8 @@ export default function LookStep() {
         </label>
         <p className="hint">Hold the phone upright and walk slowly around the car for 30–45 seconds, in even light; film or export at 1080p so it stays under 64 MB. Its own sound is replaced by the approved voice from step 3, and it is cropped to the publish format and trimmed to the video length.</p>
       </div>
-      <div id="aiLook" hidden={footage}>
+      {slideshow && <SlideshowShapes />}
+      <div id="aiLook" hidden={!ai}>
         <label>Spokesperson
           <select id="spokesperson" value={s.spokespersonId} onChange={(e) => s.setSpokespersonId(e.target.value)}>
             {!s.spokespersons.items.length && <option value="">No spokespersons yet — add one under Tools</option>}
@@ -54,7 +57,7 @@ export default function LookStep() {
           {beats.map(([t, d]) => <div key={t}><b>{t}</b><span>{d}</span></div>)}
         </div>
       </div>
-      <label>Publish format
+      <label hidden={slideshow}>Publish format
         <select id="format" value={s.format} onChange={(e) => s.setFormat(e.target.value)}>
           <option value="instagram_reels">Instagram Reels — 9:16</option>
           <option value="facebook_reels">Facebook Reels — 9:16</option>
@@ -62,14 +65,38 @@ export default function LookStep() {
           <option value="square">Instagram / Facebook Square — 1:1</option>
         </select>
       </label>
-      <p className="hint" id="formatHint">{s.format === 'facebook_feed' ? 'Seedance renders a 3:4 video; it is cropped to 4:5 when finished.' : 'Generated in this shape directly. Check captions and face placement before posting.'}</p>
-      <div id="aiSheet" hidden={footage}><AssetSheet /></div>
+      <p className="hint" id="formatHint" hidden={slideshow}>{s.format === 'facebook_feed' ? 'Seedance renders a 3:4 video; it is cropped to 4:5 when finished.' : 'Generated in this shape directly. Check captions and face placement before posting.'}</p>
+      <div id="aiSheet" hidden={!ai}><AssetSheet /></div>
       <StepContinue from="stepLook" to="stepGenerate" label="Continue to step 5: Generate"
-        check={footage ? 'Footage video chosen' : 'Spokesperson, format and photos confirmed'}
-        ready={!!s.chosen && (!footage || !!s.footage) && (footage || !!s.spokesperson)}
-        waiting={!s.chosen ? 'Choose a vehicle in step 1 first' : footage ? 'Choose the car video first' : 'Choose a spokesperson first'} />
+        check={footage ? 'Footage video chosen' : slideshow ? 'Slideshow shapes chosen' : 'Spokesperson, format and photos confirmed'}
+        ready={!!s.chosen && (footage ? !!s.footage : slideshow ? s.shapes.length > 0 && (s.chosen.photos ?? []).length > 0 : !!s.spokesperson)}
+        waiting={!s.chosen ? 'Choose a vehicle in step 1 first' : footage ? 'Choose the car video first' : slideshow ? 'Choose at least one shape (the car needs photos)' : 'Choose a spokesperson first'} />
       </Editable>
     </section>
+  );
+}
+
+export const SLIDESHOW_SHAPES = [
+  ['instagram_reels', '9:16 upright', 'Reels, Stories, YouTube Shorts, TikTok'],
+  ['facebook_feed', '4:5 feed', 'Facebook and Instagram feed, Marketplace ads'],
+  ['youtube', '16:9 wide', 'YouTube in-stream ads (Google Ads); opens on the car, dealer card at the end'],
+  ['square', '1:1 square', 'Feed posts where square fits best'],
+];
+
+/** The shapes a photo slideshow is built in: one finished video per ticked shape, all from one approved voice. */
+function SlideshowShapes() {
+  const s = useStudio();
+  const photos = (s.chosen?.photos ?? []).length;
+  const toggle = (id, on) => s.setShapes(SLIDESHOW_SHAPES.map(([k]) => k).filter((k) => (k === id ? on : s.shapes.includes(k))));
+  return (
+    <div id="slideshowBox">
+      <span className="eyebrow">VIDEO SHAPES — ONE VIDEO EACH, SAME VOICE</span>
+      {SLIDESHOW_SHAPES.map(([id, name, use]) => (
+        <label key={id} className="check"><input type="checkbox" checked={s.shapes.includes(id)} onChange={(e) => toggle(id, e.target.checked)} /><b>{name}</b>&nbsp;— {use}</label>
+      ))}
+      <p className="hint">{photos ? `Uses this car's ${photos} listing photos in gallery order (about one every 2–3 seconds; a long gallery is cut to what fits), each with a slow zoom and a soft cross-fade. ` : 'This car has no photos yet. '}
+        A dealer card with the price opens the video and a test-drive card with the website and phone number closes it. Captions are the approved caption text, timed from the voice. Free to build.</p>
+    </div>
   );
 }
 

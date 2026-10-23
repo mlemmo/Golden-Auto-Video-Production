@@ -74,12 +74,13 @@ only then fast-forward `main` and deploy production (`bash /srv/golden-auto/ubun
 
 | File | What it does |
 | --- | --- |
-| `scripts.js` | Ad script wording (15 and 30 seconds) and Golden Auto's default dealer details |
+| `scripts.js` | Ad script wording (15, 30 and 60 seconds) and Golden Auto's default dealer details |
 | `speech.js` | How text is spoken: numbers, prices, acronyms, shorthand (4WD…), respellings for Seedance |
 | `prompts.js` | The Seedance video prompts |
 | `captions.js` | Caption engine: splitting, line length, timing, Call For Price |
 | `finishing.js`, `worker.js`, `autobuild.js` | Building the final captioned video (caption style, FFmpeg render, auto build) |
 | `jobs.js` | Paid generation, status checks, jobs list, My footage, library list |
+| `slideshow.js` | Photo slideshow videos: timeline, FFmpeg zoom/cross-fade graph, one job per shape (9:16, 4:5, 16:9, 1:1) |
 | `narrations.js` | Voice previews and lip-sync |
 | `ads.js` | Paid ad requests and dealer ad settings (docs/ADS_LAUNCH.md) |
 | `meta-ads.js` | Meta ads through the Marketing API: create paused, switch on/pause, end, results (ads worker) |

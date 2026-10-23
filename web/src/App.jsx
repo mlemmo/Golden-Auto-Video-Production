@@ -107,6 +107,8 @@ export default function App() {
   const [approvedVoice, setApprovedVoice] = useState('');
   const [sheetUrl, setSheetUrl] = useState('');
   const [footage, setFootage] = useState(null);
+  // Photo slideshow: the shapes built from one approved voice (one video each).
+  const [shapes, setShapes] = useState(['instagram_reels', 'facebook_feed', 'youtube']);
   const [approve, setApprove] = useState(false);
   const [confirmCurrent, setConfirmCurrent] = useState(false);
   const [resolution, setResolution] = useState('720p');
@@ -251,7 +253,11 @@ export default function App() {
     if (!car?.scripts) return;
     setScript((v) => (v.trim() === '' || Object.values(car.scripts).includes(v.trim()) ? car.scripts[len] || car.script : v));
   }
-  function setDuration(len) { setDurationRaw(len); defaultScript(len); }
+  function setDuration(len) {
+    setDurationRaw(len); defaultScript(len);
+    // 60 seconds is made only as a photo slideshow (AI videos are 15 or 30 seconds).
+    if (len === '60' && source === 'ai') setSource('slideshow');
+  }
   function setStyle(s) {
     setStyleRaw(s);
     if (s === 'dynamic') setDuration('15');
@@ -263,8 +269,9 @@ export default function App() {
   }
   function setSource(s) {
     setSourceRaw(s);
-    // Footage always uses the approved ElevenLabs voice from step 3.
-    if (s === 'footage' && voice !== 'elevenlabs') setVoice('elevenlabs');
+    // Footage and slideshows always use the approved ElevenLabs voice from step 3.
+    if (s !== 'ai' && voice !== 'elevenlabs') setVoice('elevenlabs');
+    if (s === 'ai' && duration === '60') setDuration('30');
   }
 
   const spokesperson = spokespersons.items.find((s) => s.id === spokespersonId) ?? null;
@@ -280,7 +287,7 @@ export default function App() {
     boot, client, clients, setClients, inventory, setInventory, syncLog, jobs, narr, spokespersons, spokesperson, scenes, scene, sceneId, setSceneId, showScenes,
     chosen, setChosen, duration, setDuration, script, setScript, voice, setVoice, style, setStyle, source, setSource,
     format, setFormat, spokespersonId, setSpokespersonId, approvedVoice, setApprovedVoice, approvedPreviews,
-    sheetUrl, setSheetUrl, footage, setFootage, approve, setApprove, confirmCurrent, setConfirmCurrent, resolution, setResolution,
+    sheetUrl, setSheetUrl, footage, setFootage, shapes, setShapes, approve, setApprove, confirmCurrent, setConfirmCurrent, resolution, setResolution,
     captionJob, setCaptionJob, tool, setTool, collapsed, toggleStep, openStep, closeStep, stepClass,
     busy, run, statuses, loadClients, loadInventory, loadJobs, loadSyncLog, refreshNarrations, showSpokespersons,
     clearVehicle, switchClient, formStore, defaultScript,

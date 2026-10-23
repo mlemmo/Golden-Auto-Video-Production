@@ -107,10 +107,10 @@ export function narrationTextDifferences(spoken, caption, respell = {}) {
   return diffs.reverse();
 }
 export const narrationMismatchNote = (diffs) => (diffs.length ? ' Caption text and spoken text differ: ' + diffs.slice(0, 5).join('; ') + '. Captions show the caption text, so fix one of them if they should match.' : '');
-/** ElevenLabs voice settings: 30-second previews a little slower (config narration_speed, default 0.9). */
+/** ElevenLabs voice settings: 30- and 60-second previews a little slower (config narration_speed, default 0.9). */
 export function narrationVoiceSettings(cfg, duration) {
   const settings = { stability: 0.65, similarity_boost: 0.75 };
-  const speed = duration === 30 ? Math.max(0.7, Math.min(1.2, toFloat(cfg.narration_speed ?? 0.9))) : 1.0;
+  const speed = duration >= 30 ? Math.max(0.7, Math.min(1.2, toFloat(cfg.narration_speed ?? 0.9))) : 1.0;
   if (Math.abs(speed - 1.0) > 0.001) settings.speed = speed;
   return settings;
 }
@@ -215,7 +215,7 @@ export async function narrationApi(action, inp, cfg, db, { bridge: helper = narr
     for (const c of clientInventory(db, clientOf(inp)).vehicles ?? []) if (c.StockNumber === (inp.stock ?? '')) v = c;
     if (!v || (v.active ?? true) === false) throw new Error('Select a saved vehicle that is still in active inventory.');
     const duration = toInt(inp.duration ?? 15);
-    if (![15, 30].includes(duration)) throw new Error('Choose 15 or 30 seconds.');
+    if (![15, 30, 60].includes(duration)) throw new Error('Choose 15, 30 or 60 seconds.');
     const settings = narrationVoiceSettings(cfg, duration);
     let fingerprint = createHash('sha256').update(jsonEncode([v.StockNumber, v.price, voice, text, captions, duration, settings])).digest('hex');
     if (inp.new_take) fingerprint = createHash('sha256').update(Buffer.concat([Buffer.from(fingerprint), random(16)])).digest('hex');

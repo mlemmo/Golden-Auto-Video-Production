@@ -375,6 +375,7 @@ export function goldenJobDelete(db, cfg, id, allowed = null) {
     const path = assetDir(cfg) + '/footage/' + job.footage_file; if (existsSync(path)) unlinkSync(path);
   }
   if ((job.provider ?? '') === 'footage') return { message: 'Video and its uploaded footage deleted.' };
+  if ((job.provider ?? '') === 'slideshow') return { message: 'Slideshow video deleted.' };
   return { message: 'Video deleted from the dashboard. The original generation stays in your Higgsfield history.' };
 }
 

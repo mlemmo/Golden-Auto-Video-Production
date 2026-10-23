@@ -19,6 +19,7 @@ export default function ScriptStep() {
       <label>Video length
         <select id="duration" value={s.duration} disabled={s.style === 'dynamic'} onChange={(e) => s.setDuration(e.target.value)}>
           <option value="30">30 seconds — full walkaround</option><option value="15">15 seconds — short ad</option>
+          <option value="60">60 seconds — photo slideshow for Facebook, Marketplace and YouTube</option>
         </select>
       </label>
       <label><span id="scriptLabel">{label}</span>
@@ -47,12 +48,12 @@ function SpokenLength() {
     }, 250);
     return () => { live = false; clearTimeout(t); };
   }, [s.script, sayVehicle]);
-  const thirty = s.duration === '30', limit = thirty ? 62 : 38;
+  const aim = { 15: [38, 'up to 38'], 30: [62, '55–60'], 60: [122, '100–120'] }[s.duration] ?? [62, '55–60'], limit = aim[0];
   let text, tooLong = false;
   if (pending) text = result && s.script.trim() ? `${result.words} spoken words · updating…` : 'Checking spoken length…';
   else {
     tooLong = result.words > limit;
-    text = `${result.words} spoken words · aim for ${thirty ? '55–60' : 'up to 38'} for ${s.duration} seconds` + (tooLong ? ' — too long, shorten it' : '');
+    text = `${result.words} spoken words · aim for ${aim[1]} for ${s.duration} seconds` + (tooLong ? ' — too long, shorten it' : '');
   }
   return (
     <>

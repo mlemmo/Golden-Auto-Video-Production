@@ -14,6 +14,7 @@ import { enrich, referenceImageUrl, uploadReference, generateJob, pollJob, jobsF
 import { withThumbs } from '../lib/thumbs.js';
 import { syncLogKey } from '../lib/dealercenter.js';
 import { vehicleIntro } from '../lib/intros.js';
+import { goldenSlideshowBuild } from '../lib/slideshow.js';
 import { sceneApi, sceneSuggest } from '../lib/scenes.js';
 
 const sha256 = (s) => createHash('sha256').update(s).digest('hex');
@@ -39,7 +40,7 @@ export const jobRoutes = {
     save(db, key, a);
     // The 30-second script opens with lines fitted to this vehicle (Claude when configured, else rules).
     const intro = await vehicleIntro(db, cfg, client, out, introBudget(out, dealer));
-    out.script = script(out, 15, dealer); out.scripts = { 15: out.script, 30: script(out, 30, dealer, intro) }; out.intro_source = intro.source;
+    out.script = script(out, 15, dealer); out.scripts = { 15: out.script, 30: script(out, 30, dealer, intro), 60: script(out, 60, dealer, intro) }; out.intro_source = intro.source;
     const existing = state(db, 'sheet:' + (out.Vin ?? ''));
     const sameGallery = existing && (existing.gallery_hash ?? '') === sha256(jsonEncode(out.photos ?? null));
     if (sameGallery && sheetUpToDate(existing)) out.asset_sheet = existing;
@@ -83,6 +84,12 @@ export const jobRoutes = {
     message: 'Footage uploaded. The final video with your approved voice and captions is being built and appears under Videos in a few minutes. No paid generation was used.',
     job: goldenFootageBuild(db, cfg, { ...body, client }, files.footage ?? null),
   }),
+  // Free: the car's photos with the approved voice, one finished video per chosen shape (src/lib/slideshow.js).
+  slideshow_build: ({ cfg, db, client, body, dealer }) => {
+    const jobs = goldenSlideshowBuild(db, cfg, { ...body, client }, dealer);
+    return { message: `Building ${jobs.length === 1 ? 'the slideshow video' : jobs.length + ' slideshow videos (one per shape)'} from the car's photos and your approved voice. They appear under Videos in a few minutes each. No paid generation was used.`,
+      jobs, vehicle: jobs[0].vehicle };
+  },
   job_delete: ({ cfg, db, body, user }) => goldenJobDelete(db, cfg, str(body.id ?? ''), allowedClients(db, user)),
   jobs: ({ db, client }) => jobsForClient(db, client),
   poll: ({ cfg, db, body }) => pollJob(db, cfg, str(body.id ?? '')),

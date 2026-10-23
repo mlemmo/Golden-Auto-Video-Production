@@ -125,6 +125,53 @@ def make_card(photo, output, width, height, title, closing, frame=False):
     im.save(output)
 
 
+def slideshow_card(data):
+    """Dealer card of a photo slideshow: the car's first photo blurred and darkened behind the dealer's details.
+    kind 'intro' names the dealer and the car; 'outro' asks for the test drive with website, phone and city."""
+    from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
+    width, height = int(data['width']), int(data['height'])
+    # Larger text in tall frames, where the card is seen on a phone held upright.
+    unit = min(width, height) / 720 * (1.35 if height > width * 1.2 else 1)
+    with Image.open(data['photo']) as source:
+        im = ImageOps.fit(ImageOps.exif_transpose(source).convert('RGB'), (width, height))
+    im = im.filter(ImageFilter.GaussianBlur(round(24 * unit)))
+    im = Image.blend(im, Image.new('RGB', (width, height), '#0b1622'), 0.72)
+    draw = ImageDraw.Draw(im)
+    font_dir = Path('/usr/share/fonts/truetype/dejavu')
+    lines = []
+
+    def add(text, size, color='white', bold=False, gap=0.55):
+        text = str(text or '').replace('\n', ' ').strip()[:120]
+        if text:
+            font = ImageFont.truetype(str(font_dir / ('DejaVuSans-Bold.ttf' if bold else 'DejaVuSans.ttf')), round(size * unit))
+            while draw.textbbox((0, 0), text, font=font)[2] > width * 0.86 and font.size > 12:
+                font = ImageFont.truetype(font.path, font.size - 1)
+            lines.append((text, font, color, round(gap * font.size)))
+
+    dealer = str(data.get('dealer') or '').upper()
+    if data['kind'] == 'intro':
+        add(dealer, 52, '#efcb80', True, 0.9)
+        add(data.get('vehicle'), 34, 'white', True)
+        add(data.get('price'), 34, '#efcb80', True, 0.9)
+        add(data.get('city'), 24, '#cbd5e1')
+    else:
+        add('BOOK YOUR TEST DRIVE', 36, 'white', True, 0.9)
+        add(data.get('website'), 40, '#efcb80', True)
+        add(data.get('phone'), 34, 'white', True)
+        add(dealer, 26, '#cbd5e1', False, 0.3)
+        add(data.get('city'), 24, '#cbd5e1')
+    total = sum(f.getbbox(t)[3] + g for t, f, _, g in lines)
+    y = (height - total) / 2
+    for i, (text, font, color, gap) in enumerate(lines):
+        draw.text((width / 2, y), text, font=font, fill=color, anchor='mt')
+        y += font.getbbox(text)[3] + gap
+        if i == 0:
+            rule = round(3 * unit)
+            draw.rectangle((width * .3, y - gap / 2 - rule / 2, width * .7, y - gap / 2 + rule / 2), fill='#d8b367')
+    im.save(data['output'])
+    return {'ok': True}
+
+
 def render(data):
     work = Path(data['work']).resolve()
     width, height = int(data['width']), int(data['height'])
@@ -172,7 +219,8 @@ def render(data):
 if __name__ == '__main__':
     try:
         data = json.load(sys.stdin)
-        result = analyze(data) if data['op'] == 'analyze' else render(data) if data['op'] == 'render' else None
+        ops = {'analyze': analyze, 'render': render, 'slideshow_card': slideshow_card}
+        result = ops[data['op']](data) if data.get('op') in ops else None
         if result is None:
             raise ValueError('Unknown finishing operation.')
         print(json.dumps(result))

@@ -69,7 +69,7 @@ const ADMIN_ACTIONS = new Set(['usage', 'ad_settings_save', 'facebook_disconnect
 // Actions that need no current client (an account without clients can still use them).
 const NO_CLIENT = new Set(['library', 'ad_preview', 'ad_status', 'ad_list', 'ad_request', 'ad_cancel', 'ad_remove', 'ad_switch_on', 'ad_pause', 'ad_retry', 'social_status', 'social_list', 'social_post', 'social_cancel', 'social_retry', 'usage', 'clients', 'logout', 'me', 'password_change', 'users_list', 'user_create', 'user_update', 'user_delete', 'client_add']);
 // Actions recorded for the Usage dashboard (who, which client, what, when; never passwords).
-const TRACKED = new Set(['generate', 'ad_request', 'ad_cancel', 'ad_remove', 'ad_switch_on', 'ad_pause', 'ad_retry', 'ad_settings_save', 'facebook_page', 'facebook_disconnect', 'social_post', 'social_cancel', 'social_retry', 'spokesperson_picture', 'spokesperson_save_draft', 'narration_preview', 'narration_lipsync', 'footage_build', 'finish', 'narration_approve', 'job_delete',
+const TRACKED = new Set(['generate', 'ad_request', 'ad_cancel', 'ad_remove', 'ad_switch_on', 'ad_pause', 'ad_retry', 'ad_settings_save', 'facebook_page', 'facebook_disconnect', 'social_post', 'social_cancel', 'social_retry', 'spokesperson_picture', 'spokesperson_save_draft', 'narration_preview', 'narration_lipsync', 'footage_build', 'slideshow_build', 'finish', 'narration_approve', 'job_delete',
   'narration_delete', 'narration_lipsync_delete', 'sync', 'import', 'client_add', 'client_details', 'client_analyze', 'spokesperson_upload',
   'spokesperson_default', 'spokesperson_delete', 'user_create', 'user_update', 'user_delete', 'password_change']);
 function activityDetail(name, body, out) {
@@ -77,6 +77,7 @@ function activityDetail(name, body, out) {
   for (const k of ['stock', 'duration', 'voice', 'format', 'id', 'resolution']) if (['string', 'number'].includes(typeof body[k]) && body[k] !== '') d[k] = body[k];
   const v = out?.job?.vehicle ?? out?.vehicle ?? out?.post?.vehicle; if (v) d.vehicle = v;
   if (Array.isArray(body.platforms)) d.platforms = body.platforms.join(',');
+  if (Array.isArray(body.formats)) d.formats = body.formats.join(',');
   if (out?.job?.duration) d.duration = out.job.duration;
   if (name.startsWith('user_')) { d.email = body.email ?? out?.user?.email; d.role = body.role; }
   if (name === 'client_add') d.client_name = out?.client?.name;

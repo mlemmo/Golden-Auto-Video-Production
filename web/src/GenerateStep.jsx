@@ -4,21 +4,24 @@ import { api, upload } from './api.js';
 import { StepHead, useStudio, Editable } from './App.jsx';
 import { price, vehicleName } from './ui.jsx';
 
-const FORMAT_NAME = { instagram_reels: 'Instagram Reels', facebook_reels: 'Facebook Reels', facebook_feed: 'Facebook Feed', square: 'Instagram / Facebook Square' };
+const FORMAT_NAME = { instagram_reels: 'Instagram Reels', facebook_reels: 'Facebook Reels', facebook_feed: 'Facebook Feed', square: 'Instagram / Facebook Square', youtube: 'YouTube 16:9' };
+const SHAPE_NAME = { instagram_reels: '9:16', facebook_feed: '4:5', youtube: '16:9', square: '1:1' };
 const showVideos = () => setTimeout(() => document.getElementById('videos')?.scrollIntoView({ behavior: 'smooth' }), 0);
 
 export default function GenerateStep() {
   const s = useStudio();
   const [, say] = s.statuses.generate;
-  const c = s.chosen, footage = s.source === 'footage';
+  const c = s.chosen, footage = s.source === 'footage', slideshow = s.source === 'slideshow', ai = s.source === 'ai';
   const approved = s.voice !== 'elevenlabs' || s.approvedVoice;
   const voiceText = { elevenlabs: 'approved ElevenLabs voice', native: 'Seedance voice', narration: 'silent video + ElevenLabs lip-sync' }[s.voice];
   const rows = [
     ['Vehicle', c ? `${vehicleName(c)} · ${price(c)}` : 'not selected', !!c],
     ['Voice', voiceText + (s.voice === 'elevenlabs' ? (approved ? ' · preview chosen' : ' · no approved preview yet') : ''), !!approved],
-    footage ? ['Footage', s.footage?.name || 'no video chosen yet', !!s.footage] : ['Spokesperson', s.spokesperson?.name || 'none', !!s.spokesperson],
-    ...(footage ? [] : [['Setting', s.scene?.name || 'default', true]]),
-    ['Video', `${s.duration} s · ${FORMAT_NAME[s.format]} · ${footage ? 'your footage' : s.style === 'showroom' ? 'walkaround' : 'dynamic'}${footage ? '' : ' · ' + s.resolution}`, true],
+    footage ? ['Footage', s.footage?.name || 'no video chosen yet', !!s.footage]
+      : slideshow ? ['Photos', `${(c?.photos ?? []).length} listing photos`, (c?.photos ?? []).length > 0] : ['Spokesperson', s.spokesperson?.name || 'none', !!s.spokesperson],
+    ...(ai ? [['Setting', s.scene?.name || 'default', true]] : []),
+    slideshow ? ['Videos', `${s.duration} s photo slideshow · ${s.shapes.map((k) => SHAPE_NAME[k]).join(', ') || 'no shape chosen'}`, s.shapes.length > 0]
+      : ['Video', `${s.duration} s · ${FORMAT_NAME[s.format]} · ${footage ? 'your footage' : s.style === 'showroom' ? 'walkaround' : 'dynamic'}${footage ? '' : ' · ' + s.resolution}`, true],
   ];
 
   const generate = () => {
@@ -52,6 +55,18 @@ export default function GenerateStep() {
       } catch (e) { say(e.message, true); }
     });
   };
+  const buildSlideshow = () => {
+    if (!c) return;
+    if (!s.approvedVoice) { say('Choose an approved voice preview in step 3 first.', 'warn'); return; }
+    if (!s.shapes.length) { say('Choose at least one video shape in step 4.', 'warn'); return; }
+    s.run(async () => {
+      say('Starting the slideshow videos…');
+      try {
+        say((await api('slideshow_build', { stock: c.StockNumber, narration_id: s.approvedVoice, formats: s.shapes, confirm_current: s.confirmCurrent })).message);
+        await s.loadJobs(); s.openStep('videos'); showVideos();
+      } catch (e) { say(e.message, true); }
+    });
+  };
   const checkReferences = () => s.run(async () => {
     say('Uploading reference images to Higgsfield storage; no video is generated…');
     try { say((await api('references', { sheet: s.sheetUrl, spokesperson: s.spokespersonId })).message); } catch (e) { say(e.message, true); }
@@ -68,24 +83,25 @@ export default function GenerateStep() {
 
   return (
     <section className={s.stepClass('stepGenerate')} id="stepGenerate">
-      <StepHead id="stepGenerate" num="5" title={<h2>Generate</h2>} sub={<p>One paid generation. The captioned final video is then built automatically and appears under Videos.</p>} />
+      <StepHead id="stepGenerate" num="5" title={<h2>Generate</h2>} sub={<p>{ai ? 'One paid generation. The captioned final video is then built automatically and appears under Videos.' : 'Built free on this server from your approved voice. The captioned videos appear under Videos.'}</p>} />
       <Editable>
       <ul className="summary" id="summary">
         {rows.map(([k, v, ok]) => <li key={k} className={ok ? 'ok' : 'todo'}><b>{k}</b><span>{v}</span></li>)}
       </ul>
-      <label id="resolutionLabel" hidden={footage}>Quality
+      <label id="resolutionLabel" hidden={!ai}>Quality
         <select id="resolution" value={s.resolution} onChange={(e) => s.setResolution(e.target.value)}>
           <option value="720p">720p — standard (about $9.71 for 30 s)</option>
           <option value="1080p">1080p — sharper badges and lettering (about 40% more)</option>
         </select>
       </label>
-      <label className="check note-important" id="approveLabel" hidden={footage}><input type="checkbox" id="approve" checked={s.approve} onChange={(e) => s.setApprove(e.target.checked)} />I reviewed the vehicle facts and script and approve <b>one paid Higgsfield generation</b> at my account’s current rate.</label>
+      <label className="check note-important" id="approveLabel" hidden={!ai}><input type="checkbox" id="approve" checked={s.approve} onChange={(e) => s.setApprove(e.target.checked)} />I reviewed the vehicle facts and script and approve <b>one paid Higgsfield generation</b> at my account’s current rate.</label>
       <label className="check note-important"><input type="checkbox" id="confirmCurrent" checked={s.confirmCurrent} onChange={(e) => s.setConfirmCurrent(e.target.checked)} />I confirm the vehicle is <b>available</b> and its advertised <b>price is current</b>.</label>
       <div className="actions">
         <button id="buildFootage" hidden={!footage} disabled={!c || s.busy || !s.confirmCurrent} title={s.confirmCurrent ? undefined : 'Tick “vehicle is available and price is current” first'} onClick={buildFootage}>Build video from my footage</button>
-        <button id="generate" hidden={footage} disabled={!c || s.busy || !s.approve || !s.confirmCurrent} title={s.approve && s.confirmCurrent ? undefined : 'Tick both boxes above first'} onClick={generate}>Generate video</button>
-        <button className="secondary" id="checkReferences" hidden={footage} disabled={s.busy} onClick={checkReferences}>Check reference uploads</button>
-        <button className="secondary" id="brief" hidden={footage} disabled={!c} onClick={downloadBrief}>Download production brief</button>
+        <button id="buildSlideshow" hidden={!slideshow} disabled={!c || s.busy || !s.confirmCurrent || !s.shapes.length} title={s.confirmCurrent ? undefined : 'Tick “vehicle is available and price is current” first'} onClick={buildSlideshow}>{`Build ${s.shapes.length === 1 ? 'slideshow video' : s.shapes.length + ' slideshow videos'}`}</button>
+        <button id="generate" hidden={!ai} disabled={!c || s.busy || !s.approve || !s.confirmCurrent} title={s.approve && s.confirmCurrent ? undefined : 'Tick both boxes above first'} onClick={generate}>Generate video</button>
+        <button className="secondary" id="checkReferences" hidden={!ai} disabled={s.busy} onClick={checkReferences}>Check reference uploads</button>
+        <button className="secondary" id="brief" hidden={!ai} disabled={!c} onClick={downloadBrief}>Download production brief</button>
       </div>
       </Editable>
     </section>
