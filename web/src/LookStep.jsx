@@ -18,7 +18,7 @@ export default function LookStep() {
       <label>Video source
         <select id="source" value={s.source} onChange={(e) => s.setSource(e.target.value)}>
           <option value="ai" disabled={s.duration === '60'}>AI showroom video — Seedance films the car and the spokesperson (15 or 30 seconds)</option>
-          <option value="slideshow">Photo slideshow — the car's listing photos with your approved voice (no spokesperson, no generation cost)</option>
+          <option value="slideshow">Photo slideshow — the car's listing photos with your approved voice (15, 30 or 60 seconds; no spokesperson, no generation cost)</option>
           <option value="footage">My footage — a video I filmed of this car (no spokesperson, no generation cost)</option>
         </select>
       </label>

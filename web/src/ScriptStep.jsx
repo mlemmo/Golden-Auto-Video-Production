@@ -18,8 +18,8 @@ export default function ScriptStep() {
       <details className="sub"><summary>Website description</summary><p id="description">{c ? c.description || 'No description found.' : ''}</p></details>
       <label>Video length
         <select id="duration" value={s.duration} disabled={s.style === 'dynamic'} onChange={(e) => s.setDuration(e.target.value)}>
-          <option value="30">30 seconds — full walkaround</option><option value="15">15 seconds — short ad</option>
-          <option value="60">60 seconds — photo slideshow for Facebook, Marketplace and YouTube</option>
+          <option value="30">30 seconds — AI walkaround, footage or photo slideshow</option><option value="15">15 seconds — short ad (any video source)</option>
+          <option value="60">60 seconds — photo slideshow or footage only (Facebook, Marketplace, YouTube)</option>
         </select>
       </label>
       <label><span id="scriptLabel">{label}</span>
