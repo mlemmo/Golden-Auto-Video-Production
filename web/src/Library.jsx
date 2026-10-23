@@ -1,5 +1,6 @@
-// The Library: every finished video for the clients this account may use, in a clean full-page gallery for showing
-// customers — watch inline, open a large player (with full screen), download.
+// The Library: every finished video and still for the clients this account may use, in a clean full-page gallery for
+// showing customers — by category (AI videos, slideshows, footage, stills) and, across clients, one section per
+// client; watch inline, open a large player (with full screen) or picture, download.
 import { useEffect, useRef, useState } from 'react';
 import { api } from './api.js';
 import { useStudio } from './App.jsx';
@@ -19,40 +20,105 @@ async function shareVideo(v, say) {
     say('Link copied: ' + url);
   } catch (e) { if (e?.name !== 'AbortError') window.prompt('Copy this link:', url); }
 }
-const fileName = (v) => `${v.vehicle} ${v.stock}`.trim().replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '') + '.mp4';
+const fileName = (v, ext = '.mp4') => `${v.vehicle} ${v.stock}`.trim().replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '') + ext;
+// Library categories: [id, tab label, what an empty one says].
+const KIND = { ai: 'AI video', slideshow: 'Slideshow', footage: 'My footage' };
+const CATEGORIES = [['all', 'All'], ['ai', 'AI videos'], ['slideshow', 'Slideshows'], ['footage', 'My footage'], ['stills', 'Stills']];
+const EMPTY = { all: 'Nothing finished yet.', ai: 'No AI videos yet.', slideshow: 'No slideshow videos yet.', footage: 'No videos from your footage yet.',
+  stills: 'No stills yet. Build a photo slideshow with a showroom background: the car pictures it makes appear here, ready for image ads.' };
 
 export function Library({ open, onClose }) {
   const [, say] = useStatus('library');
   const [data, setData] = useState(null);
   const [client, setClient] = useState('');
   const [q, setQ] = useState('');
+  const [category, setCategory] = useState('all');
   const [playing, setPlaying] = useState(null);
+  const [viewing, setViewing] = useState(null);
   const [posting, setPosting] = useState(null);
   const [advertising, setAdvertising] = useState(null);
   const { readOnly } = useStudio();
   useEffect(() => { if (open) api('library').then(setData).catch((e) => say(e.message, true)); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!open) return undefined;
-    const esc = (e) => { if (e.key === 'Escape') (advertising ? setAdvertising(null) : posting ? setPosting(null) : playing ? setPlaying(null) : onClose()); };
+    const esc = (e) => { if (e.key === 'Escape') (advertising ? setAdvertising(null) : posting ? setPosting(null) : playing ? setPlaying(null) : viewing ? setViewing(null) : onClose()); };
     document.addEventListener('keydown', esc); document.body.style.overflow = 'hidden';
     return () => { document.removeEventListener('keydown', esc); document.body.style.overflow = ''; };
-  }, [open, playing, posting, advertising, onClose]);
+  }, [open, playing, viewing, posting, advertising, onClose]);
   // Delete a video (job_delete): gone from the Library, the Videos step and this server; never undone.
   const remove = async (v) => {
     try {
       const r = await api('job_delete', { id: v.id });
-      setData((d) => ({ ...d, videos: d.videos.filter((x) => x.id !== v.id) }));
+      const d = await api('library');
+      setData(d);
       if (playing?.id === v.id) setPlaying(null);
       say(r.message || 'Video deleted.');
     } catch (e) { say(e.message, true); }
   };
+  const removeStill = async (x) => {
+    try {
+      const r = await api('still_delete', { id: x.id });
+      setData((d) => ({ ...d, stills: d.stills.filter((s) => s.id !== x.id) }));
+      if (viewing?.id === x.id) setViewing(null);
+      say(r.message || 'Still deleted.');
+    } catch (e) { say(e.message, true); }
+  };
   if (!open) return null;
   const names = Object.fromEntries((data?.clients ?? []).map((c) => [c.id, c.name]));
-  const shown = (data?.videos ?? []).filter((v) => (!client || v.client === client) && (!q || `${v.vehicle} ${v.stock}`.toLowerCase().includes(q.toLowerCase())));
+  const match = (v) => (!client || v.client === client) && (!q || `${v.vehicle} ${v.stock}`.toLowerCase().includes(q.toLowerCase()));
+  // Everything matching the client and search, newest first: { type: 'video' | 'still', cat, item }.
+  const items = [...(data?.videos ?? []).map((v) => ({ type: 'video', cat: v.kind ?? 'ai', item: v })), ...(data?.stills ?? []).map((x) => ({ type: 'still', cat: 'stills', item: x }))]
+    .filter((x) => match(x.item)).sort((a, b) => String(b.item.created_at).localeCompare(String(a.item.created_at)));
+  const count = (c) => items.filter((x) => c === 'all' || x.cat === c).length;
+  const shown = items.filter((x) => category === 'all' || x.cat === category);
+  // Across several clients: one section per client (in the client list's order); one client: a single grid.
+  const sections = !client && (data?.clients.length ?? 0) > 1
+    ? data.clients.map((c) => [c.name, shown.filter((x) => x.item.client === c.id)]).filter(([, xs]) => xs.length)
+    : [[null, shown]];
+  const meta = (v, extra) => [extra, FORMAT[v.format], v.duration ? v.duration + ' s' : '', v.created_at ? new Date(v.created_at).toLocaleDateString() : ''].filter(Boolean).join(' · ');
+  const videoCard = (v) => (
+    <article key={v.id} className="library-card">
+      <button type="button" className="library-thumb" aria-label={'Play ' + v.vehicle} onClick={() => setPlaying(v)}>
+        <video src={v.url + '#t=1'} preload="metadata" muted playsInline />
+        <span className="play" aria-hidden="true">▶</span>
+      </button>
+      <div className="library-meta">
+        <strong>{v.vehicle}</strong>
+        <span className="library-price">{money(v.price)}</span>
+        <small>{meta(v, KIND[v.kind ?? 'ai'])}</small>
+        {v.speech_check?.ok === false && <span className="badge bad" title={v.speech_check.issues.map((x) => x.message).join('\n')}>⚠ Speech check: {v.speech_check.issues.length} difference{v.speech_check.issues.length === 1 ? '' : 's'}</span>}
+      </div>
+      <div className="actions">
+        <button type="button" className="small" onClick={() => setPlaying(v)}>Watch</button>
+        <a className="button small secondary-link" href={v.url} download={fileName(v)}>Download</a>
+        <button type="button" className="secondary small share-btn" onClick={() => shareVideo(v, say)}>Share</button>
+        {!readOnly && <button type="button" className="secondary small" title={REELS.includes(v.format) ? 'Post to Facebook & Instagram' : 'Make the Reels 9:16 format to post'} onClick={() => setPosting(v)}>Post</button>}
+        {!readOnly && <button type="button" className="secondary small" onClick={() => setAdvertising(v)}>Run as ad</button>}
+        {!readOnly && <DangerButton label="Delete" what={`this video of the ${v.vehicle}`} detail="It is removed from the Library, the Videos list and this server. Copies you downloaded or posts already published on Facebook or Instagram are not affected." onConfirm={() => remove(v)} />}
+      </div>
+    </article>
+  );
+  const stillCard = (x) => (
+    <article key={x.id} className="library-card">
+      <button type="button" className="library-thumb still" aria-label={'View ' + x.vehicle} onClick={() => setViewing(x)}>
+        <img src={x.url} alt={x.vehicle} loading="lazy" />
+      </button>
+      <div className="library-meta">
+        <strong>{x.vehicle}</strong>
+        <span className="library-price">{money(x.price)}</span>
+        <small>{meta(x, x.background ? 'Still · ' + x.background : 'Still')}</small>
+      </div>
+      <div className="actions">
+        <button type="button" className="small" onClick={() => setViewing(x)}>View</button>
+        <a className="button small secondary-link" href={x.url} download={fileName(x, '.jpg')}>Download</a>
+        {!readOnly && <DangerButton label="Delete" what={`this still of the ${x.vehicle}`} detail="The picture is removed from the Library and this server. Videos made with it are not changed." onConfirm={() => removeStill(x)} />}
+      </div>
+    </article>
+  );
   return (
-    <div className="library" id="library" role="dialog" aria-modal="true" aria-label="Video library">
+    <div className="library" id="library" role="dialog" aria-modal="true" aria-label="Library">
       <div className="tool-window-head">
-        <h2>Video library</h2>
+        <h2>Library</h2>
         <button type="button" className="secondary" id="libraryClose" onClick={onClose}>Close</button>
       </div>
       <div className="library-body">
@@ -63,37 +129,45 @@ export function Library({ open, onClose }) {
             </select>
           )}
           <input type="search" aria-label="Search" placeholder="Search by car or stock number" value={q} onChange={(e) => setQ(e.target.value)} />
-          <span className="library-count">{data ? `${shown.length} video${shown.length === 1 ? '' : 's'}` : 'Loading…'}</span>
+          <span className="library-count">{data ? `${shown.length} item${shown.length === 1 ? '' : 's'}` : 'Loading…'}</span>
         </div>
-        {data && !shown.length && <p className="hint">No finished videos yet.</p>}
-        <div className="library-grid">
-          {shown.map((v) => (
-            <article key={v.id} className="library-card">
-              <button type="button" className="library-thumb" aria-label={'Play ' + v.vehicle} onClick={() => setPlaying(v)}>
-                <video src={v.url + '#t=1'} preload="metadata" muted playsInline />
-                <span className="play" aria-hidden="true">▶</span>
-              </button>
-              <div className="library-meta">
-                <strong>{v.vehicle}</strong>
-                <span className="library-price">{money(v.price)}</span>
-                <small>{[names[v.client], FORMAT[v.format], v.duration ? v.duration + ' s' : '', v.created_at ? new Date(v.created_at).toLocaleDateString() : ''].filter(Boolean).join(' · ')}</small>
-                {v.speech_check?.ok === false && <span className="badge bad" title={v.speech_check.issues.map((x) => x.message).join('\n')}>⚠ Speech check: {v.speech_check.issues.length} difference{v.speech_check.issues.length === 1 ? '' : 's'}</span>}
-              </div>
-              <div className="actions">
-                <button type="button" className="small" onClick={() => setPlaying(v)}>Watch</button>
-                <a className="button small secondary-link" href={v.url} download={fileName(v)}>Download</a>
-                <button type="button" className="secondary small share-btn" onClick={() => shareVideo(v, say)}>Share</button>
-                {!readOnly && <button type="button" className="secondary small" title={REELS.includes(v.format) ? 'Post to Facebook & Instagram' : 'Make the Reels 9:16 format to post'} onClick={() => setPosting(v)}>Post</button>}
-                {!readOnly && <button type="button" className="secondary small" onClick={() => setAdvertising(v)}>Run as ad</button>}
-                {!readOnly && <DangerButton label="Delete" what={`this video of the ${v.vehicle}`} detail="It is removed from the Library, the Videos list and this server. Copies you downloaded or posts already published on Facebook or Instagram are not affected." onConfirm={() => remove(v)} />}
-              </div>
-            </article>
+        <div className="library-tabs" role="tablist" aria-label="Category">
+          {CATEGORIES.map(([id, label]) => (
+            <button key={id} type="button" role="tab" aria-selected={category === id} className={'library-tab' + (category === id ? ' on' : '')} onClick={() => setCategory(id)}>
+              {label}<span className="library-tab-count">{data ? count(id) : ''}</span>
+            </button>
           ))}
         </div>
+        {data && !shown.length && <p className="hint">{q || client ? 'Nothing matches.' : EMPTY[category]}</p>}
+        {sections.map(([title, xs]) => (
+          <section key={title ?? 'all'} className="library-section">
+            {title && <h3 className="library-section-title">{title}<small>{xs.length}</small></h3>}
+            <div className="library-grid">{xs.map((x) => (x.type === 'still' ? stillCard(x.item) : videoCard(x.item)))}</div>
+          </section>
+        ))}
       </div>
       {playing && <Player v={playing} client={names[playing.client]} onClose={() => setPlaying(null)} onShare={() => shareVideo(playing, say)} onPost={readOnly ? null : () => setPosting(playing)} />}
+      {viewing && <StillViewer x={viewing} client={names[viewing.client]} onClose={() => setViewing(null)} />}
       {posting && <SocialPost v={posting} say={say} onClose={() => setPosting(null)} />}
       {advertising && <AdRequest v={advertising} say={say} onClose={() => setAdvertising(null)} />}
+    </div>
+  );
+}
+
+/** A still shown large, with Download. */
+function StillViewer({ x, client, onClose }) {
+  return (
+    <div className="player-backdrop" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="player" role="dialog" aria-label={x.vehicle}>
+        <img src={x.url} alt={x.vehicle} className="still-large" />
+        <div className="player-info">
+          <div><strong>{x.vehicle}</strong><span>{money(x.price)}{client ? ' · ' + client : ''}</span></div>
+          <div className="actions">
+            <a className="button" href={x.url} download={fileName(x, '.jpg')}>Download</a>
+            <button type="button" className="secondary" onClick={onClose}>Close</button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

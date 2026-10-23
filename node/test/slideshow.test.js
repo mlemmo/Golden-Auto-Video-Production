@@ -13,10 +13,10 @@ import { runProcess } from '../src/lib/finishing.js';
 import { captionWorkerRun, renderArgs, jobMusic } from '../src/lib/worker.js';
 import { musicApi, musicFilter } from '../src/lib/music.js';
 import { backdropApi, applyBackdrop } from '../src/lib/backdrops.js';
-import { goldenJobDelete } from '../src/lib/jobs.js';
+import { goldenJobDelete, libraryVideos, libraryStills, stillDelete } from '../src/lib/jobs.js';
 import { script } from '../src/lib/scripts.js';
 import { speechWordCount } from '../src/lib/speech.js';
-import { slideshowPlan, slideshowArgs, slideFit, cardPrice, formatSize, goldenSlideshowBuild, slideshowMaster, heroOrder } from '../src/lib/slideshow.js';
+import { slideshowPlan, slideshowArgs, slideFit, cardPrice, formatSize, goldenSlideshowBuild, slideshowMaster, heroOrder, keepStills } from '../src/lib/slideshow.js';
 import { dcNormalize } from '../src/lib/dealercenter.js';
 import { JPEG_40x30, JPEG_1800x900 } from './fixtures/images.js';
 
@@ -231,4 +231,32 @@ test('ad cut: no intro card, hero exterior then interior and detail first', asyn
   assert.equal(dcNormalize({ ...car, page_url: 'https://www.mygoldenauto.net/inventory/ram/1500-crew-cab/666777/' }).page_url, 'https://www.mygoldenauto.net/inventory/ram/1500-crew-cab/666777/');
   assert.throws(() => dcNormalize({ ...car, page_url: 'javascript:alert(1)' }), /page_url/);
   assert.equal(dcNormalize(car).page_url, '');
+});
+
+test('library: videos by kind, stills from showroom builds, deleting stills', () => {
+  const { dir, cfg, db } = setup();
+  try {
+    const pic = (n) => { const f = `${dir}/data/${n.repeat(64)}.jpg`; writeFileSync(f, 'pic ' + n); return { file: f }; };
+    const names = keepStills(cfg, [pic('a'), pic('b'), { file: `${dir}/data/photo-0.jpg` }, pic('a')]);
+    assert.deepEqual(names, ['a'.repeat(64) + '.jpg', 'b'.repeat(64) + '.jpg'], 'composed pictures only, once each');
+    assert.ok(existsSync(`${dir}/assets/stills/${names[0]}`));
+    const done = { status: 'completed', finish_status: 'completed', captioned_url: 'https://example.com:4343/assets/x.mp4', vehicle: '2015 VOLKSWAGEN GOLF', stock: 'S1', price: 13550 };
+    put(db, 'jobs', { ...done, id: 'J1', provider: 'slideshow', format: 'facebook_feed', stills: names, background_name: 'Studio — charcoal', finish_completed_at: '2026-10-23T10:00:00Z' });
+    put(db, 'jobs', { ...done, id: 'J2', provider: 'slideshow', format: 'instagram_reels', stills: [names[0]], finish_completed_at: '2026-10-23T11:00:00Z' });
+    put(db, 'jobs', { ...done, id: 'J3', provider: 'higgsfield', format: 'instagram_reels' });
+    put(db, 'jobs', { ...done, id: 'J4', provider: 'footage', format: 'square', client: 'eastbay' });
+    assert.deepEqual(libraryVideos(db, ['golden-auto', 'eastbay']).map((v) => v.id + ':' + v.kind).sort(), ['J1:slideshow', 'J2:slideshow', 'J3:ai', 'J4:footage']);
+    const stills = libraryStills(db, cfg, ['golden-auto']);
+    assert.equal(stills.length, 2, 'a picture shared by two shapes is listed once');
+    assert.ok(stills.every((x) => x.url.startsWith('https://example.com:4343/assets/stills/') && x.vehicle === '2015 VOLKSWAGEN GOLF'));
+    assert.deepEqual(libraryStills(db, cfg, ['eastbay']), [], 'other clients do not see them');
+    assert.throws(() => stillDelete(db, cfg, names[1], ['eastbay']), /no access/);
+    assert.equal(stillDelete(db, cfg, names[1], ['golden-auto']).message, 'Still deleted.');
+    assert.ok(!existsSync(`${dir}/assets/stills/${names[1]}`));
+    // Deleting a video keeps a still another video still uses, and removes it with the last one.
+    goldenJobDelete(db, cfg, 'J1');
+    assert.ok(existsSync(`${dir}/assets/stills/${names[0]}`));
+    goldenJobDelete(db, cfg, 'J2');
+    assert.ok(!existsSync(`${dir}/assets/stills/${names[0]}`));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });

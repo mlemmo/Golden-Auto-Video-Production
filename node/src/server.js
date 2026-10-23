@@ -22,7 +22,7 @@ import { withSpeechSites } from './lib/speech.js';
 import { sessionStore, newSessionId, newCsrf, sameSecret, parseCookies, sessionCookie, clearedCookie, COOKIE } from './lib/session.js';
 import { loginPage, dashboardPage, sharePage } from './lib/pages.js';
 import { recordActivity, usageReport } from './lib/activity.js';
-import { libraryVideos } from './lib/jobs.js';
+import { libraryVideos, libraryStills, stillDelete } from './lib/jobs.js';
 import { signIn, userById, userCount, publicUser, allowedClients, usersList, userCreate, userUpdate, userDelete, passwordChange } from './lib/users.js';
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
@@ -51,7 +51,8 @@ const sessionRoutes = {
   // Meta's own previews of an ad (nothing is created; the video is uploaded to the ad account once and reused at launch).
   ad_preview: ({ db, cfg, user, body }) => adPreview(db, cfg, body, { allowed: allowedClients(db, user) }),
   ...Object.fromEntries(['ad_settings', 'ad_settings_save'].map((a) => [a, ({ db, user, body, client }) => adApi(a, { ...body, client }, db, { allowed: allowedClients(db, user), user: user.email })])),
-  library: ({ db, user }) => { const ids = allowedClients(db, user); return { videos: libraryVideos(db, ids), clients: clientsLoad(db).items.filter((c) => ids.includes(c.id)).map((c) => ({ id: c.id, name: c.name })) }; },
+  library: ({ db, cfg, user }) => { const ids = allowedClients(db, user); return { videos: libraryVideos(db, ids), stills: libraryStills(db, cfg, ids), clients: clientsLoad(db).items.filter((c) => ids.includes(c.id)).map((c) => ({ id: c.id, name: c.name })) }; },
+  still_delete: ({ db, cfg, user, body }) => stillDelete(db, cfg, String(body.id ?? ''), allowedClients(db, user)),
   password_change: async ({ db, user, body }) => { await passwordChange(db, user, body.current, body.password); return { message: 'Password changed.' }; },
   // Admins: accounts.
   users_list: ({ db }) => ({ users: usersList(db).map(publicUser), clients: clientsLoad(db).items.map((c) => ({ id: c.id, name: c.name })) }),
@@ -67,9 +68,9 @@ const sessionRoutes = {
 const VIEWER_ACTIONS = new Set(['library', 'music_list', 'backdrop_list', 'scene_list', 'clients', 'client_select', 'inventory', 'sync_log', 'jobs', 'narration_list', 'spokesperson_list', 'detail', 'speech', 'logout', 'me', 'password_change']);
 const ADMIN_ACTIONS = new Set(['usage', 'music_upload', 'music_delete', 'backdrop_upload', 'backdrop_delete', 'ad_settings_save', 'facebook_disconnect', 'spokesperson_describe', 'spokesperson_picture', 'spokesperson_save_draft', 'snapshot_import', 'scene_save', 'scene_delete', 'scene_default', 'scene_suggest', 'client_add', 'client_analyze', 'client_details', 'spokesperson_upload', 'spokesperson_default', 'spokesperson_delete', 'users_list', 'user_create', 'user_update', 'user_delete']);
 // Actions that need no current client (an account without clients can still use them).
-const NO_CLIENT = new Set(['library', 'ad_preview', 'ad_status', 'ad_list', 'ad_request', 'ad_cancel', 'ad_remove', 'ad_switch_on', 'ad_pause', 'ad_retry', 'social_status', 'social_list', 'social_post', 'social_cancel', 'social_retry', 'usage', 'clients', 'logout', 'me', 'password_change', 'users_list', 'user_create', 'user_update', 'user_delete', 'client_add']);
+const NO_CLIENT = new Set(['library', 'still_delete', 'ad_preview', 'ad_status', 'ad_list', 'ad_request', 'ad_cancel', 'ad_remove', 'ad_switch_on', 'ad_pause', 'ad_retry', 'social_status', 'social_list', 'social_post', 'social_cancel', 'social_retry', 'usage', 'clients', 'logout', 'me', 'password_change', 'users_list', 'user_create', 'user_update', 'user_delete', 'client_add']);
 // Actions recorded for the Usage dashboard (who, which client, what, when; never passwords).
-const TRACKED = new Set(['generate', 'ad_request', 'ad_cancel', 'ad_remove', 'ad_switch_on', 'ad_pause', 'ad_retry', 'ad_settings_save', 'facebook_page', 'facebook_disconnect', 'social_post', 'social_cancel', 'social_retry', 'spokesperson_picture', 'spokesperson_save_draft', 'narration_preview', 'narration_lipsync', 'footage_build', 'slideshow_build', 'music_upload', 'music_delete', 'backdrop_upload', 'backdrop_delete', 'finish', 'narration_approve', 'job_delete',
+const TRACKED = new Set(['generate', 'ad_request', 'ad_cancel', 'ad_remove', 'ad_switch_on', 'ad_pause', 'ad_retry', 'ad_settings_save', 'facebook_page', 'facebook_disconnect', 'social_post', 'social_cancel', 'social_retry', 'spokesperson_picture', 'spokesperson_save_draft', 'narration_preview', 'narration_lipsync', 'footage_build', 'slideshow_build', 'music_upload', 'music_delete', 'backdrop_upload', 'backdrop_delete', 'still_delete', 'finish', 'narration_approve', 'job_delete',
   'narration_delete', 'narration_lipsync_delete', 'sync', 'import', 'client_add', 'client_details', 'client_analyze', 'spokesperson_upload',
   'spokesperson_default', 'spokesperson_delete', 'user_create', 'user_update', 'user_delete', 'password_change']);
 function activityDetail(name, body, out) {

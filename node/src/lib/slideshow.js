@@ -7,7 +7,8 @@
 // The caption worker draws the master here (slideshowMaster), then burns the captions and lays the voice over it
 // like a footage job (audio_swap, captions timed from the approved voice).
 import { randomBytes } from 'node:crypto';
-import { writeFileSync } from 'node:fs';
+import { writeFileSync, mkdirSync, copyFileSync, existsSync, chmodSync } from 'node:fs';
+import { basename } from 'node:path';
 import { str, toFloat, toInt, truthy, gmdateC } from './text.js';
 import { jsonEncode } from './storedjson.js';
 import { adPrice, priceMatches, title } from './price.js';
@@ -88,6 +89,22 @@ export function slideshowArgs(cfg, plan, inputs, [w, h], output) {
   args.push('-filter_complex', graph.join(';'), '-map', '[v]', '-t', plan.total.toFixed(3), '-r', String(SLIDE_FPS),
     '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '17', '-threads', '2', '-pix_fmt', 'yuv420p', '-an', output);
   return args;
+}
+
+/**
+ * The showroom pictures of a build (the car on its backdrop, at the video's size) copied to assets/stills for the
+ * Library's Stills, named by content so the same picture is stored once. Returns their file names.
+ */
+export function keepStills(cfg, files) {
+  const dir = str(cfg.asset_dir ?? '') + '/stills', names = [];
+  for (const f of files) {
+    const name = basename(f.file);
+    if (!/^[a-f0-9]{64}\.jpg$/.test(name)) continue;   // only composed pictures (cache names); originals stay out
+    mkdirSync(dir, { recursive: true, mode: 0o755 });
+    if (!existsSync(dir + '/' + name)) { copyFileSync(f.file, dir + '/' + name); chmodSync(dir + '/' + name, 0o644); }
+    names.push(name);
+  }
+  return [...new Set(names)];
 }
 
 /** Photos reordered for an ad: first exterior, first interior, first detail, then the others in gallery order. */
@@ -180,6 +197,7 @@ export async function slideshowMaster(cfg, job, work, ffmpeg, { photos = (urls) 
   if (str(job.background ?? '') !== '') {
     const backdrop = backdropFind(db, cfg, job.background);
     job.background_photos = await backdrops(cfg, files, backdrop, [w, h]);
+    job.stills = keepStills(cfg, files);
   }
   for (const f of files) f.fit = slideFit(f.size, [w, h]);
   const c = job.cards ?? {};

@@ -242,3 +242,14 @@ a.button.secondary-link{background:#262d3a;color:#fff;border:1px solid var(--lin
 .music-preview { width: 100%; margin: 4px 0 8px; }
 .music-upload { display: grid; gap: 8px; }
 .backdrop-preview { width: 100%; max-height: 220px; object-fit: cover; border-radius: 8px; margin: 4px 0 8px; }
+/* Library: category tabs, client sections, stills */
+.library-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 14px; }
+.library-tab { background: transparent; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-weight: 600; }
+.library-tab.on { background: var(--gold); color: #151a23; border-color: transparent; }
+.library-tab-count { margin-left: 6px; opacity: .7; font-weight: 500; }
+.library-section + .library-section { margin-top: 22px; }
+.library-section-title { display: flex; align-items: baseline; gap: 8px; margin: 0 0 10px; }
+.library-section-title small { color: var(--muted); font-weight: 500; }
+.library-thumb.still { aspect-ratio: 4/5; background: #1b2230; }
+.library-thumb.still img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.still-large { max-width: 100%; max-height: 75vh; display: block; margin: 0 auto; }

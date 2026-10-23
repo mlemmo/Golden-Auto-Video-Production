@@ -304,7 +304,7 @@ export default function App() {
       <div className="topbar">
         <span className="topbar-brand">{client ? client.name : 'Golden Auto'} · Video Studio</span>
         <div className="header-actions">
-          <button type="button" className="secondary small" id="libraryOpen" aria-label="Video library" onClick={() => setLibraryOpen(true)}>▶<span className="label-long"> Library</span></button>
+          <button type="button" className="secondary small" id="libraryOpen" aria-label="Library" onClick={() => setLibraryOpen(true)}>▶<span className="label-long"> Library</span></button>
           {!readOnly && <button type="button" className="secondary small" id="postsOpen" aria-label="Posts" onClick={() => setPostsOpen(true)}>📣<span className="label-long"> Posts</span></button>}
           {!readOnly && <button type="button" className="secondary small" id="adsOpen" aria-label="Ads" onClick={() => setAdsOpen(true)}>💲<span className="label-long"> Ads</span></button>}
           {!readOnly && <ToolsMenu />}

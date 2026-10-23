@@ -375,7 +375,15 @@ export function goldenJobDelete(db, cfg, id, allowed = null) {
     const path = assetDir(cfg) + '/footage/' + job.footage_file; if (existsSync(path)) unlinkSync(path);
   }
   if ((job.provider ?? '') === 'footage') return { message: 'Video and its uploaded footage deleted.' };
-  if ((job.provider ?? '') === 'slideshow') return { message: 'Slideshow video deleted.' };
+  if ((job.provider ?? '') === 'slideshow') {
+    for (const name of job.stills ?? []) {
+      if (!STILL_NAME.test(str(name))) continue;
+      const shared = db.prepare('SELECT payload FROM jobs').all().some((r) => (JSON.parse(r.payload).stills ?? []).includes(name));
+      const path = assetDir(cfg) + '/stills/' + name;
+      if (!shared && existsSync(path)) unlinkSync(path);
+    }
+    return { message: 'Slideshow video deleted.' + ((job.stills ?? []).length ? ' Its stills are deleted too unless another video uses them.' : '') };
+  }
   return { message: 'Video deleted from the dashboard. The original generation stays in your Higgsfield history.' };
 }
 
@@ -453,6 +461,45 @@ export function footageLocalPath(cfg, job) {
   return path;
 }
 
+/** The Library's category of a video: an AI video (Seedance, lip-sync), a photo slideshow or the dealer's footage. */
+export const videoKind = (j) => (j.provider === 'slideshow' ? 'slideshow' : j.provider === 'footage' ? 'footage' : 'ai');
+
+const STILL_NAME = /^[a-f0-9]{64}\.jpg$/;
+/**
+ * Stills of the given clients, newest first: the showroom pictures slideshow builds made (the car on a studio or
+ * showroom backdrop), one entry per picture even when several shapes or builds share it.
+ */
+export function libraryStills(db, cfg, clientIds) {
+  const seen = new Map(), base = str(cfg.public_base_url ?? '').replace(/\/+$/, '') + '/assets/stills/';
+  for (const { payload } of db.prepare('SELECT payload FROM jobs').all()) {
+    let j; try { j = JSON.parse(payload); } catch { continue; }
+    const client = j.client ?? CLIENT_DEFAULT;
+    if (!clientIds.includes(client) || j.finish_status !== 'completed') continue;
+    for (const name of j.stills ?? []) {
+      if (!STILL_NAME.test(str(name)) || seen.has(name) || !existsSync(assetDir(cfg) + '/stills/' + name)) continue;
+      seen.set(name, { id: name, job_id: j.id, client, vehicle: str(j.vehicle), stock: str(j.stock), price: j.price ?? null, format: str(j.format),
+        background: str(j.background_name ?? ''), url: base + name, created_at: j.finish_completed_at ?? j.created_at ?? '' });
+    }
+  }
+  return [...seen.values()].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+}
+
+/** Deleting a still: taken off every video that lists it, and its file removed. */
+export function stillDelete(db, cfg, name, allowed) {
+  if (!STILL_NAME.test(str(name))) throw new Error('Still not found. Reload the library.');
+  let found = false;
+  for (const { payload } of db.prepare('SELECT payload FROM jobs').all()) {
+    const j = JSON.parse(payload);
+    if (!(j.stills ?? []).includes(name)) continue;
+    if (!allowed.includes(j.client ?? CLIENT_DEFAULT)) throw new Error('Your account has no access to that still.');
+    j.stills = j.stills.filter((x) => x !== name); found = true;
+    db.prepare('UPDATE jobs SET payload=? WHERE id=?').run(jsonEncode(j), j.id);
+  }
+  if (!found) throw new Error('Still not found. Reload the library.');
+  const path = assetDir(cfg) + '/stills/' + name; if (existsSync(path)) unlinkSync(path);
+  return { message: 'Still deleted.' };
+}
+
 /** Finished, captioned videos of the given clients, newest first (the Library page). */
 export function libraryVideos(db, clientIds) {
   const out = [];
@@ -460,7 +507,7 @@ export function libraryVideos(db, clientIds) {
     let j; try { j = JSON.parse(payload); } catch { continue; }
     const client = j.client ?? CLIENT_DEFAULT;
     if (!clientIds.includes(client) || j.finish_status !== 'completed' || !String(j.captioned_url ?? '').startsWith('https://')) continue;
-    out.push({ id: j.id, client, vehicle: str(j.vehicle), stock: str(j.stock), price: j.price ?? null, duration: j.duration ?? null, format: str(j.format),
+    out.push({ id: j.id, client, kind: videoKind(j), vehicle: str(j.vehicle), stock: str(j.stock), price: j.price ?? null, duration: j.duration ?? null, format: str(j.format),
       url: j.captioned_url, created_at: j.finish_completed_at ?? j.created_at ?? '', approved_by: str(j.approved_by ?? ''), speech_check: j.speech_check ?? null });
   }
   return out.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
