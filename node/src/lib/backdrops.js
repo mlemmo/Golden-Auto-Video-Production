@@ -110,7 +110,9 @@ export function backdropCompose(cfg, items, spec, layout = {}) {
 /** Run private/ai_backdrop.py (PAID): { files, calls }. The fal key goes on stdin, never on the command line. */
 export function aiCompose(cfg, items, spec) {
   return new Promise((resolve, reject) => {
-    const p = spawn('/usr/bin/python3', ['-I', AI_HELPER], { stdio: ['pipe', 'pipe', 'ignore'] });
+    // With the cut-out Python the helper finds the car to frame it the same size in every picture.
+    const python = backdropsAvailable(cfg) ? str(cfg.cutout_python) : '/usr/bin/python3';
+    const p = spawn(python, ['-I', AI_HELPER], { stdio: ['pipe', 'pipe', 'ignore'] });
     const out = [];
     const timer = setTimeout(() => p.kill('SIGKILL'), 900000);
     p.stdout.on('data', (d) => out.push(d));
@@ -186,7 +188,7 @@ async function applyAiBackdrop(cfg, files, backdrop, { classify, ai, approved, s
   const sorted = photoLabels(cfg, files, classify);
   if (!sorted) return 0;
   const { labels, sums } = sorted;
-  const outs = sums.map((h) => `${cache}/${createHash('sha256').update('ai1|' + backdrop.file + '|' + h).digest('hex')}.jpg`);
+  const outs = sums.map((h) => `${cache}/${createHash('sha256').update('ai2|' + backdrop.file + '|' + h).digest('hex')}.jpg`);
   // Without the build's approval nothing is sent: pictures made before are used, the other photos stay as taken.
   const todo = approved ? files.map((f, i) => i).filter((i) => labels[i] === 'exterior' && !existsSync(outs[i])).slice(0, AI_MAX) : [];
   stats.calls = 0;
