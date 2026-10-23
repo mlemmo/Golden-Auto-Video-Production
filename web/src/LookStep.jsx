@@ -1,7 +1,7 @@
 // Step 4: video source, spokesperson, background setting, style, publish format and the car photos sent to the video model
 // (a photo slideshow instead chooses its shapes).
-import { useEffect, useState } from 'react';
-import { api } from './api.js';
+import { useEffect, useRef, useState } from 'react';
+import { api, upload } from './api.js';
 import { StepContinue, StepHead, useStudio, Editable } from './App.jsx';
 
 export default function LookStep() {
@@ -96,7 +96,59 @@ function SlideshowShapes() {
       ))}
       <p className="hint">{photos ? `Uses this car's ${photos} listing photos in gallery order (about one every 2–3 seconds; a long gallery is cut to what fits), each with a slow zoom and a soft cross-fade. ` : 'This car has no photos yet. '}
         A dealer card with the price opens the video and a test-drive card with the website and phone number closes it. Captions are the approved caption text, timed from the voice. Free to build.</p>
+      <BackgroundMusic />
     </div>
+  );
+}
+
+/** Background music: a track from the library (admins upload tracks the dealer may use), mixed quietly under the voice. */
+function BackgroundMusic() {
+  const s = useStudio();
+  const [, say] = s.statuses.studio;
+  const [tracks, setTracks] = useState(null);
+  const formRef = useRef(null);
+  useEffect(() => { api('music_list').then((d) => setTracks(d.items)).catch((e) => say(e.message, true)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const items = tracks ?? [];
+  const current = items.find((t) => t.id === s.music) ?? null;
+  useEffect(() => { if (tracks && s.music && !current) s.setMusic(''); }, [tracks]); // eslint-disable-line react-hooks/exhaustive-deps
+  const add = (e) => {
+    e.preventDefault();
+    s.run(async () => {
+      say('Uploading the music track…');
+      try {
+        const d = await upload('music_upload', new FormData(formRef.current));
+        setTracks(d.items); s.setMusic(d.items.at(-1)?.id ?? ''); formRef.current.reset();
+        say('Music track added.');
+      } catch (err) { say(err.message, true); }
+    });
+  };
+  const remove = () => s.run(async () => {
+    if (!current || !confirm(`Delete the track “${current.name}” for everyone?`)) return;
+    try { setTracks((await api('music_delete', { id: current.id })).items); s.setMusic(''); say('Music track deleted.'); } catch (err) { say(err.message, true); }
+  });
+  return (
+    <>
+      <label>Background music
+        <select id="music" value={s.music} onChange={(e) => s.setMusic(e.target.value)}>
+          <option value="">No music</option>
+          {items.map((t) => <option key={t.id} value={t.id}>{`${t.name} · ${Math.round(t.duration)} s`}</option>)}
+        </select>
+      </label>
+      {current && <audio controls preload="none" src={current.url} className="music-preview" />}
+      <p className="hint">{items.length ? 'Played quietly under the voice, turned down further while she speaks, repeated if shorter than the video and faded out at the end.'
+        : s.isAdmin ? 'No tracks yet. Upload music the dealership is licensed to use (royalty-free or bought for ads).' : 'No tracks yet. An admin can add music the dealership is licensed to use.'}</p>
+      {s.isAdmin && (
+        <details className="sub"><summary>Add or delete music (admins)</summary>
+          <form ref={formRef} onSubmit={add} className="music-upload">
+            <label>Track name<input name="name" maxLength={60} required placeholder="e.g. Upbeat acoustic" /></label>
+            <label>Music file — MP3, M4A or WAV, up to 30 MB<input type="file" name="music" accept="audio/mpeg,audio/mp4,audio/wav,.mp3,.m4a,.wav" required /></label>
+            <p className="hint">Only upload music you have the rights to use in ads.</p>
+            <button type="submit" className="secondary small" disabled={s.busy}>Upload track</button>
+            {current && <button type="button" className="secondary small" disabled={s.busy} onClick={remove}>Delete “{current.name}”</button>}
+          </form>
+        </details>
+      )}
+    </>
   );
 }
 

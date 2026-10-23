@@ -16,6 +16,7 @@ import { sheetBytes } from './media.js';
 import { CLIENT_DEFAULT, clientInventory } from './clients.js';
 import { narrationTables, narrationLoad, narrationCheckAudio } from './narrations.js';
 import { NARRATION_OFFSET, finishPython } from './finishing.js';
+import { musicFind } from './music.js';
 
 export const FORMAT_SIZE = { instagram_reels: [1080, 1920], facebook_reels: [1080, 1920], facebook_feed: [1080, 1350], square: [1080, 1080], youtube: [1920, 1080] };
 /** Width and height of a finished video in this publish format (9:16 when unknown). */
@@ -119,6 +120,8 @@ export function goldenSlideshowBuild(db, cfg, inp, dealer, { random = randomByte
   if ((voice.stock ?? '') !== v.StockNumber || !priceMatches(voice.price ?? null, v.price ?? null)) throw new Error('The approved voice preview is for a different car or an old price. Make a new preview.');
   narrationCheckAudio(cfg, voice);
   const length = toInt(voice.duration), speechEnd = NARRATION_OFFSET + toFloat(voice.audio_duration ?? length);
+  // Optional background music from the library (src/lib/music.js); '' = none.
+  const music = musicFind(db, cfg, str(inp.music ?? ''));
   const cards = { dealer: str(dealer?.name ?? ''), website: str(dealer?.website ?? ''), phone: str(dealer?.phone ?? ''), city: str(dealer?.city ?? ''),
     vehicle: title(v), price: cardPrice(v.price ?? null) };
   const jobs = [];
@@ -129,7 +132,7 @@ export function goldenSlideshowBuild(db, cfg, inp, dealer, { random = randomByte
     const job = { id, client, stock: v.StockNumber, vehicle: title(v), spokesperson: '', format, style: 'slideshow',
       duration: plan.total, speech_end: round3(speechEnd), status: 'completed', provider: 'slideshow', created_at: gmdateC(), approved_by: str(inp.approved_by ?? ''),
       script: str(voice.caption_script), speech_script: str(voice.text), price: v.price ?? null, voice: 'elevenlabs',
-      narration_id: voice.id, audio_swap: true, captions_from_audio: true, photos, cards, intro_card: intro, video_url: '',
+      narration_id: voice.id, audio_swap: true, captions_from_audio: true, photos, cards, intro_card: intro, ...(music ? { music_id: music.id, music_file: music.file, music_name: music.name } : {}), video_url: '',
       finish_status: 'queued', render_backend: 'linux', finish_error: '', captioned_url: null, auto_queued_at: gmdateC() };
     db.prepare('INSERT INTO jobs VALUES (?,?,?)').run(id, null, jsonEncode(job));
     jobs.push(job);

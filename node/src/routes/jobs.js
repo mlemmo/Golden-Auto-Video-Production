@@ -15,12 +15,13 @@ import { withThumbs } from '../lib/thumbs.js';
 import { syncLogKey } from '../lib/dealercenter.js';
 import { vehicleIntro } from '../lib/intros.js';
 import { goldenSlideshowBuild } from '../lib/slideshow.js';
+import { musicApi } from '../lib/music.js';
 import { sceneApi, sceneSuggest } from '../lib/scenes.js';
 
 const sha256 = (s) => createHash('sha256').update(s).digest('hex');
 const SPOKESPERSON = ['spokesperson_list', 'spokesperson_upload', 'spokesperson_default', 'spokesperson_delete'];
 
-export const MULTIPART = new Set(['import', 'spokesperson_upload', 'footage_build']);
+export const MULTIPART = new Set(['import', 'spokesperson_upload', 'footage_build', 'music_upload']);
 
 export const jobRoutes = {
   // Background settings: everyone lists them; admins add, edit, delete, set the default, and ask Claude to write one.
@@ -84,6 +85,8 @@ export const jobRoutes = {
     message: 'Footage uploaded. The final video with your approved voice and captions is being built and appears under Videos in a few minutes. No paid generation was used.',
     job: goldenFootageBuild(db, cfg, { ...body, client }, files.footage ?? null),
   }),
+  // Background music library: everyone lists it; admins upload and delete tracks.
+  ...Object.fromEntries(['music_list', 'music_upload', 'music_delete'].map((a) => [a, ({ cfg, db, body, files }) => musicApi(a, body, cfg, db, files)])),
   // Free: the car's photos with the approved voice, one finished video per chosen shape (src/lib/slideshow.js).
   slideshow_build: ({ cfg, db, client, body, dealer }) => {
     const jobs = goldenSlideshowBuild(db, cfg, { ...body, client }, dealer);

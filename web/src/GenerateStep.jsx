@@ -20,7 +20,7 @@ export default function GenerateStep() {
     footage ? ['Footage', s.footage?.name || 'no video chosen yet', !!s.footage]
       : slideshow ? ['Photos', `${(c?.photos ?? []).length} listing photos`, (c?.photos ?? []).length > 0] : ['Spokesperson', s.spokesperson?.name || 'none', !!s.spokesperson],
     ...(ai ? [['Setting', s.scene?.name || 'default', true]] : []),
-    slideshow ? ['Videos', `${s.duration} s photo slideshow · ${s.shapes.map((k) => SHAPE_NAME[k]).join(', ') || 'no shape chosen'}`, s.shapes.length > 0]
+    slideshow ? ['Videos', `${s.duration} s photo slideshow · ${s.shapes.map((k) => SHAPE_NAME[k]).join(', ') || 'no shape chosen'} · ${s.music ? 'with music' : 'no music'}`, s.shapes.length > 0]
       : ['Video', `${s.duration} s · ${FORMAT_NAME[s.format]} · ${footage ? 'your footage' : s.style === 'showroom' ? 'walkaround' : 'dynamic'}${footage ? '' : ' · ' + s.resolution}`, true],
   ];
 
@@ -62,7 +62,7 @@ export default function GenerateStep() {
     s.run(async () => {
       say('Starting the slideshow videos…');
       try {
-        say((await api('slideshow_build', { stock: c.StockNumber, narration_id: s.approvedVoice, formats: s.shapes, confirm_current: s.confirmCurrent })).message);
+        say((await api('slideshow_build', { stock: c.StockNumber, narration_id: s.approvedVoice, formats: s.shapes, music: s.music, confirm_current: s.confirmCurrent })).message);
         await s.loadJobs(); s.openStep('videos'); showVideos();
       } catch (e) { say(e.message, true); }
     });

@@ -237,3 +237,7 @@ a.button.secondary-link{background:#262d3a;color:#fff;border:1px solid var(--lin
 .speech-check.bad { border-left: 3px solid #c77700; background: rgba(199, 119, 0, .08); padding: 6px 10px; border-radius: 4px; }
 .speech-check.bad ul { margin: 4px 0 0; padding-left: 18px; }
 .library-meta .badge.bad { justify-self: start; margin-top: 4px; }
+
+/* Photo slideshow: background music preview and upload */
+.music-preview { width: 100%; margin: 4px 0 8px; }
+.music-upload { display: grid; gap: 8px; }

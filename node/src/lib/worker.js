@@ -13,6 +13,7 @@ import { isPublicIPv4, pinnedLookup } from './clients.js';
 import { jobError, footageLocalPath } from './jobs.js';
 import { autoBuild } from './autobuild.js';
 import { formatSize, slideshowMaster } from './slideshow.js';
+import { musicFilter } from './music.js';
 import { NARRATION_OFFSET, runProcess, nativeCaptions, finishRender, jobNarration } from './finishing.js';
 
 const saveRenderJob = (db, j) => db.prepare('UPDATE jobs SET payload=? WHERE id=?').run(jsonEncode(j), j.id);
@@ -39,18 +40,31 @@ export async function downloadMaster(url, path) {
   if (status !== 200 || size < 1000 || size > 100000000) throw new Error('Video download failed (HTTP ' + status + '). Refresh the generation result if its link expired.');
 }
 
+/** A slideshow's background track on this server (null without music; an error when its file was deleted). */
+export function jobMusic(cfg, job) {
+  const name = str(job.music_file ?? '');
+  if (name === '') return null;
+  const path = str(cfg.asset_dir ?? '') + '/music/' + name;
+  if (!/^music-[a-f0-9]{16}\.(mp3|m4a|wav)$/.test(name) || !existsSync(path)) throw new Error('The background music for this video was deleted. Build it again with another track or no music.');
+  return path;
+}
+
 export const CAPTION_STYLE_NATIVE = 'FontName=DejaVu Sans,Bold=1,FontSize=11,PrimaryColour=&H00FFFFFF,BackColour=&H80000000,BorderStyle=1,Outline=0,Shadow=1.5,Alignment=2,MarginV=28';
 export const CAPTION_STYLE_PLAIN = 'FontName=DejaVu Sans,FontSize=10,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,BorderStyle=1,Outline=1,Shadow=0,Alignment=2,MarginV=40';
 
-/** The FFmpeg arguments for a captioned render (everything except the fal intro/closing-card path). */
-export function renderArgs(cfg, job, narration, output) {
+/**
+ * The FFmpeg arguments for a captioned render (everything except the fal intro/closing-card path). music: a looped
+ * background track mixed under the narration (photo slideshows).
+ */
+export function renderArgs(cfg, job, narration, output, music = null) {
   const [w, h] = formatSize(job.format);
   // Native-voice videos: bold white words, no box or outline, with a faint soft shadow so they stay readable.
   const style = ['native', 'elevenlabs'].includes(job.voice ?? '') ? CAPTION_STYLE_NATIVE : CAPTION_STYLE_PLAIN;
   const filter = `scale=${w}:${h}:force_original_aspect_ratio=increase,crop=${w}:${h},setsar=1,subtitles=captions.srt:force_style='${style}'`;
   const args = [str(cfg.ffmpeg_path ?? 'ffmpeg'), '-nostdin', '-n', '-hide_banner', '-loglevel', 'error', '-i', 'master.mp4'];
   // audio_swap jobs: the approved narration replaces the generated audio.
-  if (narration) args.push('-i', narration, '-filter_complex', '[1:a]adelay=' + Math.round(NARRATION_OFFSET * 1000) + ':all=1,apad[a]', '-map', '0:v', '-map', '[a]', '-shortest');
+  if (narration && music) args.push('-i', narration, '-stream_loop', '-1', '-i', music, '-filter_complex', musicFilter('1:a', '2:a', Math.round(NARRATION_OFFSET * 1000), toFloat(job.duration ?? 30)), '-map', '0:v', '-map', '[a]', '-shortest');
+  else if (narration) args.push('-i', narration, '-filter_complex', '[1:a]adelay=' + Math.round(NARRATION_OFFSET * 1000) + ':all=1,apad[a]', '-map', '0:v', '-map', '[a]', '-shortest');
   // Footage is usually longer than the ad: trim it to the video length.
   if ((job.provider ?? '') === 'footage') args.push('-t', String(toInt(job.duration ?? 30)));
   args.push('-vf', filter, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '20', '-threads', '1', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-movflags', '+faststart', output);
@@ -104,7 +118,7 @@ export async function captionWorkerRun(db, cfg, opts = {}) {
     const name = random(20).toString('hex') + '.mp4'; output = str(cfg.asset_dir) + '/' + name;
     if ((job.provider ?? '') === 'fal_lipsync') await render(db, cfg, job, work, output, w, h);
     else {
-      const status = await ffmpeg(renderArgs(cfg, job, narration, output), work, work + '/ffmpeg.log');
+      const status = await ffmpeg(renderArgs(cfg, job, narration, output, jobMusic(cfg, job)), work, work + '/ffmpeg.log');
       if (status !== 0 || !existsSync(output) || statSync(output).size < 1000) {
         let detail = ''; try { detail = readFileSync(work + '/ffmpeg.log').subarray(0, 1000).toString(); } catch { /* no log */ }
         throw new Error('FFmpeg failed: ' + detail);

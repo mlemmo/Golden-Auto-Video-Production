@@ -10,7 +10,8 @@ import { openMemoryDb, save } from '../src/lib/db.js';
 import { jsonEncode } from '../src/lib/storedjson.js';
 import { narrationTables, narrationVoiceSettings } from '../src/lib/narrations.js';
 import { runProcess } from '../src/lib/finishing.js';
-import { captionWorkerRun } from '../src/lib/worker.js';
+import { captionWorkerRun, renderArgs, jobMusic } from '../src/lib/worker.js';
+import { musicApi, musicFilter } from '../src/lib/music.js';
 import { goldenJobDelete } from '../src/lib/jobs.js';
 import { script } from '../src/lib/scripts.js';
 import { speechWordCount } from '../src/lib/speech.js';
@@ -137,5 +138,35 @@ test('caption worker draws slideshows instead of downloading', async () => {
     assert.equal(done.finish_status, 'completed', done.finish_error);
     assert.equal(seen[0], job.id);
     assert.ok(seen[1].includes('scale=1920:1080') && seen[1].includes('narrations/'), '16:9 render with the approved voice');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('background music library and mix', { skip: !hasFfmpeg }, async () => {
+  const { dir, cfg, db } = setup();
+  try {
+    const tmp = (n, body = 'x') => { const f = `${dir}/data/${n}`; writeFileSync(f, body); return f; };
+    const up = (name, file, probe = () => ({ duration: 95, codec: 'mp3' })) => musicApi('music_upload', { name }, cfg, db, { music: file }, { probe });
+    assert.deepEqual(musicApi('music_list', {}, cfg, db).items, []);
+    assert.throws(() => up('', { name: 'a.mp3', tmp_name: tmp('a'), size: 1, error: 0 }), /name/);
+    assert.throws(() => up('Song', { name: 'a.ogg', tmp_name: tmp('a'), size: 1, error: 0 }), /MP3, M4A or WAV/);
+    assert.throws(() => up('Song', { name: 'a.mp3', tmp_name: tmp('a'), size: 1, error: 0 }, () => null), /no audio/);
+    assert.throws(() => up('Song', { name: 'a.mp3', tmp_name: tmp('a'), size: 1, error: 0 }, () => ({ duration: 4 })), /shorter than 10/);
+    // A real short track (FFmpeg tone) so the final render mixes it.
+    const track = `${dir}/data/tone.mp3`;
+    spawnSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'sine=f=330:d=12', '-ac', '2', track]);
+    const lib = up('Upbeat <test>', { name: 'Tone.MP3', tmp_name: track, size: 1000, error: 0 }, () => ({ duration: 12, codec: 'mp3' }));
+    assert.equal(lib.items.length, 1);
+    const t = lib.items[0];
+    assert.ok(t.url.startsWith('https://example.com:4343/assets/music/music-') && t.duration === 12);
+    const [job] = goldenSlideshowBuild(db, cfg, { client: 'golden-auto', stock: 'S1', narration_id: 'N1', confirm_current: '1', formats: ['square'], music: t.id }, DEALER);
+    assert.ok(job.music_id === t.id && /^music-[a-f0-9]{16}\.mp3$/.test(job.music_file));
+    assert.throws(() => goldenSlideshowBuild(db, cfg, { client: 'golden-auto', stock: 'S1', narration_id: 'N1', confirm_current: '1', formats: ['square'], music: 'gone' }, DEALER), /removed/);
+    const args = renderArgs(cfg, job, '/n/v.mp3', 'o.mp4', jobMusic(cfg, job));
+    assert.ok(args.includes('-stream_loop') && args.join(' ').includes('sidechaincompress') && args.includes('-shortest'));
+    assert.ok(musicFilter('1:a', '2:a', 500, 60).includes('afade=t=out:st=57.50'), 'faded out over the last 2.5 s');
+    assert.equal(jobMusic(cfg, { music_file: '' }), null);
+    musicApi('music_delete', { id: t.id }, cfg, db);
+    assert.throws(() => jobMusic(cfg, job), /music for this video was deleted/);
+    assert.deepEqual(musicApi('music_list', {}, cfg, db).items, []);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
