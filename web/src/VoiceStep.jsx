@@ -106,8 +106,10 @@ function VoiceStudio({ hidden }) {
     act('narration_preview', { stock: s.chosen.StockNumber, voice_id: voiceId, voice_name: (voices ?? []).find((x) => x.id === voiceId)?.name ?? '', text, caption_script: captions, duration: Number(s.duration), approve_spend: spend, new_take: newTake });
     setSpend(false); setNewTake(false);
   }
-  // Previews: the selected car's only (newest first), so the list matches what you are working on.
-  const previews = newestFirst(s.chosen ? s.narr.previews.filter((p) => p.stock === s.chosen.StockNumber) : s.narr.previews);
+  // Previews: the selected car's, of the length chosen in step 2 (newest first), so the list matches what you are working on.
+  const forCar = s.chosen ? s.narr.previews.filter((p) => p.stock === s.chosen.StockNumber) : s.narr.previews;
+  const previews = newestFirst(s.chosen ? forCar.filter((p) => String(p.duration) === s.duration) : forCar);
+  const otherLengths = forCar.length - previews.length;
   return (
     <div id="voiceStudio" className="studio" hidden={hidden}>
       <ol className="mini-steps"><li>The script from step 2 is filled in below by itself.</li><li>Pick a voice and fix any word that sounds wrong by respelling it in the spoken text.</li><li>Create a preview, listen to all of it, then approve it.</li></ol>
@@ -133,8 +135,9 @@ function VoiceStudio({ hidden }) {
         <button type="button" id="nRefresh" className="secondary" disabled={pending} onClick={() => s.refreshNarrations().then(() => say('Previews refreshed.')).catch((e) => say(e.message, true))}>Refresh previews</button>
       </div>
       <div id="nPreviews" className="list">
-        {s.chosen && !previews.length && <p>No voice previews for this car yet.</p>}
-        <LatestFirst key={s.chosen?.StockNumber ?? 'all'} items={previews} noun="voice preview" render={(p) => <Preview key={p.id} p={p} act={act} voices={voices} />} />
+        {s.chosen && !previews.length && <p>No {s.duration}-second voice previews for this car yet.</p>}
+        {s.chosen && otherLengths > 0 && <p className="hint">{otherLengths} preview{otherLengths === 1 ? '' : 's'} of other lengths not shown; change the video length in step 2 to see {otherLengths === 1 ? 'it' : 'them'}.</p>}
+        <LatestFirst key={(s.chosen?.StockNumber ?? 'all') + s.duration} items={previews} noun="voice preview" render={(p) => <Preview key={p.id} p={p} act={act} voices={voices} />} />
       </div>
     </div>
   );
@@ -153,9 +156,10 @@ function voiceLabel(p, voices) {
 
 /**
  * How a preview is told apart, the same on its card and in the "Approved voice preview" list: its take number among
- * all of this car's previews, whatever their length (the earliest made = Take 1), its short code and when it was made.
+ * this car's previews of the same length — the ones step 3 shows for the length chosen in step 2 (the earliest made =
+ * Take 1) — its short code and when it was made.
  */
-const takeNo = (p, all) => all.filter((x) => x.stock === p.stock && String(x.created_at ?? '') <= String(p.created_at ?? '')).length || 1;
+const takeNo = (p, all) => all.filter((x) => x.stock === p.stock && x.duration === p.duration && String(x.created_at ?? '') <= String(p.created_at ?? '')).length || 1;
 const previewCode = (p) => '#' + p.id.slice(0, 8);
 const made = (p) => (p.created_at ? new Date(p.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '');
 
