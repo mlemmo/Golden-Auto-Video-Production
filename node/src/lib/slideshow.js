@@ -18,7 +18,7 @@ import { CLIENT_DEFAULT, clientInventory } from './clients.js';
 import { narrationTables, narrationLoad, narrationCheckAudio } from './narrations.js';
 import { NARRATION_OFFSET, finishPython } from './finishing.js';
 import { musicFind } from './music.js';
-import { backdropFind, backdropsAvailable, applyBackdrop, photoLabels } from './backdrops.js';
+import { backdropFind, backdropsAvailable, aiBackdropsAvailable, applyBackdrop, photoLabels, AI_PRICE, AI_MAX } from './backdrops.js';
 
 export const FORMAT_SIZE = { instagram_reels: [1080, 1920], facebook_reels: [1080, 1920], facebook_feed: [1080, 1350], square: [1080, 1080], youtube: [1920, 1080] };
 /** Width and height of a finished video in this publish format (9:16 when unknown). */
@@ -148,7 +148,11 @@ export function goldenSlideshowBuild(db, cfg, inp, dealer, { random = randomByte
   const music = musicFind(db, cfg, str(inp.music ?? ''));
   // Optional showroom backdrop behind the car in its outside photos (src/lib/backdrops.js); '' = original photos.
   const backdrop = backdropFind(db, cfg, str(inp.background ?? ''));
-  if (backdrop && !backdropsAvailable(cfg)) throw new Error('Background replacement is not set up on this server. Choose "Original photos".');
+  if (backdrop && !backdrop.ai && !backdropsAvailable(cfg)) throw new Error('Background replacement is not set up on this server. Choose "Original photos".');
+  if (backdrop?.ai) {
+    if (!aiBackdropsAvailable(cfg)) throw new Error('AI backgrounds are not set up on this server (no fal.ai key). Choose another background.');
+    if (!truthy(inp.approve_ai_spend ?? false)) throw new Error(`Tick the box approving the paid AI background (about $${AI_PRICE.toFixed(2)} per outside photo not made before, at most ${AI_MAX}).`);
+  }
   const cards = { dealer: str(dealer?.name ?? ''), website: str(dealer?.website ?? ''), phone: str(dealer?.phone ?? ''), city: str(dealer?.city ?? ''),
     vehicle: title(v), price: cardPrice(v.price ?? null) };
   const jobs = [];
@@ -161,7 +165,8 @@ export function goldenSlideshowBuild(db, cfg, inp, dealer, { random = randomByte
       duration: plan.total, speech_end: round3(speechEnd), status: 'completed', provider: 'slideshow', created_at: gmdateC(), approved_by: str(inp.approved_by ?? ''),
       script: str(voice.caption_script), speech_script: str(voice.text), price: v.price ?? null, voice: 'elevenlabs',
       narration_id: voice.id, audio_swap: true, captions_from_audio: true, photos, cards, intro_card: intro, ...(truthy(inp.ad_cut ?? false) ? { ad_cut: true } : {}), ...(music ? { music_id: music.id, music_file: music.file, music_name: music.name } : {}),
-      ...(backdrop ? { background: backdrop.id, background_name: backdrop.name } : {}), video_url: '',
+      ...(backdrop ? { background: backdrop.id, background_name: backdrop.name } : {}),
+      ...(backdrop?.ai ? { ai_approved_by: str(inp.approved_by ?? '') || 'dashboard', ai_approved_at: gmdateC() } : {}), video_url: '',
       finish_status: 'queued', render_backend: 'linux', finish_error: '', captioned_url: null, auto_queued_at: gmdateC() };
     db.prepare('INSERT INTO jobs VALUES (?,?,?)').run(id, null, jsonEncode(job));
     jobs.push(job);
@@ -196,7 +201,9 @@ export async function slideshowMaster(cfg, job, work, ffmpeg, { photos = (urls) 
   // Showroom backdrop: whole-car exterior shots get the car on the chosen backdrop; the rest stay as they are.
   if (str(job.background ?? '') !== '') {
     const backdrop = backdropFind(db, cfg, job.background);
-    job.background_photos = await backdrops(cfg, files, backdrop, [w, h]);
+    const stats = {};
+    job.background_photos = await backdrops(cfg, files, backdrop, [w, h], { approved: !!job.ai_approved_by, stats });
+    if (backdrop.ai) job.ai_background_calls = (job.ai_background_calls ?? 0) + (stats.calls ?? 0);
     job.stills = keepStills(cfg, files);
   }
   for (const f of files) f.fit = slideFit(f.size, [w, h]);

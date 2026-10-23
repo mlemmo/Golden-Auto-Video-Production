@@ -12,7 +12,7 @@ import { narrationTables, narrationVoiceSettings } from '../src/lib/narrations.j
 import { runProcess } from '../src/lib/finishing.js';
 import { captionWorkerRun, renderArgs, jobMusic } from '../src/lib/worker.js';
 import { musicApi, musicFilter } from '../src/lib/music.js';
-import { backdropApi, applyBackdrop } from '../src/lib/backdrops.js';
+import { backdropApi, applyBackdrop, backdropFind } from '../src/lib/backdrops.js';
 import { goldenJobDelete, libraryVideos, libraryStills, stillDelete } from '../src/lib/jobs.js';
 import { script } from '../src/lib/scripts.js';
 import { speechWordCount } from '../src/lib/speech.js';
@@ -258,5 +258,38 @@ test('library: videos by kind, stills from showroom builds, deleting stills', ()
     assert.ok(existsSync(`${dir}/assets/stills/${names[0]}`));
     goldenJobDelete(db, cfg, 'J2');
     assert.ok(!existsSync(`${dir}/assets/stills/${names[0]}`));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('AI showroom background: paid approval, at most 8 new pictures, made once (fake provider, nothing paid)', async () => {
+  const { dir, cfg, db } = setup();
+  try {
+    const img = `${dir}/data/showroom.jpg`; writeFileSync(img, Buffer.from(JPEG_1800x900, 'base64'));
+    const up = backdropApi('backdrop_upload', { name: 'Our showroom' }, cfg, db, { backdrop: { name: 's.jpg', tmp_name: img, size: 10, error: 0 } });
+    const id = 'ai:' + up.items[0].id;
+    assert.equal(backdropApi('backdrop_list', {}, cfg, db).ai_available, false, 'no fal key: no AI choice');
+    const inp = { client: 'golden-auto', stock: 'S1', narration_id: 'N1', confirm_current: '1', formats: ['facebook_feed'], background: id, approved_by: 'sawyer@example.com' };
+    assert.throws(() => goldenSlideshowBuild(db, cfg, inp, DEALER), /no fal\.ai key/);
+    cfg.fal_key = 'test-placeholder';
+    assert.throws(() => goldenSlideshowBuild(db, cfg, inp, DEALER), /Tick the box approving the paid AI background/);
+    assert.throws(() => backdropFind(db, cfg, 'ai:studio'), /uploaded showroom photo/);
+    const [job] = goldenSlideshowBuild(db, cfg, { ...inp, approve_ai_spend: true }, DEALER);
+    assert.ok(job.background === id && job.ai_approved_by === 'sawyer@example.com' && /^AI showroom — Our showroom$/.test(job.background_name));
+    // Ten outside photos: only 8 are sent; the others stay as taken. A second shape reuses all 8 for free.
+    const files = () => [...Array(10).keys()].map((n) => { const f = `${dir}/data/x${n}.jpg`; writeFileSync(f, Buffer.from(JPEG_40x30, 'base64').toString('latin1') + n, 'latin1'); return { file: f, size: { width: 40, height: 30 } }; });
+    const classify = (paths) => Object.fromEntries(paths.map((p) => [p, 'exterior']));
+    let sent = 0;
+    const ai = async (c, items, spec) => { sent += items.length; assert.ok(spec.endsWith('.jpg')); for (const it of items) writeFileSync(it.out, Buffer.from(JPEG_1800x900, 'base64')); return { files: items.map((it) => it.out), calls: items.length }; };
+    const backdrop = backdropFind(db, cfg, id);
+    assert.equal(await applyBackdrop(cfg, files(), backdrop, [1080, 1350], { classify, ai }), 0, 'no approval: nothing is sent, photos stay as taken');
+    assert.equal(sent, 0);
+    const stats = {}, first = files();
+    assert.equal(await applyBackdrop(cfg, first, backdrop, [1080, 1350], { classify, ai, approved: true, stats }), 8);
+    assert.deepEqual([sent, stats.calls], [8, 8]);
+    assert.deepEqual(first[0].size, { width: 1800, height: 900 }, 'the AI picture keeps its own shape');
+    assert.ok(first[9].file.endsWith('x9.jpg'), 'beyond 8, photos stay as taken');
+    const again = {};
+    assert.equal(await applyBackdrop(cfg, files(), backdrop, [1080, 1920], { classify, ai, approved: false, stats: again }), 8, 'made before: reused without approval or cost; the 2 others stay as taken');
+    assert.deepEqual([sent, again.calls], [8, 0]);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

@@ -113,10 +113,14 @@ function ShowroomBackground() {
   const [lib, setLib] = useState(null);
   const formRef = useRef(null);
   useEffect(() => { api('backdrop_list').then(setLib).catch((e) => say(e.message, true)); }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const all = [...(lib?.builtin ?? []), ...(lib?.items ?? [])];
-  const uploaded = (lib?.items ?? []).find((t) => t.id === s.background) ?? null;
+  const local = lib?.available ? [...(lib?.builtin ?? []), ...(lib?.items ?? [])] : [];
+  // AI showroom (paid): one choice per uploaded showroom photo, used as the AI's reference.
+  const ai = lib?.ai_available ? (lib?.items ?? []).map((t) => ({ id: 'ai:' + t.id, name: 'AI showroom — ' + t.name + ' (paid)', ref: t })) : [];
+  const all = [...local, ...ai];
+  const isAi = s.background.startsWith('ai:');
+  const uploaded = (lib?.items ?? []).find((t) => t.id === (isAi ? s.background.slice(3) : s.background)) ?? null;
   useEffect(() => { if (lib && s.background && !all.some((b) => b.id === s.background)) s.setBackground(''); }, [lib]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (lib && !lib.available) return <p className="hint">Showroom backgrounds are not set up on this server (needs the local cut-out model), so the original photos are used.</p>;
+  if (lib && !lib.available && !lib.ai_available) return <p className="hint">Showroom backgrounds are not set up on this server (needs the local cut-out model or a fal.ai key), so the original photos are used.</p>;
   const add = (e) => {
     e.preventDefault();
     s.run(async () => {
@@ -134,13 +138,20 @@ function ShowroomBackground() {
   return (
     <>
       <label>Background behind the car
-        <select id="background" value={s.background} onChange={(e) => s.setBackground(e.target.value)}>
+        <select id="background" value={s.background} onChange={(e) => { s.setBackground(e.target.value); s.setAiApprove(false); }}>
           <option value="">Original photos</option>
-          {all.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+          {local.length > 0 && <optgroup label="Free — cut out on this server">{local.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</optgroup>}
+          {ai.length > 0 && <optgroup label="AI — most realistic (paid)">{ai.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}</optgroup>}
         </select>
       </label>
       {uploaded && <img src={uploaded.url} alt={uploaded.name} className="backdrop-preview" />}
-      <p className="hint">{s.background ? 'Only the outside photos of the whole car get the new background (the car is cut out and stood on the floor with a soft shadow). Interior, open-door and close-up photos stay as they are. Adds about a minute to the first build of a car.'
+      {lib?.ai_available && !ai.length && s.isAdmin && <p className="hint">Upload a showroom photo below to offer the AI showroom background.</p>}
+      {isAi && (
+        <label className="check note-important"><input type="checkbox" id="aiApprove" checked={s.aiApprove} onChange={(e) => s.setAiApprove(e.target.checked)} />
+          I approve <b>paid AI background pictures</b> on fal.ai: about ${(lib?.ai_price ?? 0.04).toFixed(2)} for each whole-car outside photo of this car not made before (at most {lib?.ai_max ?? 8}, so at most ${((lib?.ai_price ?? 0.04) * (lib?.ai_max ?? 8)).toFixed(2)}). Pictures already made are reused for free, for every shape.</label>
+      )}
+      <p className="hint">{isAi ? 'The AI keeps the car exactly as photographed and draws a showroom in the style of your photo around it, with a matching floor, light and shadows. Interior and close-up photos stay as they are.'
+        : s.background ? 'Only the outside photos of the whole car get the new background (the car is cut out and stood on the floor with a soft shadow). Interior, open-door and close-up photos stay as they are. Adds about a minute to the first build of a car.'
         : 'The photos are shown as taken.'}</p>
       {s.isAdmin && (
         <details className="sub"><summary>Add or delete showroom photos (admins)</summary>

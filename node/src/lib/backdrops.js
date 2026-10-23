@@ -3,6 +3,10 @@
 // text photos are left as they are (sorted by the local CLIP model, photoClassify). Built-in backdrops are seamless
 // studio sweeps; admins can upload photos of their own showroom (state row "backdrops", files in assets/backdrops).
 // Results are cached per photo and backdrop in data_dir/backdrop-cache, so every shape of one build reuses them.
+// AI showroom (PAID, "ai:<uploaded id>"): fal.ai Bria Background Replace keeps the car's own pixels and generates a
+// background in the style of an uploaded showroom photo, with floor, light and shadows matching the photo's camera
+// (private/ai_backdrop.py, about $0.04 a picture). Only with the build's paid approval (job.ai_approved_by), at most
+// AI_MAX new pictures per build, each picture made once and reused afterwards (cached by photo and reference).
 import { spawn } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { existsSync, accessSync, constants, mkdirSync, copyFileSync, unlinkSync, chmodSync, readFileSync, writeFileSync } from 'node:fs';
@@ -13,6 +17,8 @@ import { probeImage } from './images.js';
 import { photoClassify } from './photos.js';
 
 const COMPOSER = fileURLToPath(new URL('../../../private/backdrop.py', import.meta.url));
+const AI_HELPER = fileURLToPath(new URL('../../../private/ai_backdrop.py', import.meta.url));
+export const AI_PREFIX = 'ai:', AI_PRICE = 0.04, AI_MAX = 8;
 const VERSION = 3;   // bump when backdrop.py changes how pictures look, so cached ones are redrawn
 export const BUILTIN_BACKDROPS = [{ id: 'studio', name: 'Studio — charcoal' }, { id: 'white', name: 'Studio — white' }];
 const backdropDir = (cfg) => str(cfg.asset_dir ?? '') + '/backdrops';
@@ -25,10 +31,21 @@ export function backdropsAvailable(cfg) {
   try { accessSync(python, constants.X_OK); return true; } catch { return false; }
 }
 
-/** A backdrop by id: a built-in sweep, or an uploaded photo with its file checked; null for '' (original photos). */
+/** Whether AI showroom backgrounds can be made (config fal_key; the photo sorter picks the photos). */
+export const aiBackdropsAvailable = (cfg) => trim(str(cfg.fal_key ?? '')) !== '';
+
+/**
+ * A backdrop by id: a built-in sweep, an uploaded photo with its file checked, or "ai:<uploaded id>" (that photo as
+ * the AI's reference); null for '' (original photos).
+ */
 export function backdropFind(db, cfg, id) {
   id = str(id);
   if (id === '') return null;
+  if (id.startsWith(AI_PREFIX)) {
+    const ref = backdropFind(db, cfg, id.slice(AI_PREFIX.length));
+    if (!ref || BUILTIN_BACKDROPS.some((b) => b.id === ref.id)) throw new Error('Choose an uploaded showroom photo for the AI background.');
+    return { ...ref, id, name: 'AI showroom — ' + ref.name, ai: true };
+  }
   const builtin = BUILTIN_BACKDROPS.find((b) => b.id === id);
   if (builtin) return { ...builtin, spec: id };
   const item = library(db).items.find((i) => i.id === id);
@@ -67,7 +84,8 @@ export function backdropApi(action, inp, cfg, db, files = {}, { random = randomB
     try { unlinkSync(item.spec); } catch { /* already gone */ }
   } else if (action !== 'backdrop_list') throw new Error('Unknown action.');
   const base = str(cfg.public_base_url ?? '').replace(/\/+$/, '') + '/assets/backdrops/';
-  return { available: backdropsAvailable(cfg), builtin: BUILTIN_BACKDROPS, items: lib.items.map((i) => ({ id: i.id, name: i.name, url: base + i.file })) };
+  return { available: backdropsAvailable(cfg), ai_available: aiBackdropsAvailable(cfg), ai_price: AI_PRICE, ai_max: AI_MAX,
+    builtin: BUILTIN_BACKDROPS, items: lib.items.map((i) => ({ id: i.id, name: i.name, url: base + i.file })) };
 }
 
 /** Run private/backdrop.py: { items: [{ src, out }], backdrop } → the outputs written (a failed picture is skipped). */
@@ -86,6 +104,25 @@ export function backdropCompose(cfg, items, spec, layout = {}) {
     });
     p.stdin.on('error', () => {});
     p.stdin.end(JSON.stringify({ items, backdrop: spec, ...layout }));
+  });
+}
+
+/** Run private/ai_backdrop.py (PAID): { files, calls }. The fal key goes on stdin, never on the command line. */
+export function aiCompose(cfg, items, spec) {
+  return new Promise((resolve, reject) => {
+    const p = spawn('/usr/bin/python3', ['-I', AI_HELPER], { stdio: ['pipe', 'pipe', 'ignore'] });
+    const out = [];
+    const timer = setTimeout(() => p.kill('SIGKILL'), 900000);
+    p.stdout.on('data', (d) => out.push(d));
+    p.on('error', () => { clearTimeout(timer); reject(new Error('The AI background could not start.')); });
+    p.on('close', (code) => {
+      clearTimeout(timer);
+      let d = null; try { d = JSON.parse(Buffer.concat(out).toString()); } catch { /* reported below */ }
+      if (code !== 0 || !Array.isArray(d?.files)) return reject(new Error('The AI background failed. Nothing more was sent; try again later.'));
+      resolve({ files: d.files, calls: Number(d.calls ?? items.length) });
+    });
+    p.stdin.on('error', () => {});
+    p.stdin.end(JSON.stringify({ items, ref: spec, key: str(cfg.fal_key), seed: 7 }));
   });
 }
 
@@ -124,8 +161,9 @@ export function photoLabels(cfg, files, classify = (paths) => photoClassify(cfg,
  * replaced by the composed picture). Labels and pictures are cached by photo content; without a classifier no photo
  * is changed (a cut-out interior would look broken). Returns the number of photos replaced.
  */
-export async function applyBackdrop(cfg, files, backdrop, size, { classify = (paths) => photoClassify(cfg, paths), compose = backdropCompose } = {}) {
+export async function applyBackdrop(cfg, files, backdrop, size, { classify = (paths) => photoClassify(cfg, paths), compose = backdropCompose, ai = aiCompose, approved = false, stats = {} } = {}) {
   const cache = str(cfg.data_dir ?? '') + '/backdrop-cache';
+  if (backdrop.ai) return applyAiBackdrop(cfg, files, backdrop, { classify, ai, approved, stats, cache });
   const layout = backdropLayout(backdrop, size);
   const key = backdrop.id + (backdrop.file ? ':' + backdrop.file : '') + `:${layout.width}x${layout.height}`;
   const sorted = photoLabels(cfg, files, classify);
@@ -136,5 +174,32 @@ export async function applyBackdrop(cfg, files, backdrop, size, { classify = (pa
   if (todo.length) await compose(cfg, todo.map((i) => ({ src: files[i].file, out: outs[i] })), backdrop.spec, layout);
   let n = 0;
   files.forEach((f, i) => { if (labels[i] === 'exterior' && existsSync(outs[i])) { f.file = outs[i]; f.size = { width: layout.width, height: layout.height }; n++; } });
+  return n;
+}
+
+/**
+ * AI showroom pictures for the whole-car exterior shots (PAID). Pictures made before are reused for free; new ones
+ * need the build's approval and are limited to AI_MAX per build (the rest stay as taken; without approval none are made). The pictures keep each
+ * photo's own shape. stats.calls counts the paid requests.
+ */
+async function applyAiBackdrop(cfg, files, backdrop, { classify, ai, approved, stats, cache }) {
+  const sorted = photoLabels(cfg, files, classify);
+  if (!sorted) return 0;
+  const { labels, sums } = sorted;
+  const outs = sums.map((h) => `${cache}/${createHash('sha256').update('ai1|' + backdrop.file + '|' + h).digest('hex')}.jpg`);
+  // Without the build's approval nothing is sent: pictures made before are used, the other photos stay as taken.
+  const todo = approved ? files.map((f, i) => i).filter((i) => labels[i] === 'exterior' && !existsSync(outs[i])).slice(0, AI_MAX) : [];
+  stats.calls = 0;
+  if (todo.length) {
+    const r = await ai(cfg, todo.map((i) => ({ src: files[i].file, out: outs[i] })), backdrop.spec);
+    stats.calls = r.calls;
+  }
+  let n = 0;
+  files.forEach((f, i) => {
+    if (labels[i] !== 'exterior' || !existsSync(outs[i])) return;
+    const size = probeImage(readFileSync(outs[i]));
+    if (!size) return;
+    f.file = outs[i]; f.size = { width: size.width, height: size.height }; n++;
+  });
   return n;
 }

@@ -20,7 +20,7 @@ export default function GenerateStep() {
     footage ? ['Footage', s.footage?.name || 'no video chosen yet', !!s.footage]
       : slideshow ? ['Photos', `${(c?.photos ?? []).length} listing photos`, (c?.photos ?? []).length > 0] : ['Spokesperson', s.spokesperson?.name || 'none', !!s.spokesperson],
     ...(ai ? [['Setting', s.scene?.name || 'default', true]] : []),
-    slideshow ? ['Videos', `${s.duration} s photo slideshow · ${s.shapes.map((k) => SHAPE_NAME[k]).join(', ') || 'no shape chosen'} · ${s.adCut ? 'ad cut · ' : ''}${s.background ? 'showroom background' : 'original photos'} · ${s.music ? 'with music' : 'no music'}`, s.shapes.length > 0]
+    slideshow ? ['Videos', `${s.duration} s photo slideshow · ${s.shapes.map((k) => SHAPE_NAME[k]).join(', ') || 'no shape chosen'} · ${s.adCut ? 'ad cut · ' : ''}${s.background.startsWith('ai:') ? 'AI showroom (paid)' : s.background ? 'showroom background' : 'original photos'} · ${s.music ? 'with music' : 'no music'}`, s.shapes.length > 0]
       : ['Video', `${s.duration} s · ${FORMAT_NAME[s.format]} · ${footage ? 'your footage' : s.style === 'showroom' ? 'walkaround' : 'dynamic'}${footage ? '' : ' · ' + s.resolution}`, true],
   ];
 
@@ -62,7 +62,8 @@ export default function GenerateStep() {
     s.run(async () => {
       say('Starting the slideshow videos…');
       try {
-        say((await api('slideshow_build', { stock: c.StockNumber, narration_id: s.approvedVoice, formats: s.shapes, music: s.music, background: s.background, ad_cut: s.adCut, confirm_current: s.confirmCurrent })).message);
+        say((await api('slideshow_build', { stock: c.StockNumber, narration_id: s.approvedVoice, formats: s.shapes, music: s.music, background: s.background, ad_cut: s.adCut, approve_ai_spend: s.aiApprove, confirm_current: s.confirmCurrent })).message);
+        s.setAiApprove(false);   // the paid AI background approval covers this one build
         await s.loadJobs(); s.openStep('videos'); showVideos();
       } catch (e) { say(e.message, true); }
     });
@@ -98,7 +99,7 @@ export default function GenerateStep() {
       <label className="check note-important"><input type="checkbox" id="confirmCurrent" checked={s.confirmCurrent} onChange={(e) => s.setConfirmCurrent(e.target.checked)} />I confirm the vehicle is <b>available</b> and its advertised <b>price is current</b>.</label>
       <div className="actions">
         <button id="buildFootage" hidden={!footage} disabled={!c || s.busy || !s.confirmCurrent} title={s.confirmCurrent ? undefined : 'Tick “vehicle is available and price is current” first'} onClick={buildFootage}>Build video from my footage</button>
-        <button id="buildSlideshow" hidden={!slideshow} disabled={!c || s.busy || !s.confirmCurrent || !s.shapes.length} title={s.confirmCurrent ? undefined : 'Tick “vehicle is available and price is current” first'} onClick={buildSlideshow}>{`Build ${s.shapes.length === 1 ? 'slideshow video' : s.shapes.length + ' slideshow videos'}`}</button>
+        <button id="buildSlideshow" hidden={!slideshow} disabled={!c || s.busy || !s.confirmCurrent || !s.shapes.length || (s.background.startsWith('ai:') && !s.aiApprove)} title={!s.confirmCurrent ? 'Tick “vehicle is available and price is current” first' : s.background.startsWith('ai:') && !s.aiApprove ? 'Tick the paid AI background approval in step 4 first' : undefined} onClick={buildSlideshow}>{`Build ${s.shapes.length === 1 ? 'slideshow video' : s.shapes.length + ' slideshow videos'}`}</button>
         <button id="generate" hidden={!ai} disabled={!c || s.busy || !s.approve || !s.confirmCurrent} title={s.approve && s.confirmCurrent ? undefined : 'Tick both boxes above first'} onClick={generate}>Generate video</button>
         <button className="secondary" id="checkReferences" hidden={!ai} disabled={s.busy} onClick={checkReferences}>Check reference uploads</button>
         <button className="secondary" id="brief" hidden={!ai} disabled={!c} onClick={downloadBrief}>Download production brief</button>
