@@ -350,3 +350,19 @@ test('render slots: one per 4 CPUs (at most 4), or config render_parallel', asyn
   assert.deepEqual([renderSlots({}, 4), renderSlots({}, 12), renderSlots({}, 32), renderSlots({}, 2)], [1, 3, 4, 1]);
   assert.deepEqual([renderSlots({ render_parallel: 2 }, 12), renderSlots({ render_parallel: 0 }, 12), renderSlots({ render_parallel: 9 }, 12)], [2, 3, 4]);
 });
+
+test('30-second scripts name the car in varied wordings, steady per car', async () => {
+  const { script, nameLine, NAME_LINES } = await import('../src/lib/scripts.js');
+  const dealer = { name: 'Golden Auto', city: 'San Ramon', website: 'mygoldenauto.net' };
+  const cars = ['3VW2A7AUXFM031209', '5FNRL5H69FB053326', 'JF2GPAWC5D2870288', '1C6RR7PT6FS666777', 'YV4A22PL3J1324492', '5FNRL5H33GB017610', 'WBA3D5C55FK158444']
+    .map((Vin, i) => ({ Vin, StockNumber: 'S' + i, Year: 2015, Make: 'HONDA', Model: 'ODYSSEY', Trim: 'EX-L MINIVAN 4D', Drivetrain: 'FWD', Odometer: 99587, price: 15026.25 }));
+  const openings = cars.map((v) => script(v, 30, dealer, { hook: 'Room for the whole family and then some.', highlight: '' }).split('. ')[1].split(' this ')[0]);
+  assert.ok(new Set(openings).size >= 3, 'different cars, different wordings: ' + openings.join(' / '));
+  assert.equal(script(cars[0], 30, dealer), script(cars[0], 30, dealer), 'the same car always gets the same wording');
+  assert.ok(!script(cars[1], 30, dealer).includes('MINIVAN'), 'body style left out of the name');
+  for (let i = 0; i < 50; i++) {
+    const line = nameLine({ Vin: 'VIN' + i }, 'car', 'Golden Auto', 'Here is one worth a closer look.');
+    assert.ok(!/\blook\b/.test(line), 'no second "look" after a hook that says it: ' + line);
+  }
+  assert.equal(NAME_LINES.length, 7);
+});

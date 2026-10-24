@@ -34,6 +34,28 @@ export function colorPhrase(raw) {
   return c + ' paint';
 }
 
+/**
+ * The sentence that names the car, in several wordings so neighbouring cars don't all say "Take a look at this…"
+ * (user, 2026-10-24). The car's VIN (or stock number) picks one, so a car keeps the same wording every time; one with
+ * "look" is skipped after an opener that already says it ("Here is one worth a closer look."). All are about as long
+ * as the original, so the word budget is unchanged.
+ */
+export const NAME_LINES = [
+  (n, at) => `Take a look at this ${n}, here at ${at}.`,
+  (n, at) => `Meet this ${n}, ready for you at ${at}.`,
+  (n, at) => `Check out this ${n}, available now at ${at}.`,
+  (n, at) => `Come see this ${n}, here at ${at}.`,
+  (n, at) => `Say hello to this ${n}, waiting at ${at}.`,
+  (n, at) => `This ${n} is ready for you at ${at}.`,
+  (n, at) => `Step inside this ${n}, here at ${at}.`,
+];
+export function nameLine(v, name, at, hook = '') {
+  const key = str(v.Vin ?? '') || str(v.StockNumber ?? '');
+  let pick = [...key].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7) % NAME_LINES.length;
+  if (/\blook\b/i.test(hook) && /\blook\b/.test(NAME_LINES[pick]('', ''))) pick = (pick + 1) % NAME_LINES.length;
+  return NAME_LINES[pick](name, at);
+}
+
 const DRIVES = { AWD: 'all-wheel drive', '4WD': 'four-wheel drive', '4X4': 'four-wheel drive', FWD: 'front-wheel drive', RWD: 'rear-wheel drive' };
 
 /**
@@ -56,7 +78,7 @@ function script30Parts(v, dealer, intro) {
         : /coupe/i.test(trimRaw) ? 'coupe'
           : /van/i.test(trimRaw) ? 'van' : 'vehicle';
   // Trim name without the body-style suffix, e.g. "Premium Sport Utility 4D" → "Premium".
-  const trimName = trim(trimRaw.replace(/\b(sport utility|sedan|coupe|pickup|crew cab|van|wagon|hatchback|convertible)\b.*$/gi, ''));
+  const trimName = trim(trimRaw.replace(/\b(sport utility|sedan|coupe|pickup|crew cab|minivan|van|wagon|hatchback|convertible)\b.*$/gi, ''));
   // "Base" (or "Base Trim Level") is not worth saying.
   const shownTrim = /^base( trim level)?$/i.test(trimName) ? '' : trimName;
   const name = title(v) + (shownTrim !== '' && !lower(title(v)).includes(lower(shownTrim)) ? ' ' + shownTrim : '');
@@ -71,9 +93,10 @@ function script30Parts(v, dealer, intro) {
   const use = body === 'truck' ? 'It is ready for work during the week and adventures on the weekend.'
     : body === 'SUV' ? 'It is a great fit for daily commutes, family errands, and weekend road trips.'
       : 'It is a great fit for daily commutes and weekend drives.';
+  const hook = intro ? trim(intro.hook ?? '') : 'Looking for a dependable ' + body + '?';
   const parts = {
-    hook: intro ? trim(intro.hook ?? '') : 'Looking for a dependable ' + body + '?',
-    name: 'Take a look at this ' + name + ', here at ' + str(dealer.name) + (str(dealer.city ?? '') !== '' ? ' in ' + str(dealer.city) : '') + '.',
+    hook,
+    name: nameLine(v, name, str(dealer.name) + (str(dealer.city ?? '') !== '' ? ' in ' + str(dealer.city) : ''), hook),
     facts: factLine,
     use: intro ? trim(intro.highlight ?? '') : use,
     price: hasPrice(v) ? 'Priced at ' + adPrice(toFloat(v.price)) + '.' : '',
@@ -100,7 +123,7 @@ export function script60(v, dealer = DEALER_DEFAULT, intro = null) {
   const parts = {
     hook: p.hook, name: p.name, facts: p.facts, use: p.use,
     roomy: ROOMY[p.body] ?? 'It is comfortable on the highway and easy to park around town.',
-    photos: 'Check out the photos to see it inside and out.',
+    photos: /^Check out\b/.test(p.name) ? 'Have a look through the photos to see it inside and out.' : 'Check out the photos to see it inside and out.',
     price: p.price,
     visit: 'Come see it in person at ' + str(dealer.name) + city + ', and take it for a drive.',
     cta: 'Book your test drive today at ' + str(dealer.website) + '.',
