@@ -10,8 +10,8 @@ Everything is read in Chrome (signed in to DealerCenter and the dashboard), in o
 `tools/inventory-snapshot.js`:
 
 1. **DealerCenter** → Reports → *Active Inventory* (page size 50). Run `step1DealerCenterList()`: it presses **Run**,
-   reads the report's own data and, per In Inventory car, its inventory record (drive and dealer fees), using the
-   page's sign-in. The advertised price is the vehicle price plus the dealer fees (doc, smog…; added up when the
+   reads the report's own data and, per In Inventory car, its inventory record (drive, dealer fees and the full
+   description — the report cuts long descriptions short), using the page's sign-in. The advertised price is the vehicle price plus the dealer fees (doc, smog…; added up when the
    record's total is blank), as on the website. Cost, valuation and flooring fields are never read.
 2. Same tab → `https://www.mygoldenauto.net/` (wait until it has loaded). Run `step2WebsiteDetails()`: photos and
    page address for each car the website shows; a car it does not show yet is sent with `keep_photos: true`.

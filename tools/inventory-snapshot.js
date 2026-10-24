@@ -19,8 +19,8 @@ async function sha12(text) {
 /**
  * Step 1 (DealerCenter report): the In Inventory cars with their details, all from DealerCenter (the authority):
  * the report's own data (year, make, model, trim, VIN, stock, colour, mileage, price, status, description) and, per
- * car, its inventory record (drive and dealer fee; the advertised price is the vehicle price plus the fee, as on the
- * website). It presses Run itself and reads the replies DealerCenter's page receives, with the page's own sign-in;
+ * car, its inventory record (drive, dealer fees and the full description, which the report cuts short; the advertised
+ * price is the vehicle price plus the fees, as on the website). It presses Run itself and reads the replies DealerCenter's page receives, with the page's own sign-in;
  * cost, valuation and flooring fields are never read. → window.name
  */
 async function step1DealerCenterList() {
@@ -67,7 +67,9 @@ async function step1DealerCenterList() {
     if (!inv) problems.push(r.StockNumber + ': inventory record not read (drive and fee missing)');
     const price = Number(r.VehiclePrice) || 0;
     cars.push({ stock: r.StockNumber, vin: r.Vin, year: r.Year, make: r.Make, model: r.Model, trim: r.Trim ?? '', drivetrain: drive, color: r.ExteriorColor ?? '',
-      mileage: r.Mileage ?? r.Odometer ?? null, prices: price > 0 ? [Math.round((price + fee) * 100) / 100, price] : [], description: text(r.OnlineMarketingDescription) });
+      mileage: r.Mileage ?? r.Odometer ?? null, prices: price > 0 ? [Math.round((price + fee) * 100) / 100, price] : [],
+      // The full description is in the inventory record; the report cuts long ones short ("…balances style...").
+      description: text(inv?.onlineMarketingDescription?.description ?? r.OnlineMarketingDescription) });
   }
   const json = JSON.stringify({ dc: cars });
   window.name = json;
