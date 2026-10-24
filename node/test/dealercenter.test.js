@@ -83,3 +83,31 @@ test('descriptions lose the website\'s Cloudflare script text', () => {
   assert.equal(dcCleanDescription(text + " (function(){if(!document.body)return;var s=1;})();"), text);
   assert.equal(dcCleanDescription('A great car (function and form).'), 'A great car (function and form).', 'ordinary brackets stay');
 });
+
+test('DealerCenter list-only cars: a saved car stays active and unchanged, a new one waits for details', async () => {
+  const dir = mkdtempSync(tmpdir() + '/ga-dc-list-');
+  const cfg = { asset_dir: dir, public_base_url: 'https://staging.example.com:4343' };
+  const db = openMemoryDb();
+  save(db, 'clients', { items: [{ id: 'golden-auto', name: 'Golden Auto', website: 'https://www.mygoldenauto.net' }] });
+  const saved = (stock, extra = {}) => ({ StockNumber: stock, Vin: 'V' + stock, source: 'zip', Year: 2015, Make: 'HONDA', Model: 'ODYSSEY', price: 15026.25, Odometer: 99587, photos: ['https://x/a.jpg'], dc_photo_count: 1, ...extra });
+  save(db, 'inventory', { vehicles: [saved('053326'), saved('101049', { Make: 'BMW', Model: 'S1000 XR' }), saved('428316', { active: false, Make: 'TOYOTA', Model: 'COROLLA' })] });
+  const download = async (urls) => Object.fromEntries(urls.map((_, i) => [i, Buffer.from(JPEG_1800x900, 'base64')]));
+  try {
+    assert.throws(() => dcNormalize({ stock: 'X1', list_only: true, vin: 'bad' }), /invalid VIN/);
+    const log = await dcSync(db, cfg, [
+      { stock: '053326', vin: '5FNRL5H69FB053326', list_only: true, title: '2015 HONDA ODYSSEY EX-L MINIVAN 4D' },   // saved, not on the website yet
+      { stock: '428316', list_only: true },                                                                        // was hidden, back in inventory
+      { stock: '050440', list_only: true, title: '2014 MERCEDES-BENZ S-CLASS S 550 SEDAN 4D' },                    // new, no details yet
+    ], null, download);
+    const inv = Object.fromEntries(state(db, 'inventory').vehicles.map((v) => [v.StockNumber, v]));
+    assert.ok(inv['053326'].active !== false && inv['053326'].price === 15026.25 && inv['053326'].Odometer === 99587, 'kept active, details unchanged');
+    assert.equal(inv['428316'].active, true, 'returned');
+    assert.equal(inv['101049'].active, false, 'gone from DealerCenter: hidden');
+    assert.ok(!inv['050440'], 'a new car is not added without details');
+    assert.deepEqual(log.kept_listed, ['053326 2015 HONDA ODYSSEY', '428316 2015 TOYOTA COROLLA']);
+    assert.deepEqual(log.waiting_details, ['050440 2014 MERCEDES-BENZ S-CLASS S 550 SEDAN 4D (in DealerCenter, not on the website yet)']);
+    assert.deepEqual(log.returned, ['428316 2015 TOYOTA COROLLA']);
+    assert.deepEqual(log.removed, ['101049 2015 BMW S1000 XR']);
+    assert.equal(log.active_count, 2);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

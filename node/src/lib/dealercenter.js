@@ -44,6 +44,13 @@ export function dcNormalize(raw) {
   const s = isMap(raw) ? raw : isList(raw) ? Object.fromEntries(raw.map((v, i) => [String(i), v])) : { 0: raw };
   const stock = trim(str(s.stock ?? ''));
   if (!/^[A-Za-z0-9_-]{1,40}$/.test(stock)) throw new Error('Snapshot has an invalid stock number.');
+  // A car on DealerCenter's In Inventory list that the website does not show (yet): only its stock number (and, for
+  // the log, VIN and title). It keeps a saved car active and unchanged; a new one waits for its details.
+  if (s.list_only === true) {
+    const vin = upper(trim(str(s.vin ?? '')));
+    if (vin && !/^[A-HJ-NPR-Z0-9]{17}$/.test(vin)) throw new Error(`Stock ${stock}: invalid VIN.`);
+    return { stock, vin, list_only: true, title: trim(str(s.title ?? '')).slice(0, 120) };
+  }
   const year = filterValidateInt(s.year ?? null);
   if (!year || year < 1900 || year > new Date().getUTCFullYear() + 2) throw new Error(`Stock ${stock}: invalid year.`);
   const make = upper(trim(str(s.make ?? ''))), model = upper(trim(str(s.model ?? '')));
@@ -145,7 +152,7 @@ export async function dcSync(db, cfg, snapshot, zipDir = null, download = downlo
   const imported = new Map(); let created = [];
   try {
     for (const [stock, s] of items) {
-      if (!dcPhotosChanged(before.get(stock) ?? null, s)) continue;
+      if (s.list_only || !dcPhotosChanged(before.get(stock) ?? null, s)) continue;
       const fields = { stock, year: s.year, make: s.make, model: s.model, trim: s.trim, vin: s.vin, mileage: s.mileage === null ? '' : String(s.mileage),
         prices: s.price === null ? '' : String(s.price), description: s.description, drivetrain: s.drivetrain };
       let v;
@@ -161,7 +168,7 @@ export async function dcSync(db, cfg, snapshot, zipDir = null, download = downlo
   } catch (e) { created.forEach(unlinkQuiet); throw e; }
 
   // Phase 2 (short transaction): re-read inventory and apply all changes.
-  const log = { at: gmdateC(), source: feed, active_count: items.size, added: [], photos_updated: [], price_changed: [], updated: [], returned: [], removed: [], waiting_photos: [], sheet_views: [] };
+  const log = { at: gmdateC(), source: feed, active_count: items.size, added: [], photos_updated: [], price_changed: [], updated: [], returned: [], removed: [], waiting_photos: [], sheet_views: [], kept_listed: [], waiting_details: [] };
   let stale = []; const rebuild = new Set(); let byStock;
   db.exec('BEGIN');
   try {
@@ -169,7 +176,19 @@ export async function dcSync(db, cfg, snapshot, zipDir = null, download = downlo
     byStock = new Map();
     for (const v of inv.vehicles) byStock.set(str(v.StockNumber), v);
     for (const [stock, s] of items) {
-      const cur = byStock.get(stock) ?? null, label = stock + ' ' + trim(s.year + ' ' + s.make + ' ' + s.model);
+      const cur = byStock.get(stock) ?? null;
+      if (s.list_only) {
+        // On DealerCenter's In Inventory list but not on the website: a saved car stays active with its details as they
+        // were; a new one cannot be added without details (photos, price), so it is listed as waiting.
+        const label = stock + ' ' + (cur ? title(cur) : s.title || s.vin || 'vehicle');
+        if (!cur) { log.waiting_details.push(label + ' (in DealerCenter, not on the website yet)'); continue; }
+        if ((cur.active ?? true) === false) log.returned.push(label);
+        const v = { ...cur, active: true, dc_checked_at: gmdateC() }; delete v.removed_at;
+        log.kept_listed.push(label);
+        byStock.set(stock, v);
+        continue;
+      }
+      const label = stock + ' ' + trim(s.year + ' ' + s.make + ' ' + s.model);
       let v;
       if (imported.has(stock)) {
         v = dcApplyFields(imported.get(stock), s, feed); v.imported_at = imported.get(stock).imported_at;
@@ -191,6 +210,7 @@ export async function dcSync(db, cfg, snapshot, zipDir = null, download = downlo
       if (imported.has(stock)) rebuild.add(stock);
       byStock.set(stock, v);
     }
+    log.active_count = items.size - log.waiting_details.length;
     for (const [stock, v] of byStock) {
       if (items.has(stock) || (v.source ?? '') !== 'zip' || (v.active ?? true) === false) continue;
       byStock.set(stock, { ...v, active: false, removed_at: gmdateC() }); log.removed.push(stock + ' ' + title(v));

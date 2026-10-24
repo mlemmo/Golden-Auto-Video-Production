@@ -8,7 +8,7 @@ const METHOD_TITLE = { feed: 'Daily inventory feed', website_dealercenter: 'Webs
   browser_snapshot: 'Browser snapshot', zip: 'Manual import', dealercenter_snapshot: 'DealerCenter website snapshot' };
 const SYNC_SECTIONS = [['added', 'Added'], ['removed', 'Removed — no longer in DealerCenter (hidden, videos kept)'], ['returned', 'Back in inventory'],
   ['price_changed', 'Price changed — review the script'], ['photos_updated', 'Photos updated — asset sheet rebuilt'], ['sheet_views', 'Asset sheet views changed'],
-  ['waiting_photos', 'Waiting for photos'], ['updated', 'Details updated'], ['sheet_errors', 'Asset sheet problems']];
+  ['waiting_photos', 'Waiting for photos'], ['waiting_details', 'In DealerCenter, not on the website yet — not added'], ['kept_listed', 'In DealerCenter, not on the website yet — kept as it was'], ['updated', 'Details updated'], ['sheet_errors', 'Asset sheet problems']];
 
 export default function VehicleStep() {
   const s = useStudio();
