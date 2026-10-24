@@ -43,9 +43,10 @@ test('rule lines fit the type of vehicle', () => {
 test('30-second script: fitted opener, a/an, no "Base", paint names, word budget', () => {
   const intro = { hook: 'Built for drivers who love the drive.', highlight: 'It turns every drive into an event.' };
   const s = script(m4, 30, dealer, intro);
-  assert.ok(s.startsWith('Built for drivers who love the drive. Take a look at this 2025 BMW M4 Competition') && s.includes('It turns every drive into an event.'), s);
+  // The sentence naming the car varies by VIN (scripts.js NAME_LINES); it follows the opener and names the car.
+  assert.ok(s.startsWith('Built for drivers who love the drive. ') && s.includes(' 2025 BMW M4 Competition') && s.includes('It turns every drive into an event.'), s);
   const lexus = script({ ...m4, Make: 'LEXUS', Model: 'RX 350', Trim: 'Base', ExteriorColor: 'Caviar', Drivetrain: '' }, 30, dealer, intro);
-  assert.ok(lexus.includes('2025 LEXUS RX 350, here') && lexus.includes('It comes with Caviar paint and just over 8,000 miles.'), lexus);
+  assert.ok(/2025 LEXUS RX 350[ ,]/.test(lexus) && lexus.includes('It comes with Caviar paint and just over 8,000 miles.'), lexus);
   assert.equal(colorPhrase('Ice Grey Metallic'), 'an ice grey metallic exterior');
   assert.equal(colorPhrase('Obsidian Blue Pearl'), 'an obsidian blue pearl exterior');
   assert.equal(colorPhrase('Silver'), 'a silver exterior');
