@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// Caption worker (cron, every minute): the auto build, then every queued final render, one after the other
-// without waiting for the next minute (config render_parallel for more at once) (src/lib/worker.js captionWorkerDrain).
+// Caption worker (cron, every minute): the auto build, then every queued final render, several side by side
+// (one per 4 CPUs, config render_parallel), each starting as soon as a slot is free (src/lib/worker.js captionWorkerDrain).
 // One run at a time: a lock folder in data_dir, kept fresh while rendering and taken over when older than 20 minutes
 // (a run that died; a render is marked stuck after 15).
 import { mkdirSync, rmSync, statSync, utimesSync } from 'node:fs';

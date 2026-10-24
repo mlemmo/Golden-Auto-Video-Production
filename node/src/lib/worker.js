@@ -3,6 +3,7 @@
 // FFmpeg (or the intro/closing-card render for lip-synced videos). Free: status
 // checks, a download of our own finished video, and local tools only.
 import { request } from 'node:https';
+import { availableParallelism } from 'node:os';
 import { lookup } from 'node:dns/promises';
 import { randomBytes } from 'node:crypto';
 import { createWriteStream, writeFileSync, mkdirSync, copyFileSync, existsSync, statSync, readFileSync, readdirSync, unlinkSync, rmdirSync, chmodSync, openSync, closeSync } from 'node:fs';
@@ -105,18 +106,27 @@ export async function backfillPosters(db, cfg, limit = 20, poster = makePoster) 
   return n;
 }
 
+/**
+ * How many videos to render at once: config render_parallel, else one per 4 CPUs (at most 4). Measured on staging
+ * with three slideshows: 4 CPUs — two at once took ~4 min for two against ~1 min each in turn; 12 CPUs (2026-10-24) —
+ * one at a time 167 s for all three, two 116 s, three 70 s.
+ */
+export function renderSlots(cfg, cpus = availableParallelism()) {
+  const set = Number(cfg.render_parallel);
+  return Math.max(1, Math.min(4, Number.isFinite(set) && set >= 1 ? Math.floor(set) : Math.floor(cpus / 4)));
+}
+
 /** Queued final renders waiting for this server. */
 export const queuedRenders = (db, cfg) => db.prepare('SELECT payload FROM jobs').all().map((r) => JSON.parse(r.payload))
   .filter((j) => (j.finish_status ?? '') === 'queued' && (j.render_backend ?? cfg.render_backend ?? 'linux') === 'linux').length;
 
 /**
  * The whole queue in one process: the auto build once, then `slots` renders side by side (config render_parallel,
- * default 1: on this 4-core server two at once took about 4 minutes for two slideshows against about 1 minute each
- * one after the other, as both fight for the cores), each slot taking the next queued video as soon as it is free, until nothing is queued or `budgetMs` has passed (cron starts the next run a minute later). Each video is
+ * default renderSlots(): one per 4 CPUs, at most 4), each slot taking the next queued video as soon as it is free, until nothing is queued or `budgetMs` has passed (cron starts the next run a minute later). Each video is
  * claimed by one slot only: picking and marking it "rendering" happen without a pause in between. touch() keeps the
  * run's lock fresh. Returns the log lines.
  */
-export async function captionWorkerDrain(db, cfg, { slots = Math.max(1, Math.min(4, Number(cfg.render_parallel ?? 1) || 1)), budgetMs = 50 * 60000, touch = () => {}, run = captionWorkerRun, now = () => Date.now(), opts = {} } = {}) {
+export async function captionWorkerDrain(db, cfg, { slots = renderSlots(cfg), budgetMs = 50 * 60000, touch = () => {}, run = captionWorkerRun, now = () => Date.now(), opts = {} } = {}) {
   const start = now(), out = [];
   for (const line of await run(db, cfg, { ...opts, skipAutoBuild: false, renderLimit: 0 })) out.push(line);
   const slot = async () => {

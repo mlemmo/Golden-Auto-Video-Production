@@ -344,3 +344,9 @@ test('posters: made from a finished video, shown in the Library, removed with th
     assert.ok(!existsSync(`${dir}/assets/posters/${'c'.repeat(40)}.jpg`), 'deleted with its video');
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('render slots: one per 4 CPUs (at most 4), or config render_parallel', async () => {
+  const { renderSlots } = await import('../src/lib/worker.js');
+  assert.deepEqual([renderSlots({}, 4), renderSlots({}, 12), renderSlots({}, 32), renderSlots({}, 2)], [1, 3, 4, 1]);
+  assert.deepEqual([renderSlots({ render_parallel: 2 }, 12), renderSlots({ render_parallel: 0 }, 12), renderSlots({ render_parallel: 9 }, 12)], [2, 3, 4]);
+});
