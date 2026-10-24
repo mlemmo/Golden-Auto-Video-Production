@@ -62,7 +62,11 @@ export function dcNormalize(raw) {
   const mileage = s.mileage ?? null;
   if (mileage !== null && mileage !== '' && (filterValidateInt(mileage) === false || filterValidateInt(mileage) < 0 || filterValidateInt(mileage) > 2000000)) throw new Error(`Stock ${stock}: invalid mileage.`);
   let urls = null, key = null, count = s.photo_count;
-  if (s.photo_urls !== undefined && s.photo_urls !== null) {
+  // keep_photos: details from DealerCenter, but no photo list yet (the website does not show the car): the saved
+  // photos stay; a new car waits for its photos.
+  const keepPhotos = s.keep_photos === true;
+  if (keepPhotos) count = null;
+  else if (s.photo_urls !== undefined && s.photo_urls !== null) {
     if (!isList(s.photo_urls) || s.photo_urls.length > 100) throw new Error(`Stock ${stock}: photo_urls must be a list of up to 100 URLs.`);
     // Two photo hosts: DealerCenter (imagescf.dealercenter.net; CDN paths are /W/H/[overlay-folder/]document.jpg and
     // only the document id is kept — the folder-less original without the website's logo/phone overlay — so the
@@ -79,8 +83,8 @@ export function dcNormalize(raw) {
     urls = ids.map(dcPhotoUrl);
     count = urls.length;
   }
-  const photos = filterValidateInt(count ?? null);
-  if (photos === false || photos < 0 || photos > 100) throw new Error(`Stock ${stock}: photo_count must be 0–100.`);
+  const photos = keepPhotos ? null : filterValidateInt(count ?? null);
+  if (!keepPhotos && (photos === false || photos < 0 || photos > 100)) throw new Error(`Stock ${stock}: photo_count must be 0–100.`);
   // The car's own page on the dealer's website (ads link to it); optional.
   const pageUrl = trim(str(s.page_url ?? ''));
   if (pageUrl !== '' && (!/^https:\/\/[^\s"'<>]+$/.test(pageUrl) || pageUrl.length > 500)) throw new Error(`Stock ${stock}: page_url must be an https web address.`);
@@ -92,11 +96,12 @@ export function dcNormalize(raw) {
   }
   return { stock, vin, year, make, model, trim: trim(str(s.trim ?? '')), drivetrain: trim(str(s.drivetrain ?? '')), color: trim(str(s.color ?? '')),
     mileage: mileage === null || mileage === '' ? null : filterValidateInt(mileage), price: prices.length ? Math.max(...prices) : null,
-    description: dcCleanDescription(str(s.description ?? '')), photo_count: photos, photo_urls: urls, photo_key: key, sheet_photos: sheet, page_url: pageUrl };
+    description: dcCleanDescription(str(s.description ?? '')), photo_count: photos, photo_urls: urls, photo_key: key, sheet_photos: sheet, page_url: pageUrl, keep_photos: keepPhotos };
 }
 /** True when the saved photo set no longer matches the snapshot (URL set when known, otherwise the count). */
 export function dcPhotosChanged(cur, s) {
   if (!cur || !(cur.photos ?? []).length) return true;
+  if (s.keep_photos) return false;
   return s.photo_key !== null ? (cur.dc_photo_key ?? null) !== s.photo_key : (cur.dc_photo_count ?? null) !== s.photo_count;
 }
 /** Saved JSON turns 9000.0 into 9000, so compare prices by value. */
@@ -152,7 +157,7 @@ export async function dcSync(db, cfg, snapshot, zipDir = null, download = downlo
   const imported = new Map(); let created = [];
   try {
     for (const [stock, s] of items) {
-      if (s.list_only || !dcPhotosChanged(before.get(stock) ?? null, s)) continue;
+      if (s.list_only || s.keep_photos || !dcPhotosChanged(before.get(stock) ?? null, s)) continue;
       const fields = { stock, year: s.year, make: s.make, model: s.model, trim: s.trim, vin: s.vin, mileage: s.mileage === null ? '' : String(s.mileage),
         prices: s.price === null ? '' : String(s.price), description: s.description, drivetrain: s.drivetrain };
       let v;
@@ -197,7 +202,7 @@ export async function dcSync(db, cfg, snapshot, zipDir = null, download = downlo
       } else if (cur) {
         v = dcApplyFields(cur, s, feed);
         if (dcPhotosChanged(cur, s)) log.waiting_photos.push(label + ' (photo count ' + str(cur.dc_photo_count ?? 'unknown') + ' → ' + s.photo_count + ')');
-      } else { log.waiting_photos.push(label + ' (new, ' + s.photo_count + ' photos)'); continue; }
+      } else { log.waiting_photos.push(label + (s.keep_photos ? ' (new, not on the website yet: no photos)' : ' (new, ' + s.photo_count + ' photos)')); continue; }
       if (cur) {
         if (!dcSamePrice(cur.price ?? null, v.price)) { log.price_changed.push(label + ': ' + money(cur.price ?? null) + ' → ' + money(v.price)); v.price_changed_at = gmdateC(); }
         if ((cur.active ?? true) === false) log.returned.push(label);

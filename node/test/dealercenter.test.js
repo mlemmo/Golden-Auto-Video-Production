@@ -111,3 +111,23 @@ test('DealerCenter list-only cars: a saved car stays active and unchanged, a new
     assert.equal(log.active_count, 2);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('details from DealerCenter with keep_photos: saved photos stay, a new car waits for photos', async () => {
+  const dir = mkdtempSync(tmpdir() + '/ga-dc-keep-');
+  const cfg = { asset_dir: dir, public_base_url: 'https://staging.example.com:4343' };
+  const db = openMemoryDb();
+  save(db, 'clients', { items: [{ id: 'golden-auto', name: 'Golden Auto', website: 'https://www.mygoldenauto.net' }] });
+  save(db, 'inventory', { vehicles: [{ StockNumber: '053326', Vin: '5FNRL5H69FB053326', source: 'zip', Year: 2015, Make: 'HONDA', Model: 'ODYSSEY', ExteriorColor: '-', Odometer: 99587, price: 15026.25, photos: ['https://x/a.jpg'], dc_photo_key: 'k', dc_photo_count: 27 }] });
+  let downloads = 0;
+  const download = async (urls) => { downloads += urls.length; return {}; };
+  try {
+    const base = { year: 2015, make: 'HONDA', model: 'ODYSSEY', trim: 'EX-L MINIVAN 4D', drivetrain: 'FWD', prices: [15026.25, 14888], description: 'From DealerCenter.', keep_photos: true };
+    const log = await dcSync(db, cfg, [{ ...base, stock: '053326', vin: '5FNRL5H69FB053326', color: 'GRAY', mileage: 99610 }, { ...base, stock: '050440', vin: 'WDDUG8CB7EA050440', make: 'MERCEDES-BENZ', model: 'S-CLASS', mileage: 101270 }], null, download);
+    const v = state(db, 'inventory').vehicles.find((x) => x.StockNumber === '053326');
+    assert.ok(v.ExteriorColor === 'GRAY' && v.Odometer === 99610 && v.description === 'From DealerCenter.', 'details from DealerCenter');
+    assert.ok(v.photos.length === 1 && v.dc_photo_key === 'k' && downloads === 0, 'saved photos kept, nothing downloaded');
+    assert.deepEqual(log.updated, ['053326 2015 HONDA ODYSSEY']);
+    assert.deepEqual(log.waiting_photos, ['050440 2015 MERCEDES-BENZ S-CLASS (new, not on the website yet: no photos)']);
+    assert.ok(!state(db, 'inventory').vehicles.some((x) => x.StockNumber === '050440'));
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
