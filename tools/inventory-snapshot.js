@@ -2,7 +2,7 @@
 // tab's window.name, so nothing is copied by hand). See docs/INVENTORY_SYNC.md.
 //
 //   Step 1  on DealerCenter's Active Inventory report (press Run first):        await step1DealerCenterList()
-//   Step 2  on https://www.mygoldenauto.net/inventory/ (same tab):               await step2WebsiteDetails()
+//   Step 2  on https://www.mygoldenauto.net/ (same tab, page loaded):           await step2WebsiteDetails()
 //   Step 3  on the staging (or production) dashboard, signed in as an admin:     await step3Import()
 //
 // Which cars are in stock comes from DealerCenter ("In Inventory" status only; In Recon and Inbound are not for
