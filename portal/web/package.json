@@ -1,0 +1,19 @@
+{
+  "name": "lotspotlight-portal-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LotSpotlight portal front end (React). Built into ../public and served by the portal.",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "4.3.4",
+    "vite": "5.4.11"
+  }
+}
