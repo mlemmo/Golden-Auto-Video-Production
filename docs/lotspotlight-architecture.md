@@ -1,7 +1,7 @@
 # LotSpotlight — Architecture & Build Spec (for Claude Code)
 
 > Save this file in the repo as `docs/lotspotlight-architecture.md`.
-> Repo: `mlemmo/Golden-Auto-Video-Production` · Work on the `nodejs` branch (never `staging` or `main` without asking).
+> Repo: `mlemmo/Golden-Auto-Video-Production` · Work on the `siteground` branch (replaced `nodejs` on 2026-11-02; never `staging` or `main` without asking).
 > Owner: Mark Lemmo (mark@lotspotlight.com)
 > Last updated: 2026-10-31
 
@@ -9,7 +9,7 @@
 
 ## 0. Instructions for Claude Code
 
-1. **Read the existing code first.** The current system is PHP on an Ubuntu server, with a Node.js port in progress on the `nodejs` branch. Inventory what already exists (inventory import, script generation, voice, avatar/lip-sync, ffmpeg composition, Meta code) and **reuse it** rather than rewriting.
+1. **Read the existing code first.** The current system is the Node.js video app (`node/`, `web/`) on an Ubuntu server (the PHP version and the Node.js port branch are retired; see CLAUDE.md). Inventory what already exists (inventory import, script generation, voice, avatar/lip-sync, ffmpeg composition, Meta code) and **reuse it** rather than rewriting.
 2. Before writing code, reply with: (a) what you found, (b) any conflicts with this spec, (c) a step-by-step plan for Milestone 1. Wait for approval.
 3. Small, reviewable commits. Each commit message says which milestone/task it covers.
 4. **Never commit secrets.** All keys go in `.env` (git-ignored); maintain `.env.example` with placeholder values.

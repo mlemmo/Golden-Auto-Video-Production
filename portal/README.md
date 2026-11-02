@@ -23,6 +23,20 @@ started by any service yet.
    `WORKER_SHARED_SECRETS`), then `node ../node/src/cli/portal-worker.js`. "Send test job" (staff only) should show
    **done** within a few seconds.
 
+## Status and handoff (2026-11-02)
+
+- Branch `siteground` (replaces `nodejs`). Milestone 1 done: `npm test` → 22 passing against MySQL 8.4, and a live
+  "Send test job" round trip through the screens worked on Mark's PC.
+- Differences from the spec, on purpose: a `sessions` table (sign-in), `users.is_staff` (eShield staff), and
+  `jobs.available_at` (retry backoff) plus a `ping` job type for the round-trip check.
+- Spec §3/§10 say the worker is `node.mygoldenauto.net` on 4343; that site is retired. The live servers are
+  video.mygoldenauto.net (Node on 4353) and staging.mygoldenauto.net (4352), both behind Nginx with HTTPS on :4343.
+- Overlap to decide with Mark: the video app already has accounts, per-dealer clients, Facebook/Instagram posting and
+  Meta ads (CLAUDE.md); the spec moves those to the portal over Milestones 3–4.
+- Not done yet: password reset (needs a mail service), MFA, SiteGround deployment and DNS for app.lotspotlight.com,
+  running `portal-worker.js` under systemd on the server.
+- Open questions in spec §13 are still unanswered except §13.5: the front end is React (Mark, 2026-10-31).
+
 ## Rules
 
 - Roles are checked on the server: staff (eShield) → every dealer; owner > admin > approver > viewer per dealer.
