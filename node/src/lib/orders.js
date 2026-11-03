@@ -52,10 +52,18 @@ export async function pushClientsToPortal(db, portal) {
   return links ?? {};
 }
 
-/** pushClientsToPortal in the background (studio start, client changes): a failure is only logged. */
-export function pushClientsSoon(db, cfg, log = (m) => console.error(m)) {
+/**
+ * pushClientsToPortal in the background (studio start, client changes). retryMs: waits before trying again (the portal
+ * may still be starting when a deploy restarts both); a last failure is only logged.
+ */
+export function pushClientsSoon(db, cfg, { retryMs = [], log = (m) => console.error(m) } = {}) {
   const portal = portalFromConfig(cfg);
-  if (portal) pushClientsToPortal(db, portal).catch((e) => log('portal client sync: ' + e.message));
+  if (!portal) return;
+  const attempt = (left) => pushClientsToPortal(db, portal).catch((e) => {
+    if (left.length) setTimeout(() => attempt(left.slice(1)), left[0]).unref?.();
+    else log('portal client sync: ' + e.message);
+  });
+  attempt(retryMs);
 }
 
 export async function portalOrders(db, cfg, portal = portalFromConfig(cfg)) {

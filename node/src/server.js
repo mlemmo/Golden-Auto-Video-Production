@@ -310,6 +310,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   server.listen(PORT, HOST, () => {
     console.log(`golden-auto-node listening on http://${HOST}:${PORT}`);
     // The portal learns this studio's clients on every start (staff add them there with one click).
-    try { const cfg = loadConfig(); pushClientsSoon(openDb(cfg), cfg); } catch (e) { console.error('portal client sync: ' + e.message); }
+    try { const cfg = loadConfig(); pushClientsSoon(openDb(cfg), cfg, { retryMs: [5000, 30000, 120000] }); } catch (e) { console.error('portal client sync: ' + e.message); }
   });
 }
