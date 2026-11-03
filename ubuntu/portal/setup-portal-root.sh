@@ -9,7 +9,7 @@
 # (new random secrets; prints the "portal" settings the studio's config needs) and keeps the API and pages addresses in
 # it up to date; installs and starts the portal API service golden-auto-<site>-portal on 127.0.0.1 (staging 4362,
 # production 4363) and lets mark restart it. For each address given it gets a Let's Encrypt certificate through
-# Cloudflare DNS (like the mygoldenauto.net sites) and adds an Nginx site on ports 4343 and 443:
+# Cloudflare DNS (token per domain: /root/.secrets/cloudflare-<domain>.ini, else the mygoldenauto.net one) and adds an Nginx site on ports 4343 and 443:
 #   --api     the portal API          --pages   the customer pages (portal/public, built for that API)
 #   --studio  a second address for the video studio (its mygoldenauto.net address keeps working)
 # The studio's own service, its Nginx site and its data are not changed.
@@ -122,8 +122,14 @@ no_cert=()
 cert_for() {
   local host="$1"
   [ -f "/etc/letsencrypt/live/$host/fullchain.pem" ] && return 0
+  # Each domain may have its own Cloudflare token (/root/.secrets/cloudflare-lotspotlight.com.ini); otherwise the
+  # mygoldenauto.net one. Certbot remembers which file it used, so renewals keep working.
+  local domain creds
+  domain="$(echo "$host" | awk -F. '{print $(NF-1)"."$NF}')"
+  creds="/root/.secrets/cloudflare-$domain.ini"
+  [ -f "$creds" ] || creds=/root/.secrets/cloudflare.ini
   certbot certonly --non-interactive --agree-tos --keep-until-expiring --dns-cloudflare \
-    --dns-cloudflare-credentials /root/.secrets/cloudflare.ini --dns-cloudflare-propagation-seconds 60 -d "$host" >/dev/null 2>&1 || {
+    --dns-cloudflare-credentials "$creds" --dns-cloudflare-propagation-seconds 60 -d "$host" >/dev/null 2>&1 || {
     no_cert+=("$host")
     return 1
   }
@@ -211,8 +217,10 @@ for name in "${changed[@]}"; do
 done
 if [ ${#no_cert[@]} -gt 0 ]; then
   echo "Not set up (no certificate): ${no_cert[*]}" >&2
-  echo "Certbot could not use Cloudflare for these names. The token in /root/.secrets/cloudflare.ini probably only covers" >&2
-  echo "mygoldenauto.net: give it Zone · DNS · Edit (and Zone · Zone · Read) on lotspotlight.com too, then run this again." >&2
+  echo "Certbot could not use Cloudflare for these names. Make an API token in the Cloudflare account that has the domain" >&2
+  echo "(template \"Edit zone DNS\", that zone only), save it as /root/.secrets/cloudflare-<domain>.ini containing" >&2
+  echo "  dns_cloudflare_api_token = <token>" >&2
+  echo "(mode 600), then run this again." >&2
   echo "Details: /var/log/letsencrypt/letsencrypt.log" >&2
   exit 1
 fi
