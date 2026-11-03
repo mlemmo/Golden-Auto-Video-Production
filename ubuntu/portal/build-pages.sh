@@ -7,8 +7,9 @@ dir="${1:?site folder, e.g. /srv/golden-auto-staging}"
 . "$dir/ubuntu/node/nvm-env.sh"
 cd "$dir/portal"
 npm ci --no-audit --no-fund >/dev/null
-api="$(sed -n 's/^APP_URL=//p' .env 2>/dev/null | tail -1)"
+api=""
+[ -f .env ] && api="$(sed -n 's/^APP_URL=//p' .env | tail -1)"
 # Pages on their own address call the API on its address; without one (https://localhost) they share the API's.
-case "$api" in https://localhost*|'') api='';; esac
+if [[ -z "$api" || "$api" == https://localhost* ]]; then api=""; fi
 (cd web && npm ci --no-audit --no-fund >/dev/null && VITE_API_BASE="$api" npx vite build >/dev/null)
-echo "Customer pages built for ${api:-the API's own address}."
+echo "Customer pages built (API: ${api:-same address as the pages})."
