@@ -44,7 +44,6 @@ export function portalClient({ api, workerId, secret, fetchFn = fetch }) {
     heartbeat: (id) => call('POST', `/jobs/${id}/heartbeat`, {}),
     complete: (id, result) => call('POST', `/jobs/${id}/complete`, { result }),
     fail: (id, error, retryable = true) => call('POST', `/jobs/${id}/fail`, { error, retryable }),
-    syncInventory: (dealerId, vehicles, complete = false) => call('POST', '/inventory/sync', { dealer_id: dealerId, vehicles, complete }),
     dealerConfig: (dealerId) => call('GET', `/dealers/${dealerId}/config`),
     // Customer orders (Milestone 2): paid and in-progress orders, one order with its photos, an uploaded photo's
     // bytes, opening it in the studio (claim), and telling the portal which uploads we now have.

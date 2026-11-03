@@ -53,15 +53,7 @@ describe('portal ↔ worker round trip', { skip: NO_DB }, () => {
     assert.ok(beats >= 3, `heartbeats sent: ${beats}`);
   });
 
-  test('inventory sync and dealer config over the signed API', async () => {
-    const car = (vin, price) => ({ vin, stock_no: vin.slice(-5), year: 2019, make: 'Honda', model: 'Civic', trim: 'EX', mileage: 41000, price, photos: ['https://imagescf.dealercenter.net/a.jpg'] });
-    const first = await client.syncInventory(dealerId, [car('1HGBH41JXMN109186', 15688), car('2HGFC2F59KH123456', 17995)], true);
-    assert.deepEqual(first, { received: 2, added: 2, changed: 0, sold: 0 });
-    const second = await client.syncInventory(dealerId, [car('1HGBH41JXMN109186', 14688)], true);
-    assert.deepEqual(second, { received: 1, added: 0, changed: 1, sold: 1 });
-    const [rows] = await pool.query('SELECT vin, price, status FROM vehicles ORDER BY vin');
-    assert.deepEqual(rows.map((r) => [r.vin, r.price, r.status]), [['1HGBH41JXMN109186', 14688, 'active'], ['2HGFC2F59KH123456', 17995, 'sold']]);
-    await assert.rejects(client.syncInventory(dealerId, [car('BAD', 1)]), /Invalid VIN/);
+  test('dealer config over the signed API', async () => {
     const cfg = await client.dealerConfig(dealerId);
     assert.equal(cfg.dealer.slug, 'golden-auto');
     assert.match(cfg.disclaimer, /Plus tax, title and fees/);

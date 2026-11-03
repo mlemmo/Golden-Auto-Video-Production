@@ -19,6 +19,10 @@ export function loadConfig(env = process.env) {
     appUrl,
     databaseUrl: env.DATABASE_URL || '',
     workerSecrets: parseWorkerSecrets(env.WORKER_SHARED_SECRETS || ''),
+    // The static customer site's addresses (e.g. https://lotspotlight.com), allowed to call this API from the browser.
+    // They must share the API's registrable domain (lotspotlight.com and api.lotspotlight.com) so the sign-in cookie,
+    // SameSite=Lax, goes with their requests. Empty: the pages are served by this app itself (one address).
+    corsOrigins: String(env.CORS_ORIGINS ?? '').split(',').map((s) => s.trim().replace(/\/+$/, '')).filter(Boolean),
     // Customers' uploaded car photos (full size until our server has copied them, then thumbnails only).
     uploadDir: env.UPLOAD_DIR || join(PORTAL_DIR, 'uploads'),
     secureCookies: appUrl.startsWith('https://'),

@@ -11,10 +11,9 @@ import { dealerRoutes } from './routes/dealers.js';
 import { workerRoutes } from './routes/worker.js';
 import { vehicleRoutes } from './routes/vehicles.js';
 import { orderRoutes, staffRoutes } from './routes/orders.js';
-import { pullRoutes, snapshotRoutes } from './routes/pulls.js';
 import { clientFetch } from '../../shared/website.js';
 
-const PHOTO_UPLOAD = /^\/dealers\/\d+\/vehicles\/\d+\/photos(\/\d+\/thumb)?$/;
+const PHOTO_UPLOAD = /^\/dealers\/\d+\/uploads(\/\d+\/thumb)?$/;
 
 // fetchFn: outgoing API requests (VIN lookup); siteFetch: dealer website pages (shared/website.js, public https only).
 // Tests pass fakes for both, so nothing outside is called.
@@ -31,11 +30,24 @@ export function createApp({ pool, config, publicDir = join(PORTAL_DIR, 'public')
     next();
   });
 
+  // The static customer site on another address (CORS_ORIGINS) may call the API with its cookie; nobody else may.
+  const allowed = new Set(config.corsOrigins ?? []);
+  app.use('/api', (req, res, next) => {
+    const origin = req.get('origin');
+    if (!origin || !allowed.has(origin) || req.path.startsWith('/worker')) return next();
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Vary', 'Origin');
+    if (req.method !== 'OPTIONS') return next();
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-CSRF-Token');
+    res.setHeader('Access-Control-Max-Age', '600');
+    res.status(204).end();
+  });
+
   // Worker API first: it reads its own raw body and has no browser session.
   app.use('/api/worker', workerRoutes({ pool, config }));
 
-  // A browser snapshot of a dealer's whole inventory is bigger than any other request (staff only, checked below).
-  app.use('/api/staff/dealers/:dealerId/snapshot', express.json({ limit: '5mb' }));
   app.use('/api', express.json({ limit: '100kb' }), async (req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
     req.cookies = parseCookies(req.headers.cookie);
@@ -52,11 +64,9 @@ export function createApp({ pool, config, publicDir = join(PORTAL_DIR, 'public')
   });
   app.use('/api/auth', authRoutes({ pool, config }));
   app.use('/api/dealers', dealerRoutes({ pool }));
-  app.use('/api/dealers', vehicleRoutes({ pool, config, fetchFn }));
-  app.use('/api/dealers', orderRoutes({ pool }));
-  app.use('/api/dealers', pullRoutes({ pool, siteFetch }));
+  app.use('/api/dealers', vehicleRoutes({ pool, config, fetchFn, siteFetch }));
+  app.use('/api/dealers', orderRoutes({ pool, config }));
   app.use('/api/staff', staffRoutes({ pool }));
-  app.use('/api/staff', snapshotRoutes({ pool }));
   app.use('/api', (req) => { throw new HttpError(404, `No such API route: ${req.method} ${req.path}`); });
 
   if (existsSync(publicDir)) {

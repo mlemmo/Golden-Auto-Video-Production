@@ -71,3 +71,4 @@ h3 { font-size: 1rem; margin: 0; }
 .upload { flex-direction: row; align-items: center; gap: 10px; font-weight: 600; }
 .order-form { display: flex; flex-direction: column; gap: 12px; border-top: 1px solid var(--line); padding-top: 16px; }
 .confirm { display: inline-flex; align-items: center; gap: 6px; }
+.pill.action { background: var(--accent); color: var(--accent-text); }

@@ -1,8 +1,8 @@
-// Cars: the dealer's cars, "Pull from my website" (read a few pages per request until done), the car form (VIN
-// lookup, details, photos) and ordering a video. Viewers read; owners, admins and approvers change cars; owners and
-// admins order.
+// Cars: the dealer's cars with videos (stored when ordered), the cars on their website right now (read live, never
+// saved), and the order form: details (VIN lookup for cars added by hand), photos, video type. Everyone at the dealer
+// sees the lists; owners and admins order.
 import { useCallback, useEffect, useState } from 'react';
-import { api } from './api.js';
+import { api, apiUrl } from './api.js';
 import { uploadPhoto } from './photos.js';
 import { carTitle, StatusPill } from './Orders.jsx';
 
@@ -11,242 +11,194 @@ const FIELDS = [
   ['mileage', 'Miles', 'number'], ['price', 'Price ($)', 'number'], ['stock_no', 'Stock number'], ['page_url', 'Car page on your website'],
 ];
 const EMPTY = Object.fromEntries([...FIELDS.map(([k]) => [k, '']), ['description', ''], ['vin', '']]);
+const MAX_PHOTOS = 30;
 const dollars = (n) => (n === null || n === undefined ? '' : '$' + Number(n).toLocaleString('en-US'));
 const miles = (n) => (n === null || n === undefined ? '' : Number(n).toLocaleString('en-US') + ' mi');
-const fromCar = (v) => Object.fromEntries(Object.keys(EMPTY).map((k) => [k, v[k] ?? '']));
+const formOf = (car) => Object.fromEntries(Object.keys(EMPTY).map((k) => [k, car?.[k] ?? '']));
 
-function Pull({ dealerId, canEdit, onCars }) {
-  const [pull, setPull] = useState(null);
-  const [error, setError] = useState('');
-  useEffect(() => { api('GET', `/api/dealers/${dealerId}/pulls/latest`).then((d) => setPull(d.pull), () => {}); }, [dealerId]);
-  // A running pull is kept going from this page, one batch of pages per request.
-  useEffect(() => {
-    if (pull?.status !== 'running') return undefined;
-    let stop = false;
-    (async () => {
-      let p = pull;
-      while (!stop && p.status === 'running') {
-        const before = p.done;
-        try { p = (await api('POST', `/api/dealers/${dealerId}/pulls/${p.id}/continue`, {})).pull; }
-        catch (e) { setError(e.message); return; }
-        if (!stop) { setPull(p); onCars(); }
-        // No progress: another tab is reading this batch; wait before asking again.
-        if (p.status === 'running' && p.done === before) await new Promise((r) => setTimeout(r, 3000));
-      }
-    })();
-    return () => { stop = true; };
-  }, [pull?.id, pull?.status === 'running']); // eslint-disable-line react-hooks/exhaustive-deps
-  async function start() {
-    setError('');
-    try { setPull((await api('POST', `/api/dealers/${dealerId}/pulls`, {})).pull); } catch (e) { setError(e.message); }
-  }
-  const p = pull;
+/** A car card: photo, name, price and miles, its latest order. */
+function CarCard({ car, photo, onClick, action }) {
   return (
-    <div className="pull">
-      {canEdit && <button className="secondary" disabled={p?.status === 'running'} onClick={start}>{p?.status === 'running' ? 'Reading your website…' : 'Pull from my website'}</button>}
-      {p && p.status === 'running' && <p className="muted small">Reading car pages: {p.done} of {p.total}. Keep this page open until it finishes.</p>}
-      {p && p.status === 'done' && <p className="muted small">Last pull {new Date(p.finished_at).toLocaleString()}: {p.added} new, {p.changed} updated, {p.gone} no longer on your website.{p.errors.length ? ` ${p.errors.length} page(s) could not be read.` : ''}</p>}
-      {p && ['blocked', 'failed'].includes(p.status) && <p className="note small">{p.message}</p>}
-      {p?.errors?.length > 0 && p.status !== 'running' && <details className="small"><summary>Pages that could not be read</summary><ul>{p.errors.map((e) => <li key={e}>{e}</li>)}</ul></details>}
-      {error && <p className="error">{error}</p>}
-    </div>
+    <button className="car" onClick={onClick}>
+      {photo ? <img src={apiUrl(photo)} alt="" loading="lazy" /> : <span className="no-photo">No photo</span>}
+      <span className="car-text">
+        <strong>{carTitle(car)}</strong>
+        <span className="muted small">{[dollars(car.price), miles(car.mileage), car.stock_no && `stock ${car.stock_no}`].filter(Boolean).join(' · ')}</span>
+        <span className="badges">{car.order_status && <StatusPill status={car.order_status} />}{action && <span className="pill action">{action}</span>}</span>
+      </span>
+    </button>
   );
 }
 
-function Photos({ dealerId, car, canEdit, onChange }) {
-  const [busy, setBusy] = useState('');
-  const [error, setError] = useState('');
-  const base = `/api/dealers/${dealerId}/vehicles/${car.id}/photos`;
-  async function add(files) {
-    setError('');
-    const list = [...files];
-    try {
-      for (const [i, f] of list.entries()) { setBusy(`Uploading photo ${i + 1} of ${list.length}…`); await uploadPhoto(dealerId, car.id, f); }
-    } catch (e) { setError(e.message); }
-    setBusy('');
-    onChange();
-  }
-  async function move(i, by) {
-    const ids = car.photos.map((p) => p.id);
-    [ids[i], ids[i + by]] = [ids[i + by], ids[i]];
-    try { await api('PUT', `${base}/order`, { ids }); onChange(); } catch (e) { setError(e.message); }
-  }
-  async function remove(p) {
-    try { await api('DELETE', `${base}/${p.id}`); onChange(); } catch (e) { setError(e.message); }
-  }
-  return (
-    <section className="photos">
-      <h3>Photos <span className="muted small">{car.photos.length} of 30 · the first photos are used most</span></h3>
-      {car.photos.length === 0 && <p className="muted">No photos yet. A video needs at least one; four or more (front, both sides, rear) work best.</p>}
-      <div className="photo-grid">
-        {car.photos.map((p, i) => (
-          <figure key={p.id}>
-            <img src={p.thumb} alt={`Photo ${i + 1}`} loading="lazy" />
-            {canEdit && (
-              <figcaption>
-                <button className="link" aria-label="Move earlier" disabled={i === 0} onClick={() => move(i, -1)}>←</button>
-                <button className="link" aria-label="Move later" disabled={i === car.photos.length - 1} onClick={() => move(i, 1)}>→</button>
-                <button className="link" aria-label="Delete photo" onClick={() => remove(p)}>Delete</button>
-              </figcaption>
-            )}
-          </figure>
-        ))}
-      </div>
-      {canEdit && car.photos.length < 30 && (
-        <label className="upload">Add photos<input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={!!busy} onChange={(e) => { add(e.target.files); e.target.value = ''; }} /></label>
-      )}
-      {busy && <p className="muted small">{busy}</p>}
-      {error && <p className="error">{error}</p>}
-    </section>
-  );
-}
-
-function OrderForm({ dealerId, car, onOrdered }) {
+function OrderForm({ dealerId, start, onDone, onCancel }) {
+  const byHand = start.source === 'form' && !start.car;
+  const [form, setForm] = useState(formOf(start.car));
+  const [photos, setPhotos] = useState(start.photos);   // [{ url } | { upload_id, thumb }] in order
   const [products, setProducts] = useState(null);
   const [product, setProduct] = useState('ai_video');
   const [length, setLength] = useState(30);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
-  const [done, setDone] = useState('');
-  useEffect(() => { api('GET', `/api/dealers/${dealerId}/products`).then((d) => setProducts(d.products), (e) => setError(e.message)); }, [dealerId]);
-  if (!products) return null;
-  const lengths = products[product]?.lengths ?? [];
-  async function submit(e) {
-    e.preventDefault();
-    setError(''); setDone('');
-    try {
-      const { order } = await api('POST', `/api/dealers/${dealerId}/orders`, { vehicle_id: car.id, product, length_s: length, notes });
-      setDone(`Order ${order.id} placed. We start once it is paid.`); setNotes(''); onOrdered();
-    } catch (err) { setError(err.message); }
-  }
-  return (
-    <form className="order-form" onSubmit={submit}>
-      <h3>Order a video of this car</h3>
-      <div className="grid">
-        <label>Video<select value={product} onChange={(e) => { setProduct(e.target.value); if (!products[e.target.value].lengths.includes(length)) setLength(products[e.target.value].lengths.at(-1)); }}>
-          {Object.entries(products).map(([k, p]) => <option key={k} value={k}>{p.name}</option>)}
-        </select></label>
-        <label>Length<select value={length} onChange={(e) => setLength(Number(e.target.value))}>
-          {lengths.map((n) => <option key={n} value={n}>{n} seconds</option>)}
-        </select></label>
-      </div>
-      <label>Notes for us <span className="muted small">(optional)</span><textarea rows={3} maxLength={2000} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything to mention or leave out" /></label>
-      {error && <p className="error">{error}</p>}
-      {done && <p className="ok">{done}</p>}
-      <div className="actions"><button disabled={car.photos.length === 0}>Place order</button>{car.photos.length === 0 && <span className="muted small">Add a photo first.</span>}</div>
-    </form>
-  );
-}
-
-function CarEditor({ dealerId, carId, canEdit, canOrder, onClose, onSaved }) {
-  const isNew = carId === 'new';
-  const [car, setCar] = useState(null);
-  const [form, setForm] = useState(EMPTY);
-  const [error, setError] = useState('');
   const [note, setNote] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [confirmRemove, setConfirmRemove] = useState(false);
-  const load = useCallback(async (id = carId) => {
-    const { vehicle } = await api('GET', `/api/dealers/${dealerId}/vehicles/${id}`);
-    setCar(vehicle); setForm(fromCar(vehicle));
-  }, [dealerId, carId]);
-  useEffect(() => { if (!isNew) load().catch((e) => setError(e.message)); }, [isNew, load]);
-  const field = (k) => ({ id: `car-${k}`, value: form[k], onChange: (e) => setForm({ ...form, [k]: e.target.value }), disabled: !canEdit });
+  const [busy, setBusy] = useState('');
+  useEffect(() => { api('GET', `/api/dealers/${dealerId}/products`).then((d) => setProducts(d.products), (e) => setError(e.message)); }, [dealerId]);
+  const field = (k) => ({ id: `order-${k}`, value: form[k], onChange: (e) => setForm({ ...form, [k]: e.target.value }) });
 
   async function lookUp() {
     setError(''); setNote('');
     try {
       const { vehicle } = await api('GET', `/api/dealers/${dealerId}/vin/${encodeURIComponent(form.vin.trim())}`);
       setForm((f) => ({ ...f, ...Object.fromEntries(Object.entries(vehicle).filter(([, v]) => v !== null)) }));
-      setNote('Filled in from the VIN. Check the details before saving.');
+      setNote('Filled in from the VIN. Check the details before ordering.');
     } catch (e) { setError(e.message); }
   }
-  async function save(e) {
+  async function add(files) {
+    setError('');
+    const list = [...files].slice(0, MAX_PHOTOS - photos.length);
+    for (const [i, f] of list.entries()) {
+      setBusy(`Uploading photo ${i + 1} of ${list.length}…`);
+      try {
+        const id = await uploadPhoto(dealerId, f);
+        setPhotos((p) => [...p, { upload_id: id, thumb: `/api/dealers/${dealerId}/photos/${id}?size=thumb`, fresh: true }]);
+      } catch (e) { setError(e.message); break; }
+    }
+    setBusy('');
+  }
+  function move(i, by) {
+    const next = [...photos];
+    [next[i], next[i + by]] = [next[i + by], next[i]];
+    setPhotos(next);
+  }
+  function drop(i) {
+    const p = photos[i];
+    setPhotos(photos.filter((_, j) => j !== i));
+    // A photo uploaded just now for this order is deleted; the photos of an ordered car simply stay out of this order.
+    if (p.fresh) api('DELETE', `/api/dealers/${dealerId}/uploads/${p.upload_id}`).catch(() => {});
+  }
+  async function submit(e) {
     e.preventDefault();
-    setBusy(true); setError(''); setNote('');
-    const first = car === null;
-    const body = Object.fromEntries(Object.entries(form).filter(([k]) => k !== 'vin' || first));
+    setError(''); setNote('');
+    setBusy('Placing the order…');
     try {
-      const { vehicle } = first ? await api('POST', `/api/dealers/${dealerId}/vehicles`, body) : await api('PATCH', `/api/dealers/${dealerId}/vehicles/${car.id}`, body);
-      onSaved(vehicle.id);
-      setCar(vehicle); setForm(fromCar(vehicle));
-      setNote(first ? 'Car added. Now add its photos.' : 'Saved.');
-    } catch (err) { setError(err.message); }
-    setBusy(false);
+      const { order } = await api('POST', `/api/dealers/${dealerId}/orders`, {
+        car: form, photos: photos.map((p) => (p.upload_id ? { upload_id: p.upload_id } : { url: p.url })), source: start.source, product, length_s: length, notes,
+      });
+      onDone(`Order ${order.id} placed: ${order.product_name} of the ${carTitle(order.vehicle)}. We start once it is paid.`);
+    } catch (err) { setError(err.message); setBusy(''); }
   }
-  async function remove() {
-    try { await api('DELETE', `/api/dealers/${dealerId}/vehicles/${car.id}`); onSaved(null); onClose(); } catch (e) { setError(e.message); }
-  }
-  if (!isNew && !car) return <section className="card">{error ? <p className="error">{error}</p> : <p className="muted">Loading…</p>}</section>;
-  const added = car !== null;
+  const lengths = products?.[product]?.lengths ?? [];
   return (
-    <section className="card car-editor">
-      <div className="row"><h2>{added ? carTitle(car) : 'Add a car'}</h2><button className="link" onClick={onClose}>Back to cars</button></div>
-      {car?.missing_since && <p className="note small">This car was not on your website at the last pull. Remove it if it is sold; otherwise you can keep it.</p>}
-      <form className="form" onSubmit={save}>
-        <div className="vin-row">
-          <label>VIN<input {...field('vin')} maxLength={17} required disabled={!isNew || added || !canEdit} autoFocus={isNew} style={{ textTransform: 'uppercase' }} /></label>
-          {isNew && !added && <button type="button" className="secondary" onClick={lookUp} disabled={form.vin.trim().length !== 17}>Look up</button>}
+    <form className="card car-editor form" onSubmit={submit}>
+      <div className="row"><h2>{byHand ? 'Order a video of a car not on your website' : `Order a video: ${carTitle(start.car)}`}</h2><button type="button" className="link" onClick={onCancel}>Back to cars</button></div>
+      <p className="muted small">Check the details: the video says what is written here. Changes are saved with the order, not on your website.</p>
+      <div className="vin-row">
+        <label>VIN<input {...field('vin')} maxLength={17} required disabled={!byHand} autoFocus={byHand} style={{ textTransform: 'uppercase' }} /></label>
+        {byHand && <button type="button" className="secondary" onClick={lookUp} disabled={form.vin.trim().length !== 17}>Look up</button>}
+      </div>
+      <div className="grid">
+        {FIELDS.map(([k, label, type]) => <label key={k}>{label}<input {...field(k)} inputMode={type === 'number' ? 'numeric' : undefined} required={['year', 'make', 'model'].includes(k)} /></label>)}
+      </div>
+      <label>Description<textarea {...field('description')} rows={4} maxLength={5000} /></label>
+
+      <section className="photos">
+        <h3>Photos <span className="muted small">{photos.length} of {MAX_PHOTOS} · the first ones are used most; four or more (front, both sides, rear) work best</span></h3>
+        <div className="photo-grid">
+          {photos.map((p, i) => (
+            <figure key={p.upload_id ?? p.url}>
+              <img src={apiUrl(p.thumb ?? p.url)} alt={`Photo ${i + 1}`} loading="lazy" />
+              <figcaption>
+                <button type="button" className="link" aria-label="Move earlier" disabled={i === 0} onClick={() => move(i, -1)}>←</button>
+                <button type="button" className="link" aria-label="Move later" disabled={i === photos.length - 1} onClick={() => move(i, 1)}>→</button>
+                <button type="button" className="link" aria-label="Leave this photo out" onClick={() => drop(i)}>Remove</button>
+              </figcaption>
+            </figure>
+          ))}
         </div>
+        {photos.length < MAX_PHOTOS && <label className="upload">Add photos<input type="file" accept="image/jpeg,image/png,image/webp" multiple disabled={!!busy} onChange={(e) => { add(e.target.files); e.target.value = ''; }} /></label>}
+      </section>
+
+      {products && (
         <div className="grid">
-          {FIELDS.map(([k, label, type]) => <label key={k}>{label}<input {...field(k)} inputMode={type === 'number' ? 'numeric' : undefined} /></label>)}
+          <label>Video<select value={product} onChange={(e) => { setProduct(e.target.value); if (!products[e.target.value].lengths.includes(length)) setLength(products[e.target.value].lengths.at(-1)); }}>
+            {Object.entries(products).map(([k, p]) => <option key={k} value={k}>{p.name}</option>)}
+          </select></label>
+          <label>Length<select value={length} onChange={(e) => setLength(Number(e.target.value))}>
+            {lengths.map((n) => <option key={n} value={n}>{n} seconds</option>)}
+          </select></label>
         </div>
-        <label>Description<textarea {...field('description')} rows={4} maxLength={5000} /></label>
-        {error && <p className="error">{error}</p>}
-        {note && <p className="ok">{note}</p>}
-        {canEdit && (
-          <div className="actions">
-            <button disabled={busy}>{busy ? 'Saving…' : added ? 'Save changes' : 'Add car'}</button>
-            {added && !confirmRemove && <button type="button" className="link" onClick={() => setConfirmRemove(true)}>Remove car</button>}
-            {confirmRemove && <span className="confirm">Remove this car? <button type="button" className="danger small" onClick={remove}>Remove</button> <button type="button" className="link" onClick={() => setConfirmRemove(false)}>Keep it</button></span>}
-          </div>
-        )}
-        {added && car.source !== 'form' && <p className="muted small">Fields you change here are kept when your website is pulled again.</p>}
-      </form>
-      {added && <Photos dealerId={dealerId} car={car} canEdit={canEdit} onChange={() => load(car.id)} />}
-      {added && canOrder && <OrderForm dealerId={dealerId} car={car} onOrdered={() => onSaved(car.id)} />}
+      )}
+      <label>Notes for us <span className="muted small">(optional)</span><textarea rows={3} maxLength={2000} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything to mention or leave out" /></label>
+      {error && <p className="error">{error}</p>}
+      {note && <p className="ok">{note}</p>}
+      {busy && <p className="muted small">{busy}</p>}
+      <div className="actions"><button disabled={!!busy || photos.length === 0}>Place order</button>{photos.length === 0 && <span className="muted small">Add at least one photo.</span>}</div>
+    </form>
+  );
+}
+
+function WebsiteCars({ dealerId, canOrder, onOrder }) {
+  const [read, setRead] = useState(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const load = useCallback(async (fresh = false) => {
+    setLoading(true); setError('');
+    try { setRead(await api('GET', `/api/dealers/${dealerId}/website-cars${fresh ? '?fresh=1' : ''}`)); } catch (e) { setError(e.message); }
+    setLoading(false);
+  }, [dealerId]);
+  useEffect(() => { setRead(null); load(); }, [load]);
+  return (
+    <section className="card">
+      <div className="row">
+        <h2>On your website {read?.cars?.length > 0 && <span className="muted small">{read.cars.length}</span>}</h2>
+        <button className="secondary small" disabled={loading} onClick={() => load(true)}>{loading ? 'Reading…' : 'Refresh'}</button>
+      </div>
+      {loading && !read && <p className="muted">Reading your website… this can take a few seconds.</p>}
+      {read?.message && <p className="note small">{read.message}</p>}
+      {read?.read_at && <p className="muted small">Read from {read.website?.replace('https://', '')} at {new Date(read.read_at).toLocaleTimeString()}. Nothing is saved until you order.</p>}
+      {error && <p className="error">{error}</p>}
+      {read?.status === 'ok' && read.cars.length === 0 && <p className="muted">No cars were found on your website.</p>}
+      {read?.cars?.length > 0 && (
+        <div className="car-list">
+          {read.cars.map((c) => <CarCard key={c.vin} car={c} photo={c.photos[0]} action={canOrder ? 'Order a video' : null} onClick={() => canOrder && onOrder({ car: c, photos: c.photos.map((url) => ({ url })), source: 'website' })} />)}
+        </div>
+      )}
+      {read?.errors?.length > 0 && <details className="small"><summary>{read.errors.length} page(s) could not be read</summary><ul>{read.errors.map((e) => <li key={e}>{e}</li>)}</ul></details>}
     </section>
   );
 }
 
 export function Cars({ dealerId, role }) {
-  const canEdit = ['staff', 'owner', 'admin', 'approver'].includes(role);
   const canOrder = ['staff', 'owner', 'admin'].includes(role);
-  const [cars, setCars] = useState(null);
+  const [ordered, setOrdered] = useState(null);
   const [error, setError] = useState('');
-  const [open, setOpen] = useState(null);   // a car id, 'new', or null for the list
-  const load = useCallback(() => api('GET', `/api/dealers/${dealerId}/vehicles`).then((d) => { setCars(d.vehicles); setError(''); }, (e) => setError(e.message)), [dealerId]);
-  useEffect(() => { load(); setOpen(null); }, [load]);
+  const [done, setDone] = useState('');
+  const [ordering, setOrdering] = useState(null);   // { car, photos, source } while the order form is open
+  const load = useCallback(() => api('GET', `/api/dealers/${dealerId}/vehicles`).then((d) => { setOrdered(d.vehicles); setError(''); }, (e) => setError(e.message)), [dealerId]);
+  useEffect(() => { load(); setOrdering(null); setDone(''); }, [load]);
 
-  if (open !== null) {
-    return <CarEditor key={open} dealerId={dealerId} carId={open} canEdit={canEdit} canOrder={canOrder} onClose={() => { setOpen(null); load(); }} onSaved={() => load()} />;
+  async function orderAgain(v) {
+    try {
+      const { vehicle } = await api('GET', `/api/dealers/${dealerId}/vehicles/${v.id}`);
+      setOrdering({ car: vehicle, source: vehicle.source === 'website' ? 'website' : 'form', photos: vehicle.photos.map((p) => (p.uploaded ? { upload_id: p.id, thumb: p.thumb } : { url: p.url })) });
+    } catch (e) { setError(e.message); }
   }
+  if (ordering) return <OrderForm dealerId={dealerId} start={ordering} onCancel={() => setOrdering(null)} onDone={(msg) => { setOrdering(null); setDone(msg); load(); }} />;
   return (
-    <section className="card">
-      <div className="row">
-        <h2>Cars {cars && <span className="muted small">{cars.length}</span>}</h2>
-        {canEdit && <button onClick={() => setOpen('new')}>Add a car</button>}
-      </div>
-      <Pull dealerId={dealerId} canEdit={canEdit} onCars={load} />
-      {error && <p className="error">{error}</p>}
-      {cars === null ? <p className="muted">Loading…</p> : cars.length === 0 ? <p className="muted">No cars yet. Add one, or pull them from your website.</p> : (
-        <div className="car-list">
-          {cars.map((v) => (
-            <button key={v.id} className="car" onClick={() => setOpen(v.id)}>
-              {v.photo ? <img src={v.photo.thumb} alt="" loading="lazy" /> : <span className="no-photo">No photo</span>}
-              <span className="car-text">
-                <strong>{carTitle(v)}</strong>
-                <span className="muted small">{[dollars(v.price), miles(v.mileage), v.stock_no && `stock ${v.stock_no}`].filter(Boolean).join(' · ')}</span>
-                <span className="badges">
-                  {v.order_status && <StatusPill status={v.order_status} />}
-                  {v.missing_since && <span className="pill warn">Not on your website anymore</span>}
-                  {v.photo_count === 0 && <span className="pill">No photos</span>}
-                </span>
-              </span>
-            </button>
-          ))}
+    <>
+      {done && <p className="card ok">{done}</p>}
+      <section className="card">
+        <div className="row">
+          <h2>Cars with videos {ordered && <span className="muted small">{ordered.length}</span>}</h2>
+          {canOrder && <button onClick={() => { setDone(''); setOrdering({ car: null, photos: [], source: 'form' }); }}>Add a car by hand</button>}
         </div>
-      )}
-    </section>
+        {error && <p className="error">{error}</p>}
+        {ordered === null ? <p className="muted">Loading…</p> : ordered.length === 0 ? <p className="muted">No videos ordered yet. Pick a car from your website below, or add one by hand.</p> : (
+          <div className="car-list">
+            {ordered.map((v) => <CarCard key={v.id} car={v} photo={v.photo?.thumb} action={canOrder ? 'Order again' : null} onClick={() => canOrder && orderAgain(v)} />)}
+          </div>
+        )}
+      </section>
+      <WebsiteCars dealerId={dealerId} canOrder={canOrder} onOrder={(o) => { setDone(''); setOrdering(o); }} />
+    </>
   );
 }

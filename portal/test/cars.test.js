@@ -1,5 +1,6 @@
-// Milestone 2: cars (form, photos, VIN lookup), website pulls, orders, the staff release and the worker's order
-// endpoints. Websites, the VIN service and the worker are faked or local; nothing outside is called.
+// Cars and orders (Milestone 2, reworked 2026-11-03): the dealer's website read live and never saved, photo uploads,
+// orders that store only the ordered car, the staff release, the worker's order endpoints, and the static customer
+// site calling the API from another address. Websites, the VIN service and the worker are faked or local.
 import { describe, test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync } from 'node:fs';
@@ -8,17 +9,18 @@ import { createUser } from '../src/lib/users.js';
 import { portalClient } from '../../node/src/lib/portal-client.js';
 
 const PW = 'correct horse battery';
-const VIN_A = '1HGBH41JXMN109101', VIN_B = '1HGBH41JXMN109102', VIN_C = '1HGBH41JXMN109103', VIN_D = '1HGBH41JXMN109104', VIN_E = '1HGBH41JXMN109105';
+const VIN_A = '1HGBH41JXMN109101', VIN_B = '1HGBH41JXMN109102', VIN_C = '1HGBH41JXMN109103';
 const SITE = 'https://lr.example';
+const STATIC_SITE = 'https://staging.lotspotlight.example';
 
 /** A Dealer Car Search vehicle page (the parts shared/dcs.js reads). */
-const vdp = (id, vin, { price = 15688, miles = '41,000', year = 2019, make = 'Honda', model = 'Civic' } = {}) =>
-  `<html><script>var init_utag_data = { "product_make": "${make}", "product_model": "${model}", "product_year": "${year}", "product_price": "${price}", "product_id": "${id}", };</script>`
+const vdp = (id, vin, { price = 15688, miles = '41,000' } = {}) =>
+  `<html><script>var init_utag_data = { "product_make": "Honda", "product_model": "Civic", "product_year": "2019", "product_price": "${price}", "product_id": "${id}", };</script>`
   + `<ul><li class="detailOptTrim"><label>Trim:</label> EX</li><li class="detailOptColor"><label>Color:</label> BLUE</li>`
   + `<li class="detailOptMPG"><label>Mileage:</label> ${miles}</li><li class="detailOptStock"><label>Stock #:</label> S${id}</li><li class="detailOptVin"><label>Vin:</label> ${vin}</li></ul>`
   + `<img data-src='https://imagescdn.dealercarsearch.com/Media/1/${id}/p1.jpg'><img data-src='https://imagescdn.dealercarsearch.com/Media/1/${id}/p2.jpg'></html>`;
 
-/** A fake Dealer Car Search website: cars = { id: [vin, options] }. */
+/** A fake Dealer Car Search website (cars = { id: [vin, options] }) that counts page reads. */
 function fakeSite(cars) {
   const site = { cars, fetched: [] };
   site.fetch = async (url) => {
@@ -29,20 +31,23 @@ function fakeSite(cars) {
     if (url === SITE + '/sitemap.xml') return ok(Object.keys(site.cars).map((id) => `<loc>${SITE}/vdp/${id}/Used-2019-Honda-Civic</loc>`).join(''));
     const m = url.match(/\/vdp\/(\d+)\//);
     if (m && site.cars[m[1]]) return ok(vdp(m[1], ...site.cars[m[1]]));
+    if (url.startsWith('https://blocked.example') || url.startsWith('https://www.bare.example')) return { code: 403, body: 'cf-chl', url, headers: '' };
+    if (url.includes('.example')) return { code: 0, body: '', url, headers: '', error: 'it keeps redirecting (a redirect loop)' };
     return { code: 404, body: '', url, headers: '' };
   };
   return site;
 }
 
-describe('cars, website pulls and orders', { skip: NO_DB }, () => {
+describe('cars and orders', { skip: NO_DB }, () => {
   let pool, app, staff, owner, approver, viewer, other, dealerId, otherDealerId, worker;
-  const site = fakeSite({});
-  const vinService = async (url) => ({ ok: true, status: 200, json: async () => ({ Results: [{ ModelYear: '2019', Make: 'HONDA', Model: 'Civic', Trim: 'EX', DriveType: 'FWD', url }] }) });
+  const site = fakeSite({ 1: [VIN_B, { price: 21000 }], 2: [VIN_C, {}], 3: ['NOVIN', {}], 4: [VIN_B, { price: 1 }] });
+  const vinService = async () => ({ ok: true, status: 200, json: async () => ({ Results: [{ ModelYear: '2019', Make: 'HONDA', Model: 'Civic', Trim: 'EX', DriveType: 'FWD' }] }) });
   const login = async (email) => { const b = browser(app.url); await b.login(email, PW); return b; };
+  const path = (p) => `/api/dealers/${dealerId}${p}`;
 
   before(async () => {
     pool = await freshDb();
-    app = await startApp(pool, {}, { fetchFn: vinService, siteFetch: (url) => site.fetch(url) });
+    app = await startApp(pool, { CORS_ORIGINS: STATIC_SITE }, { fetchFn: vinService, siteFetch: (url) => site.fetch(url) });
     await createUser(pool, { email: 'staff@eshield.test', password: PW, isStaff: true });
     staff = await login('staff@eshield.test');
     dealerId = (await staff.post('/api/dealers', { name: 'eLease Returns', slug: 'elease', website: SITE })).data.dealer.id;
@@ -55,181 +60,125 @@ describe('cars, website pulls and orders', { skip: NO_DB }, () => {
   });
   after(async () => { await app?.close(); await pool?.end(); });
 
-  const path = (p) => `/api/dealers/${dealerId}${p}`;
-
-  test('a car typed in by the customer: checks, roles and other dealers', async () => {
-    assert.equal((await approver.post(path('/vehicles'), { vin: 'BAD', year: 2019, make: 'Honda', model: 'Civic' })).status, 400);
-    assert.equal((await approver.post(path('/vehicles'), { vin: VIN_A, make: 'Honda', model: 'Civic' })).status, 400, 'year required');
-    assert.equal((await approver.post(path('/vehicles'), { vin: VIN_A, year: 2019, make: 'Honda', model: 'Civic', page_url: 'http://x.test' })).status, 400);
-    assert.equal((await viewer.post(path('/vehicles'), { vin: VIN_A, year: 2019, make: 'Honda', model: 'Civic' })).status, 403);
-    const added = await approver.post(path('/vehicles'), { vin: VIN_A.toLowerCase(), year: '2019', make: 'Honda', model: 'Civic', price: '$15,688', mileage: '41,000 mi' });
-    assert.equal(added.status, 201);
-    assert.deepEqual([added.data.vehicle.vin, added.data.vehicle.price, added.data.vehicle.mileage, added.data.vehicle.source], [VIN_A, 15688, 41000, 'form']);
-    assert.equal((await approver.post(path('/vehicles'), { vin: VIN_A, year: 2019, make: 'Honda', model: 'Civic' })).status, 409);
-    assert.equal((await viewer.get(path('/vehicles'))).data.vehicles.length, 1);
-    assert.equal((await other.get(path('/vehicles'))).status, 404, 'another dealer cannot see it');
-    assert.equal((await other.get(path(`/vehicles/${added.data.vehicle.id}`))).status, 404);
+  test('the website is read live, held 15 minutes, and nothing is saved', async () => {
+    const r = await viewer.get(path('/website-cars'));
+    assert.equal(r.status, 200);
+    assert.equal(r.data.status, 'ok');
+    assert.deepEqual(r.data.cars.map((c) => [c.vin, c.price, c.make, c.photos.length, c.order_status]), [[VIN_B, 21000, 'HONDA', 2, null], [VIN_C, 15688, 'HONDA', 2, null]],
+      'site order kept; a VIN listed twice is read once');
+    assert.equal(r.data.errors.length, 1);
+    assert.match(r.data.errors[0], /no VIN/);
+    const reads = site.fetched.length;
+    await viewer.get(path('/website-cars'));
+    assert.equal(site.fetched.length, reads, 'the second visit uses the held read');
+    await viewer.get(path('/website-cars?fresh=1'));
+    assert.ok(site.fetched.length > reads, 'Refresh reads the site again');
+    const [[{ n }]] = await pool.query('SELECT COUNT(*) AS n FROM vehicles');
+    assert.equal(Number(n), 0, 'no car is stored before it is ordered');
+    assert.equal((await other.get(path('/website-cars'))).status, 404);
   });
 
-  test('VIN lookup fills the form from the (faked) NHTSA service', async () => {
-    const r = await approver.get(path(`/vin/${VIN_B}`));
-    assert.deepEqual(r.data.vehicle, { year: 2019, make: 'HONDA', model: 'Civic', trim: 'EX', drivetrain: 'FWD' });
-    assert.equal((await viewer.get(path(`/vin/${VIN_B}`))).status, 403);
+  test('sites that cannot be read say why', async () => {
+    const add = async (slug, website) => (await staff.post('/api/dealers', { name: slug, slug, website })).data.dealer.id;
+    const blocked = (await staff.get(`/api/dealers/${await add('golden', 'https://blocked.example')}/website-cars`)).data;
+    assert.equal(blocked.status, 'blocked');
+    assert.equal(blocked.message, "Your website blocks automatic reading. Add your cars by hand, or contact eShield and we'll import them for you.");
+    const loop = (await staff.get(`/api/dealers/${await add('loop', 'loop.example')}/website-cars`)).data;
+    assert.equal(loop.status, 'failed');
+    assert.match(loop.message, /https:\/\/loop\.example: it keeps redirecting/);
+    assert.equal((await staff.get(`/api/dealers/${await add('bare', 'bare.example')}/website-cars`)).data.status, 'blocked', 'tried www.bare.example');
+    assert.equal((await staff.get(`/api/dealers/${otherDealerId}/website-cars`)).data.status, 'none', 'no website saved');
   });
 
-  test('photos: JPEG only, thumbnails, order and delete', async () => {
-    const car = (await approver.get(path('/vehicles'))).data.vehicles[0];
-    const base = path(`/vehicles/${car.id}/photos`);
-    assert.equal((await approver.upload(base, Buffer.from('not a jpeg'))).status, 415);
-    assert.equal((await approver.upload(base, Buffer.from('GIF89a'), 'image/gif')).status, 415, 'only JPEG bodies');
-    assert.equal((await viewer.upload(base, jpeg())).status, 403);
-    const ids = [];
-    for (const fill of [1, 2, 3]) {
-      const r = await approver.upload(base, jpeg(300, fill));
-      assert.equal(r.status, 201);
-      ids.push(r.data.photo_id);
-      assert.equal((await approver.upload(`${base}/${r.data.photo_id}/thumb`, jpeg(50, fill + 10))).status, 200);
-    }
-    const full = await viewer.bytes(`${base}/${ids[1]}`);
-    assert.equal(full.status, 200);
-    assert.deepEqual(full.bytes, jpeg(300, 2));
-    assert.deepEqual((await viewer.bytes(`${base}/${ids[1]}?size=thumb`)).bytes, jpeg(50, 12));
-    assert.equal((await approver.put(`${base}/order`, { ids: [ids[2], ids[0]] })).status, 400, 'every photo once');
-    const reordered = await approver.put(`${base}/order`, { ids: [ids[2], ids[0], ids[1]] });
-    assert.deepEqual(reordered.data.vehicle.photos.map((p) => p.id), [ids[2], ids[0], ids[1]]);
-    assert.equal((await approver.del(`${base}/${ids[1]}`)).status, 200);
-    assert.equal((await viewer.get(path(`/vehicles/${car.id}`))).data.vehicle.photos.length, 2);
-    assert.equal((await approver.get(path('/vehicles'))).data.vehicles[0].photo.id, ids[2], 'the first photo shows in the list');
+  test('VIN lookup (owners and admins, who order)', async () => {
+    assert.deepEqual((await owner.get(path(`/vin/${VIN_A}`))).data.vehicle, { year: 2019, make: 'HONDA', model: 'Civic', trim: 'EX', drivetrain: 'FWD' });
+    assert.equal((await approver.get(path(`/vin/${VIN_A}`))).status, 403);
   });
 
-  test('orders: owners order, the car is frozen, staff release, the worker opens it', async () => {
-    const car = (await owner.get(path('/vehicles'))).data.vehicles[0];
-    const body = { vehicle_id: car.id, product: 'slideshow', length_s: 60, notes: 'Mention the new tyres' };
+  test('uploads: JPEG only, owners and admins, thumbnails, delete before ordering', async () => {
+    assert.equal((await owner.upload(path('/uploads'), Buffer.from('not a jpeg'))).status, 415);
+    assert.equal((await owner.upload(path('/uploads'), Buffer.from('GIF89a'), 'image/gif')).status, 415);
+    assert.equal((await approver.upload(path('/uploads'), jpeg())).status, 403);
+    const r = await owner.upload(path('/uploads'), jpeg(300, 2));
+    assert.equal(r.status, 201);
+    const id = r.data.photo_id;
+    assert.equal((await owner.upload(path(`/uploads/${id}/thumb`), jpeg(50, 12))).status, 200);
+    assert.deepEqual((await viewer.bytes(path(`/photos/${id}`))).bytes, jpeg(300, 2));
+    assert.deepEqual((await viewer.bytes(path(`/photos/${id}?size=thumb`))).bytes, jpeg(50, 12));
+    assert.equal((await other.bytes(path(`/photos/${id}`))).status, 404);
+    assert.equal((await owner.del(path(`/uploads/${id}`))).status, 200);
+    assert.equal((await viewer.bytes(path(`/photos/${id}`))).status, 404);
+  });
+
+  test('ordering stores only the ordered car; ordering again updates it; staff release; the worker opens it', async () => {
+    const webCar = (await owner.get(path('/website-cars'))).data.cars[0];
+    const up = (await owner.upload(path('/uploads'), jpeg(300, 5))).data.photo_id;
+    await owner.upload(path(`/uploads/${up}/thumb`), jpeg(50, 15));
+    const body = { car: { ...webCar, price: 19995 }, photos: [{ url: webCar.photos[0] }, { upload_id: up }], source: 'website', product: 'slideshow', length_s: 60, notes: 'Mention the new tyres' };
+
     assert.equal((await approver.post(path('/orders'), body)).status, 403, 'approvers do not order');
+    assert.equal((await owner.post(path('/orders'), { ...body, photos: [] })).status, 400, 'a photo is needed');
+    assert.equal((await owner.post(path('/orders'), { ...body, car: { ...body.car, vin: 'BAD' } })).status, 400);
     assert.equal((await owner.post(path('/orders'), { ...body, product: 'ai_video' })).status, 400, 'AI videos are 15 or 30 s');
-    const placed = await owner.post(path('/orders'), body);
-    assert.equal(placed.status, 201);
-    const order = placed.data.order;
-    assert.deepEqual([order.status, order.vehicle.vin, order.vehicle.price, order.vehicle.photos.length], ['awaiting_payment', VIN_A, 15688, 2]);
+    const otherUpload = (await other.upload(`/api/dealers/${otherDealerId}/uploads`, jpeg())).data.photo_id;
+    assert.equal((await owner.post(path('/orders'), { ...body, photos: [{ upload_id: otherUpload }] })).status, 400, 'another dealer’s upload');
 
-    // Editing the car later does not change the order.
-    await approver.patch(path(`/vehicles/${car.id}`), { price: 14688 });
-    assert.equal((await owner.get(path(`/orders/${order.id}`))).data.order.vehicle.price, 15688);
-    assert.equal((await owner.get(path('/vehicles'))).data.vehicles[0].order_status, 'awaiting_payment');
+    const order = (await owner.post(path('/orders'), body)).data.order;
+    assert.deepEqual([order.status, order.vehicle.vin, order.vehicle.price, order.vehicle.photos.length], ['awaiting_payment', VIN_B, 19995, 2]);
+    const cars = (await viewer.get(path('/vehicles'))).data.vehicles;
+    assert.deepEqual(cars.map((v) => [v.vin, v.price, v.source, v.photo_count, v.order_status]), [[VIN_B, 19995, 'website', 2, 'awaiting_payment']], 'only the ordered car');
+    assert.equal(cars[0].photo.url, webCar.photos[0], 'website photos stay links');
+    assert.equal((await viewer.get(path('/website-cars'))).data.cars.find((c) => c.vin === VIN_B).order_status, 'awaiting_payment');
+
+    // Ordering again with other details and without the upload: the car changes, the first order keeps its copy.
+    const again = (await owner.post(path('/orders'), { ...body, car: { ...webCar, price: 18995 }, photos: [{ url: webCar.photos[1] }], product: 'ai_video', length_s: 30 })).data.order;
+    assert.equal((await viewer.get(path('/vehicles'))).data.vehicles[0].price, 18995);
+    assert.equal((await owner.get(path(`/orders/${order.id}`))).data.order.vehicle.price, 19995);
+    assert.equal((await viewer.bytes(path(`/photos/${up}`))).status, 404, 'the upload it no longer uses is deleted');
+    assert.equal((await owner.post(path(`/orders/${again.id}/cancel`))).data.order.status, 'cancelled');
+
+    // A car added by hand, with its own upload.
+    const hand = (await owner.upload(path('/uploads'), jpeg(300, 7))).data.photo_id;
+    await owner.upload(path(`/uploads/${hand}/thumb`), jpeg(50, 17));
+    const third = (await owner.post(path('/orders'), { car: { vin: VIN_A.toLowerCase(), year: '2018', make: 'Toyota', model: 'Camry', mileage: '52,000 mi' }, photos: [{ upload_id: hand }], source: 'form', product: 'ai_video', length_s: 15 })).data.order;
+    assert.deepEqual([third.vehicle.vin, third.vehicle.mileage], [VIN_A, 52000]);
 
     // Only staff release (stands in for payment); the worker sees paid orders only.
-    assert.equal((await owner.post(`/api/staff/orders/${order.id}/release`)).status, 403);
+    assert.equal((await owner.post(`/api/staff/orders/${third.id}/release`)).status, 403);
     assert.deepEqual(await worker.orders(), []);
-    assert.equal((await staff.post(`/api/staff/orders/${order.id}/release`)).data.order.status, 'paid');
-    assert.equal((await staff.post(`/api/staff/orders/${order.id}/release`)).status, 409, 'released once');
-    assert.equal((await owner.post(path(`/orders/${order.id}/cancel`))).status, 409, 'customers cannot cancel a paid order');
-    const queue = await worker.orders();
-    assert.deepEqual(queue.map((o) => [o.id, o.status, o.dealer_name]), [[order.id, 'paid', 'eLease Returns']]);
-    assert.ok((await staff.get('/api/staff/orders?status=paid')).data.orders.some((o) => o.id === order.id));
-    assert.equal((await owner.get('/api/staff/orders')).status, 403);
+    assert.equal((await staff.post(`/api/staff/orders/${third.id}/release`)).data.order.status, 'paid');
+    assert.equal((await staff.post(`/api/staff/orders/${third.id}/release`)).status, 409, 'released once');
+    assert.equal((await owner.post(path(`/orders/${third.id}/cancel`))).status, 409, 'customers cannot cancel a paid order');
+    assert.deepEqual((await worker.orders()).map((o) => [o.id, o.status, o.dealer_name]), [[third.id, 'paid', 'eLease Returns']]);
 
-    // The worker fetches the order and its uploaded photos, claims it, then reports the photos copied.
-    const detail = await worker.order(order.id);
-    assert.equal(detail.photos.length, 2);
-    assert.ok(detail.photos.every((p) => p.path));
-    const bytes = await worker.orderPhoto(order.id, detail.photos[0].id);
-    assert.equal(bytes[0], 0xff);
-    const claimed = await worker.claimOrder(order.id, 'elease/S1');
-    assert.deepEqual([claimed.status, claimed.claimed_by, claimed.studio_ref], ['in_progress', WORKER_ID, 'elease/S1']);
-    assert.equal((await worker.claimOrder(order.id, 'elease/S1')).status, 'in_progress', 'opening again is fine');
-    const before = readdirSync(app.config.uploadDir).length;
-    await worker.photosCopied(order.id, detail.photos.map((p) => p.id));
-    assert.equal(readdirSync(app.config.uploadDir).length, before - 2, 'full uploads deleted, thumbnails kept');
-    assert.equal((await worker.order(order.id)).photos.filter((p) => p.path).length, 0);
-    await assert.rejects(worker.orderPhoto(order.id, detail.photos[0].id), /404/);
-    const thumb = await owner.bytes(path(`/vehicles/${car.id}/photos/${detail.photos[0].id}`));
-    assert.equal(thumb.status, 200, 'the portal still shows the thumbnail');
+    const detail = await worker.order(third.id);
+    assert.deepEqual(detail.photos.map((p) => Boolean(p.path)), [true]);
+    assert.deepEqual(await worker.orderPhoto(third.id, hand), jpeg(300, 7));
+    const claimed = await worker.claimOrder(third.id, 'elease/9101');
+    assert.deepEqual([claimed.status, claimed.claimed_by, claimed.studio_ref], ['in_progress', WORKER_ID, 'elease/9101']);
+    assert.equal((await worker.claimOrder(third.id, 'elease/9101')).status, 'in_progress', 'opening again is fine');
+    const files = readdirSync(app.config.uploadDir).length;
+    await worker.photosCopied(third.id, [hand]);
+    assert.equal(readdirSync(app.config.uploadDir).length, files - 1, 'the full upload is deleted, the thumbnail kept');
+    await assert.rejects(worker.orderPhoto(third.id, hand), /404/);
+    assert.equal((await owner.bytes(path(`/photos/${hand}`))).status, 200, 'the portal still shows the thumbnail');
 
-    // A customer cancels an order before payment; staff can cancel later ones.
-    const second = (await owner.post(path('/orders'), { ...body, product: 'ai_video', length_s: 30 })).data.order;
-    assert.equal((await owner.post(path(`/orders/${second.id}/cancel`))).data.order.status, 'cancelled');
-    assert.equal((await staff.post(path(`/orders/${order.id}/cancel`))).data.order.status, 'cancelled');
+    // The first order's website photos come from its own copy, even after the car was ordered with other photos.
+    await staff.post(`/api/staff/orders/${order.id}/release`);
+    assert.deepEqual((await worker.order(order.id)).photos.map((p) => p.url ?? 'upload'), [webCar.photos[0]]);
+    assert.equal((await staff.post(path(`/orders/${order.id}/cancel`))).data.order.status, 'cancelled', 'staff cancel paid orders');
     assert.equal((await other.get(path(`/orders/${order.id}`))).status, 404);
   });
 
-  test('a car without photos cannot be ordered', async () => {
-    const car = (await approver.post(path('/vehicles'), { vin: VIN_E, year: 2018, make: 'Toyota', model: 'Camry' })).data.vehicle;
-    assert.equal((await owner.post(path('/orders'), { vehicle_id: car.id, product: 'slideshow', length_s: 30 })).status, 400);
-    assert.equal((await approver.del(path(`/vehicles/${car.id}`))).status, 200);
-  });
-
-  test('website pull: batches, customer edits kept, cars gone from the site marked, never deleted', async () => {
-    site.cars = { 1: [VIN_B, { price: 21000 }], 2: [VIN_C, {}], 3: [VIN_D, {}], 4: ['NOVIN', {}], 5: [VIN_B, { price: 1 }] };
-    assert.equal((await viewer.post(path('/pulls'))).status, 403);
-    let pull = (await approver.post(path('/pulls'))).data.pull;
-    assert.deepEqual([pull.status, pull.total, pull.done], ['running', 5, 0]);
-    assert.equal((await approver.post(path('/pulls'))).data.pull.id, pull.id, 'one pull at a time');
-    pull = (await approver.post(path(`/pulls/${pull.id}/continue`))).data.pull;
-    assert.deepEqual([pull.status, pull.done], ['running', 4]);
-    pull = (await approver.post(path(`/pulls/${pull.id}/continue`))).data.pull;
-    assert.deepEqual([pull.status, pull.done, pull.added, pull.errors.length], ['done', 5, 3, 1]);
-    assert.match(pull.errors[0], /no VIN/);
-    let list = (await viewer.get(path('/vehicles'))).data.vehicles;
-    const b = list.find((v) => v.vin === VIN_B);
-    assert.deepEqual([b.source, b.price, b.make, b.photo_count], ['website', 21000, 'HONDA', 2], 'a VIN listed twice is read once');
-    assert.equal((await viewer.get(path('/pulls/latest'))).data.pull.id, pull.id);
-
-    // The customer changes the price of B; the next pull updates its miles but keeps their price; D left the site.
-    await approver.patch(path(`/vehicles/${b.id}`), { price: 19995 });
-    site.cars = { 1: [VIN_B, { price: 21000, miles: '42,500' }], 2: [VIN_C, {}] };
-    pull = (await approver.post(path('/pulls'))).data.pull;
-    pull = (await approver.post(path(`/pulls/${pull.id}/continue`))).data.pull;
-    assert.deepEqual([pull.status, pull.added, pull.gone], ['done', 0, 1]);
-    list = (await viewer.get(path('/vehicles'))).data.vehicles;
-    const b2 = list.find((v) => v.vin === VIN_B), d = list.find((v) => v.vin === VIN_D);
-    assert.deepEqual([b2.price, b2.mileage], [19995, 42500]);
-    assert.ok(d.missing_since, 'not on your website anymore');
-    assert.ok(!list.find((v) => v.vin === VIN_A).missing_since, 'a car typed in by the customer is never marked');
-
-    // A car the customer removed stays removed when the site still lists it.
-    await approver.del(path(`/vehicles/${b2.id}`));
-    pull = (await approver.post(path('/pulls'))).data.pull;
-    await approver.post(path(`/pulls/${pull.id}/continue`));
-    assert.ok(!(await viewer.get(path('/vehicles'))).data.vehicles.some((v) => v.vin === VIN_B));
-  });
-
-  test('a website that blocks us, or that we cannot read yet, asks the customer to contact eShield', async () => {
-    const blockedDealer = (await staff.post('/api/dealers', { name: 'Golden Auto', slug: 'golden-auto', website: 'https://blocked.example' })).data.dealer.id;
-    const realFetch = site.fetch;
-    site.fetch = async (url) => (url.startsWith('https://blocked.example') ? { code: 403, body: '<title>Just a moment...</title> cf-chl', url, headers: '' } : realFetch(url));
-    const pull = (await staff.post(`/api/dealers/${blockedDealer}/pulls`)).data.pull;
-    site.fetch = realFetch;
-    assert.equal(pull.status, 'blocked');
-    assert.equal(pull.message, "Your website blocks automatic reading. Contact eShield and we'll import your cars for you.");
-    assert.equal((await staff.post(`/api/dealers/${otherDealerId}/pulls`)).status, 400, 'no website saved');
-
-    // A site that does not answer says why; a bare address that fails is tried with www. (as mygoldenauto.net needs).
-    const loop = (await staff.post('/api/dealers', { name: 'Loop Cars', slug: 'loop', website: 'loop.example' })).data.dealer.id;
-    const bare = (await staff.post('/api/dealers', { name: 'Bare Cars', slug: 'bare', website: 'bare.example' })).data.dealer.id;
-    site.fetch = async (url) => {
-      if (url.startsWith('https://www.bare.example')) return { code: 403, body: 'cf-chl', url, headers: '' };
-      if (url.includes('.example') && !url.startsWith(SITE)) return { code: 0, body: '', url, headers: '', error: 'it keeps redirecting (a redirect loop)' };
-      return realFetch(url);
-    };
-    const failed = (await staff.post(`/api/dealers/${loop}/pulls`)).data.pull;
-    const viaWww = (await staff.post(`/api/dealers/${bare}/pulls`)).data.pull;
-    site.fetch = realFetch;
-    assert.equal(failed.status, 'failed');
-    assert.match(failed.message, /https:\/\/loop\.example: it keeps redirecting/);
-    assert.equal(viaWww.status, 'blocked', 'www.bare.example answered (and blocks us)');
-  });
-
-  test('staff import a browser snapshot for a site that blocks us', async () => {
-    const snapshot = [
-      { stock: '0931', vin: VIN_A, year: 2013, make: 'SUBARU', model: 'XV CROSSTREK', trim: '2.0i Premium', mileage: 98000, prices: [9995, 10990], description: 'One owner',
-        photo_urls: ['https://imagescf.dealercenter.net/640/480/a.jpg'], page_url: 'https://www.mygoldenauto.net/inventory/subaru/xv/0931/' },
-      { stock: '0932', list_only: true },
-      { stock: '0933', year: 2015, make: 'RAM', model: '1500' },
-    ];
-    assert.equal((await owner.post(`/api/staff/dealers/${otherDealerId}/snapshot`, { snapshot })).status, 403);
-    const r = await staff.post(`/api/staff/dealers/${otherDealerId}/snapshot`, { snapshot });
-    assert.deepEqual([r.data.added, r.data.skipped.length], [1, 2]);
-    const [car] = (await other.get(`/api/dealers/${otherDealerId}/vehicles`)).data.vehicles;
-    assert.deepEqual([car.vin, car.price, car.source, car.photo_count], [VIN_A, 10990, 'dms', 1]);
+  test('the static customer site may call the API with its sign-in; other sites may not', async () => {
+    const pre = await fetch(app.url + path('/vehicles'), { method: 'OPTIONS', headers: { Origin: STATIC_SITE, 'Access-Control-Request-Method': 'POST' } });
+    assert.equal(pre.status, 204);
+    assert.equal(pre.headers.get('access-control-allow-origin'), STATIC_SITE);
+    assert.equal(pre.headers.get('access-control-allow-credentials'), 'true');
+    assert.match(pre.headers.get('access-control-allow-headers'), /X-CSRF-Token/);
+    const stranger = await fetch(app.url + path('/vehicles'), { headers: { Origin: 'https://evil.example' } });
+    assert.equal(stranger.headers.get('access-control-allow-origin'), null);
+    const workerApi = await fetch(app.url + '/api/worker/orders', { method: 'OPTIONS', headers: { Origin: STATIC_SITE } });
+    assert.equal(workerApi.headers.get('access-control-allow-origin'), null, 'never the worker API');
   });
 });

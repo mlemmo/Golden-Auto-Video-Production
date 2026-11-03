@@ -4,9 +4,10 @@
 import { Router } from 'express';
 import { audit } from '../lib/audit.js';
 import { accessChecks } from '../lib/access.js';
+import { removeFiles } from '../lib/photos.js';
 import { getOrder, listOrders, moveOrder, orderView, placeOrder, PRODUCTS, statusFilter } from '../lib/orders.js';
 
-export function orderRoutes({ pool }) {
+export function orderRoutes({ pool, config }) {
   const r = Router();
   const { dealerAccess } = accessChecks(pool);
 
@@ -22,7 +23,8 @@ export function orderRoutes({ pool }) {
 
   r.post('/:dealerId/orders', async (req, res) => {
     const { user, dealer } = await dealerAccess(req, 'admin');
-    const id = await placeOrder(pool, dealer, user, req.body);
+    const { id, removed } = await placeOrder(pool, dealer, user, req.body);
+    removeFiles(config.uploadDir, removed);
     const order = await getOrder(pool, id, dealer.id);
     await audit(pool, { dealerId: dealer.id, userId: user.id, action: 'order_place', targetType: 'order', targetId: id, details: { product: order.product, length_s: order.length_s, vehicle_id: order.vehicle_id }, ip: req.ip });
     res.status(201).json({ order: orderView(order) });

@@ -1,9 +1,9 @@
-// Video orders (approved plan, Milestone 2). An order freezes the car as it was ordered; the video is made from that
-// copy. Status: awaiting_payment → paid → in_progress → ready_for_review → approved / rejected, or cancelled.
-// Until Stripe (Milestone 3), eShield staff release an order by hand (paid_via 'staff').
+// Video orders (approved plan, Milestone 2). Ordering saves the car as one of the dealer's cars with videos and
+// freezes it into the order; the video is made from that copy. Status: awaiting_payment → paid → in_progress →
+// ready_for_review → approved / rejected, or cancelled. Until Stripe (Milestone 3), eShield staff release an order by hand (paid_via 'staff').
 import { json, tx } from './db.js';
 import { HttpError } from './errors.js';
-import { getVehicle, vehicleSnapshot } from './vehicles.js';
+import { saveOrderedCar, vehiclePhotos, vehicleSnapshot } from './vehicles.js';
 
 export const PRODUCTS = {
   ai_video: { name: 'AI spokesperson video', lengths: [15, 30] },
@@ -20,19 +20,27 @@ export function orderView(o) {
   return { ...rest, product_name: PRODUCTS[o.product]?.name ?? o.product, vehicle: parsed(vehicle_snapshot_json) };
 }
 
-export async function placeOrder(db, dealer, user, input) {
+/**
+ * Places an order: the car as the customer filled it in (from their website or by hand) and its photos are saved as
+ * one of their cars with videos (lib/vehicles.js), then frozen into the order. input: { car, photos, source, product,
+ * length_s, notes }. Returns { id, removed } (removed: uploads the car no longer uses; the caller deletes their files).
+ */
+export async function placeOrder(pool, dealer, user, input) {
   const product = String(input?.product ?? '');
   const length = Number(input?.length_s);
   if (!PRODUCTS[product]) throw new HttpError(400, 'Choose a video type.');
   if (!PRODUCTS[product].lengths.includes(length)) throw new HttpError(400, `Choose a length: ${PRODUCTS[product].lengths.join(', ')} seconds.`);
   const notes = String(input?.notes ?? '').trim();
   if (notes.length > MAX_NOTES) throw new HttpError(400, `Notes can be up to ${MAX_NOTES} characters.`);
-  const vehicle = await getVehicle(db, dealer.id, input?.vehicle_id);
-  if (!vehicle.photos.length) throw new HttpError(400, 'Add at least one photo of this car before ordering a video.');
-  const [r] = await db.query(
-    'INSERT INTO orders (dealer_id, vehicle_id, product, length_s, notes, vehicle_snapshot_json, ordered_by) VALUES (?,?,?,?,?,?,?)',
-    [dealer.id, vehicle.id, product, length, notes || null, json(vehicleSnapshot(vehicle)), user.id]);
-  return r.insertId;
+  const source = input?.source === 'website' ? 'website' : 'form';
+  return tx(pool, async (conn) => {
+    const saved = await saveOrderedCar(conn, dealer.id, input?.car, input?.photos, source);
+    const vehicle = { ...(await conn.query('SELECT * FROM vehicles WHERE id = ?', [saved.id]))[0][0], photos: await vehiclePhotos(conn, saved.id) };
+    const [r] = await conn.query(
+      'INSERT INTO orders (dealer_id, vehicle_id, product, length_s, notes, vehicle_snapshot_json, ordered_by) VALUES (?,?,?,?,?,?,?)',
+      [dealer.id, saved.id, product, length, notes || null, json(vehicleSnapshot(vehicle)), user.id]);
+    return { id: r.insertId, removed: saved.removed };
+  });
 }
 
 export async function getOrder(db, id, dealerId = null) {

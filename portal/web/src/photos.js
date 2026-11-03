@@ -15,15 +15,15 @@ async function jpeg(bitmap, longest, quality) {
   return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('This photo could not be read.'))), 'image/jpeg', quality));
 }
 
-/** Uploads one photo file to a car: the shrunk photo, then its thumbnail. */
-export async function uploadPhoto(dealerId, vehicleId, file) {
+/** Uploads one photo for the order being filled in: the shrunk photo, then its thumbnail. Returns its id. */
+export async function uploadPhoto(dealerId, file) {
   let bitmap;
   try { bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' }); }
   catch { throw new Error(`${file.name} is not a photo this browser can read (use JPEG or PNG).`); }
   try {
     const full = await jpeg(bitmap, 2400, 0.88);
     const thumb = await jpeg(bitmap, 480, 0.8);
-    const base = `/api/dealers/${dealerId}/vehicles/${vehicleId}/photos`;
+    const base = `/api/dealers/${dealerId}/uploads`;
     const { photo_id: id } = await upload(base, full);
     await upload(`${base}/${id}/thumb`, thumb);
     return id;

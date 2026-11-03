@@ -4,7 +4,6 @@ import express, { Router } from 'express';
 import { HttpError } from '../lib/errors.js';
 import { verifyWorkerRequest } from '../lib/hmac.js';
 import { leaseJobs, heartbeat, completeJob, failJob } from '../lib/jobs.js';
-import { syncInventory } from '../lib/inventory.js';
 import { getOrder, listOrders, moveOrder, orderView, statusFilter } from '../lib/orders.js';
 import { photoPath, photosCopied } from '../lib/photos.js';
 
@@ -56,13 +55,6 @@ export function workerRoutes({ pool, config }) {
     res.json({ ok: true });
   });
 
-  r.post('/inventory/sync', async (req, res) => {
-    const dealerId = Number(req.body?.dealer_id);
-    const [rows] = Number.isSafeInteger(dealerId) ? await pool.query('SELECT id FROM dealers WHERE id = ?', [dealerId]) : [[]];
-    if (!rows.length) throw new HttpError(404, 'Dealer not found.');
-    res.json(await syncInventory(pool, dealerId, req.body?.vehicles, { complete: req.body?.complete === true }));
-  });
-
   // ---- Orders, for the "Customer orders" section of the video app (Milestone 2) ----
 
   const orderId = (req) => {
@@ -76,11 +68,14 @@ export function workerRoutes({ pool, config }) {
   });
 
   /** The order with each photo as the worker gets it: a website link, or a portal path while the upload is here. */
+  // Website photos come from the order's own copy (the car may have been ordered again with other photos since);
+  // uploads from the database, while the portal still has them.
   const orderPhotos = async (order) => {
-    const ids = (orderView(order).vehicle.photos ?? []).map((p) => p.id);
-    const [rows] = ids.length ? await pool.query('SELECT * FROM vehicle_photos WHERE id IN (?)', [ids]) : [[]];
+    const list = orderView(order).vehicle.photos ?? [];
+    const ids = list.filter((p) => !p.url).map((p) => p.id);
+    const [rows] = ids.length ? await pool.query('SELECT * FROM vehicle_photos WHERE id IN (?) AND dealer_id = ?', [ids, order.dealer_id]) : [[]];
     const byId = new Map(rows.map((p) => [p.id, p]));
-    return ids.map((id) => byId.get(id)).filter(Boolean);
+    return list.map((p) => (p.url ? { id: p.id, url: p.url } : byId.get(p.id))).filter(Boolean);
   };
 
   r.get('/orders/:id', async (req, res) => {

@@ -4,7 +4,6 @@
 //   Step 1  on DealerCenter's Active Inventory report (it presses Run itself):  await step1DealerCenterList()
 //   Step 2  on https://www.mygoldenauto.net/ (same tab, page loaded):           await step2WebsiteDetails()
 //   Step 3  on the staging (or production) dashboard, signed in as an admin:     await step3Import()
-//   or, for a LotSpotlight portal dealer, on the portal signed in as eShield staff: await step3Portal(<dealer id>)
 //
 // DealerCenter is the authority (user, 2026-10-24): which cars are in stock ("In Inventory" only; In Recon and
 // Inbound are not for sale yet) and every detail — year, make, model, trim, drive, colour, mileage, price (vehicle
@@ -114,18 +113,3 @@ async function step3Import() {
   return { status: r.status, sha: await sha12(json), answer: await r.json() };
 }
 
-/**
- * Step 3 for the LotSpotlight portal (eShield staff, on the portal in the same tab): the snapshot becomes that dealer's
- * cars on the portal (dealer id: the number in the portal's address bar or its dealer list). Cars without a VIN are
- * listed as skipped; cars no longer in the snapshot are marked sold.
- */
-async function step3Portal(dealerId) {
-  const json = window.name;
-  const snapshot = JSON.parse(json || 'null');
-  if (!Array.isArray(snapshot) || !snapshot.length) throw new Error('Run steps 1 and 2 in this tab first.');
-  const me = await (await fetch('/api/auth/me', { credentials: 'same-origin' })).json();
-  if (!me.user?.is_staff) throw new Error('Sign in to the portal as eShield staff first.');
-  const r = await fetch(`/api/staff/dealers/${Number(dealerId)}/snapshot`, { method: 'POST', credentials: 'same-origin',
-    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': me.csrf }, body: JSON.stringify({ snapshot }) });
-  return { status: r.status, sha: await sha12(json), answer: await r.json() };
-}
