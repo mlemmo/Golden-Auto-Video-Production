@@ -118,13 +118,13 @@ done
 echo "Portal API running: $service on 127.0.0.1:$port."
 
 # ---- Certificates and Nginx sites ----
+no_cert=()
 cert_for() {
   local host="$1"
   [ -f "/etc/letsencrypt/live/$host/fullchain.pem" ] && return 0
   certbot certonly --non-interactive --agree-tos --keep-until-expiring --dns-cloudflare \
-    --dns-cloudflare-credentials /root/.secrets/cloudflare.ini --dns-cloudflare-propagation-seconds 60 -d "$host" >/dev/null || {
-    echo "No certificate for $host. The Cloudflare token in /root/.secrets/cloudflare.ini may only cover mygoldenauto.net:" >&2
-    echo "give it DNS edit rights on lotspotlight.com too, then run this again." >&2
+    --dns-cloudflare-credentials /root/.secrets/cloudflare.ini --dns-cloudflare-propagation-seconds 60 -d "$host" >/dev/null 2>&1 || {
+    no_cert+=("$host")
     return 1
   }
 }
@@ -205,7 +205,15 @@ if [ ${#changed[@]} -gt 0 ]; then
   systemctl reload nginx.service
 fi
 systemctl restart "$service.service"
-[ -n "$api_host" ] && echo "API:    https://$api_host:4343"
-[ -n "$pages_host" ] && echo "Pages:  https://$pages_host:4343"
-[ -n "$studio_host" ] && echo "Studio: https://$studio_host:4343"
+for name in "${changed[@]}"; do
+  host="$(sed -n 's/^\s*server_name \(.*\);/\1/p' "/etc/nginx/sites-available/$name" | head -1)"
+  echo "Online: https://$host:4343"
+done
+if [ ${#no_cert[@]} -gt 0 ]; then
+  echo "Not set up (no certificate): ${no_cert[*]}" >&2
+  echo "Certbot could not use Cloudflare for these names. The token in /root/.secrets/cloudflare.ini probably only covers" >&2
+  echo "mygoldenauto.net: give it Zone · DNS · Edit (and Zone · Zone · Read) on lotspotlight.com too, then run this again." >&2
+  echo "Details: /var/log/letsencrypt/letsencrypt.log" >&2
+  exit 1
+fi
 exit 0
