@@ -23,7 +23,7 @@ import { sessionStore, newSessionId, newCsrf, sameSecret, parseCookies, sessionC
 import { loginPage, dashboardPage, sharePage } from './lib/pages.js';
 import { recordActivity, usageReport } from './lib/activity.js';
 import { libraryVideos, libraryStills, stillDelete } from './lib/jobs.js';
-import { portalOrders, portalOrderOpen } from './lib/orders.js';
+import { portalOrders, portalOrderOpen, pushClientsSoon } from './lib/orders.js';
 import { signIn, userById, userCount, publicUser, allowedClients, usersList, userCreate, userUpdate, userDelete, passwordChange } from './lib/users.js';
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
@@ -179,6 +179,8 @@ async function runAction(name, req, res, cfg, store, session, https) {
     const sites = client === null ? {} : clientSpeechSites(client, dealer);
     let out = await withSpeechSites(sites, () => handler({ cfg, db, client, dealer, body, files, req, session, user }));
     if (TRACKED.has(name)) recordActivity(db, { user: user.email, client: client ?? '', action: name, detail: activityDetail(name, body, out) });
+    // A new or edited client: tell the LotSpotlight portal (in the background; nothing waits for it).
+    if (['client_add', 'client_details', 'client_analyze'].includes(name)) pushClientsSoon(db, cfg);
     // Accounts see only their own clients.
     if (name === 'clients') { const allowed = allowedClients(db, user); out = { ...out, items: out.items.filter((c) => allowed.includes(c.id)), current: client }; }
     send(res, 200, out, closeSession(store, session, https));
@@ -305,5 +307,9 @@ export const server = createServer(async (req, res) => {
 });
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  server.listen(PORT, HOST, () => console.log(`golden-auto-node listening on http://${HOST}:${PORT}`));
+  server.listen(PORT, HOST, () => {
+    console.log(`golden-auto-node listening on http://${HOST}:${PORT}`);
+    // The portal learns this studio's clients on every start (staff add them there with one click).
+    try { const cfg = loadConfig(); pushClientsSoon(openDb(cfg), cfg); } catch (e) { console.error('portal client sync: ' + e.message); }
+  });
 }

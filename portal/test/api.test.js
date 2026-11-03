@@ -2,7 +2,7 @@ import { describe, test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { NO_DB, freshDb, startApp, browser, WORKER_ID, WORKER_SECRET } from './helpers.js';
 import { createUser } from '../src/lib/users.js';
-import { signHeaders } from '../../node/src/lib/portal-client.js';
+import { signHeaders, portalClient } from '../../node/src/lib/portal-client.js';
 
 const PW = 'correct horse battery';
 
@@ -97,6 +97,29 @@ describe('portal API', { skip: NO_DB }, () => {
     assert.equal((await staff.patch(`/api/dealers/${dealerId}`, { name: 'Golden Auto Sales' })).data.dealer.name, 'Golden Auto Sales');
     assert.equal((await owner.get('/api/auth/me')).data.dealers[0].name, 'Golden Auto Sales');
     await staff.patch(`/api/dealers/${dealerId}`, { name: 'Golden Auto' });
+  });
+
+  test('the studio sends its dealers; staff add one with a click; links go back to the studio', async () => {
+    const client = portalClient({ api: `${app.url}/api/worker`, workerId: WORKER_ID, secret: WORKER_SECRET });
+    const studio = [
+      { id: 'golden-auto', name: 'Golden Auto', website: 'https://www.mygoldenauto.net', city: 'San Ramon', phone: null, car_count: 42 },
+      { id: 'elease-returns', name: 'eLease Returns', website: 'www.eleasereturns.com', city: 'San Ramon', car_count: 25 },
+      { id: 'bad id!', name: 'Skipped' },
+    ];
+    const first = await client.syncClients(studio);
+    assert.equal(first.links['golden-auto'], dealerId, 'the dealer typed in by hand with the same name is linked');
+    assert.equal(first.links['elease-returns'], undefined);
+    const staff = browser(app.url), owner = browser(app.url);
+    await staff.login('staff@eshield.test', PW); await owner.login('owner@golden.test', PW);
+    assert.equal((await owner.get('/api/staff/studio-clients')).status, 403);
+    const list = (await staff.get('/api/staff/studio-clients')).data.clients;
+    assert.deepEqual(list.map((c) => [c.client_id, Boolean(c.dealer_id)]), [['elease-returns', false], ['golden-auto', true]]);
+    const added = await staff.post('/api/staff/studio-clients/elease-returns/add');
+    assert.equal(added.status, 201);
+    assert.deepEqual([added.data.dealer.name, added.data.dealer.slug, added.data.dealer.website], ['eLease Returns', 'elease-returns', 'https://www.eleasereturns.com']);
+    assert.equal((await staff.post('/api/staff/studio-clients/elease-returns/add')).status, 409);
+    assert.equal((await client.syncClients(studio)).links['elease-returns'], added.data.dealer.id, 'the studio learns the link');
+    assert.equal((await client.syncClients(studio.slice(0, 1))).links['elease-returns'], undefined, 'a client the studio no longer has drops out');
   });
 
   test('a dealer you do not belong to looks like it does not exist', async () => {

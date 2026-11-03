@@ -6,7 +6,7 @@
 // details whenever the orders are listed or opened. Settings: config "portal": { "api", "worker_id", "worker_secret" }; without them the window says how to
 // connect and nothing is sent anywhere. Free: no paid API is called here.
 import { portalClient } from './portal-client.js';
-import { clientsLoad, clientInventoryKey, clientFetch, clientWebsite, clientFind, clientDetails, clientSaveDetails } from './clients.js';
+import { clientsLoad, clientInventory, clientInventoryKey, clientFetch, clientWebsite, clientFind, clientDetails, clientSaveDetails } from './clients.js';
 import { dcsStorePhotos } from './photos.js';
 import { dcPhotoId, dcPhotoUrl } from './dealercenter.js';
 import { state, save } from './db.js';
@@ -31,8 +31,36 @@ function orderRow(o, clients) {
   };
 }
 
+/**
+ * Sends this studio's clients to the portal, so eShield staff can add them there with one click; the answer says which
+ * portal dealer each client is linked to, saved here as portal_dealer_id. Sent when the studio starts, when a client is
+ * added or edited, and when the Orders window lists orders.
+ */
+export async function pushClientsToPortal(db, portal) {
+  const clients = clientsLoad(db).items.map((c) => {
+    const d = clientDetails(c);
+    let cars = null;
+    try { cars = (clientInventory(db, c.id).vehicles ?? []).filter((v) => v.active !== false).length; } catch { /* no inventory yet */ }
+    return { id: c.id, name: c.name, website: c.website || null, city: d.city || null, state: c.analysis?.dealer?.state ?? null,
+      phone: d.phone || c.analysis?.dealer?.telephone || null, car_count: cars, portal_dealer_id: c.portal_dealer_id ?? null };
+  });
+  const { links } = await portal.syncClients(clients);
+  const c = clientsLoad(db);
+  let changed = false;
+  for (const x of c.items) if (links?.[x.id] && x.portal_dealer_id !== links[x.id]) { x.portal_dealer_id = links[x.id]; changed = true; }
+  if (changed) save(db, 'clients', c);
+  return links ?? {};
+}
+
+/** pushClientsToPortal in the background (studio start, client changes): a failure is only logged. */
+export function pushClientsSoon(db, cfg, log = (m) => console.error(m)) {
+  const portal = portalFromConfig(cfg);
+  if (portal) pushClientsToPortal(db, portal).catch((e) => log('portal client sync: ' + e.message));
+}
+
 export async function portalOrders(db, cfg, portal = portalFromConfig(cfg)) {
   if (!portal) return { configured: false, orders: [] };
+  try { await pushClientsToPortal(db, portal); } catch { /* orders still list */ }
   const orders = await portal.orders();
   // Dealers edit their details on the portal: bring linked clients up to date while listing (a failure only skips it).
   for (const id of new Set(orders.map((o) => o.dealer_id))) {

@@ -6,6 +6,7 @@ import { verifyWorkerRequest } from '../lib/hmac.js';
 import { leaseJobs, heartbeat, completeJob, failJob } from '../lib/jobs.js';
 import { getOrder, listOrders, moveOrder, orderView, statusFilter } from '../lib/orders.js';
 import { photoPath, photosCopied } from '../lib/photos.js';
+import { syncStudioClients } from '../lib/studio.js';
 
 export function workerRoutes({ pool, config }) {
   const r = Router();
@@ -108,6 +109,11 @@ export function workerRoutes({ pool, config }) {
     const want = new Set((Array.isArray(req.body?.photo_ids) ? req.body.photo_ids : []).map(Number));
     await photosCopied(pool, config.uploadDir, (await orderPhotos(order)).filter((p) => want.has(p.id)));
     res.json({ ok: true });
+  });
+
+  // The studio's clients: saved for staff to add with one click; the answer says which dealer each is linked to.
+  r.post('/studio-clients', async (req, res) => {
+    res.json(await syncStudioClients(pool, req.body?.clients));
   });
 
   r.get('/dealers/:id/config', async (req, res) => {

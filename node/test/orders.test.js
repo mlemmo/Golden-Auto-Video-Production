@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openMemoryDb, state } from '../src/lib/db.js';
 import { clientsLoad, clientInventory, clientDetails, clientFind } from '../src/lib/clients.js';
-import { applyPortalDealer, portalDealerClient, portalFromConfig, portalOrderOpen, portalOrders } from '../src/lib/orders.js';
+import { applyPortalDealer, portalDealerClient, portalFromConfig, portalOrderOpen, portalOrders, pushClientsToPortal } from '../src/lib/orders.js';
 import { JPEG_1800x900, JPEG_1800x900_B } from './fixtures/images.js';
 
 const VIN = '1HGBH41JXMN109186';
@@ -27,6 +27,7 @@ function fakePortal(o = order(), dealer = DEALER) {
   return {
     calls,
     dealerConfig: async (id) => { calls.push(['dealer', id]); return { dealer }; },
+    syncClients: async (clients) => { calls.push(['sync', clients.length]); return { links: {} }; },
     orders: async () => [o],
     order: async (id) => { calls.push(['order', id]); return { order: o, photos: PHOTOS }; },
     orderPhoto: async (id, photoId) => { calls.push(['photo', id, photoId]); return Buffer.from(JPEG_1800x900_B, 'base64'); },
@@ -79,7 +80,7 @@ test('Open in studio copies only the ordered car and its photos, then claims the
   assert.deepEqual([car.source, car.StockNumber, car.Vin, car.Make, car.Model, car.price, car.portal_order, car.photos.length, car.active],
     ['portal', '0931', VIN, 'HONDA', 'CIVIC', 15688, 7, 2, true]);
   for (const url of car.photos) assert.ok(existsSync(join(cfg.asset_dir, url.split('/').pop())), url);
-  assert.deepEqual(portal.calls.filter((c) => !['order', 'dealer'].includes(c[0])), [['photo', 7, 2], ['claim', 7, 'golden-auto/0931'], ['copied', 7, [2]]]);
+  assert.deepEqual(portal.calls.filter((c) => !['order', 'dealer', 'sync'].includes(c[0])), [['photo', 7, 2], ['claim', 7, 'golden-auto/0931'], ['copied', 7, [2]]]);
   assert.match(r.message, /Dealer details updated/);
   assert.equal(clientDetails(clientFind(db, 'golden-auto')).phone, '925-555-0100');
   assert.ok(state(db, 'portal_photos')['2'], 'the uploaded photo is remembered');
@@ -117,4 +118,16 @@ test('listing orders brings linked dealers up to date', async () => {
   portalDealerClient(db, order());
   await portalOrders(db, {}, fakePortal(order(), { ...DEALER, city: 'Danville' }));
   assert.equal(clientDetails(clientFind(db, 'golden-auto')).city, 'Danville');
+});
+
+test('the studio sends its clients to the portal and keeps the links it answers with', async () => {
+  const db = openMemoryDb();
+  portalDealerClient(db, { dealer_id: 9, dealer_name: 'Bay Motors', dealer_website: 'https://www.baymotors.com' });
+  let sent = null;
+  const links = await pushClientsToPortal(db, { syncClients: async (clients) => { sent = clients; return { links: { 'golden-auto': 4, 'bay-motors': 9 } }; } });
+  assert.deepEqual(links, { 'golden-auto': 4, 'bay-motors': 9 });
+  const golden = sent.find((c) => c.id === 'golden-auto');
+  assert.deepEqual([golden.name, golden.website, golden.city, golden.car_count, golden.portal_dealer_id], ['Golden Auto', 'https://www.mygoldenauto.net', 'San Ramon', 0, null]);
+  assert.equal(sent.find((c) => c.id === 'bay-motors').portal_dealer_id, 9, 'a link made by opening an order is sent along');
+  assert.equal(clientFind(db, 'golden-auto').portal_dealer_id, 4);
 });

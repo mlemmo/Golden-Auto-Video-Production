@@ -45,6 +45,8 @@ export function portalClient({ api, workerId, secret, fetchFn = fetch }) {
     complete: (id, result) => call('POST', `/jobs/${id}/complete`, { result }),
     fail: (id, error, retryable = true) => call('POST', `/jobs/${id}/fail`, { error, retryable }),
     dealerConfig: (dealerId) => call('GET', `/dealers/${dealerId}/config`),
+    // The studio's clients, for staff to add on the portal; answers { links: { client id: portal dealer id } }.
+    syncClients: (clients) => call('POST', '/studio-clients', { clients }),
     // Customer orders (Milestone 2): paid and in-progress orders, one order with its photos, an uploaded photo's
     // bytes, opening it in the studio (claim), and telling the portal which uploads we now have.
     orders: async (statuses = ['paid', 'in_progress']) => (await call('GET', `/orders?status=${statuses.join(',')}`)).orders,

@@ -6,6 +6,7 @@ import { api } from './api.js';
 import { Cars } from './Cars.jsx';
 import { Orders, StaffOrders } from './Orders.jsx';
 import { DealerDetails } from './DealerDetails.jsx';
+import { StudioDealers } from './StudioDealers.jsx';
 
 const POLL_MS = 5000;
 const ROLE_NAMES = { staff: 'eShield staff', owner: 'Owner', admin: 'Admin', approver: 'Approver', viewer: 'Viewer' };
@@ -90,7 +91,7 @@ function AddDealer({ onAdded, onCancel }) {
   }
   return (
     <form className="card form" onSubmit={submit}>
-      <h2>Add a dealer</h2>
+      <h2>Add a new dealer</h2>
       <label>Dealer name<input value={name} maxLength={190} required autoFocus
         onChange={(e) => { setName(e.target.value); if (!slugEdited) setSlug(slugFrom(e.target.value)); }} /></label>
       <label>Short name<input value={slug} maxLength={80} required
@@ -164,7 +165,8 @@ export default function App() {
       </header>
       {me.user.is_staff && (adding || !dealer) ? (
         <>
-          {!dealer && <p className="muted">There are no dealers yet. Add the first one.</p>}
+          {!dealer && <p className="muted">There are no dealers on the portal yet. Add one from the video studio, or type a new one in.</p>}
+          <StudioDealers onAdded={dealerAdded} />
           <AddDealer onAdded={dealerAdded} onCancel={dealer ? () => setAdding(false) : null} />
         </>
       ) : !dealer ? <p className="card muted">Your account is not linked to a dealer yet. Ask your dealer's owner or eShield to add you.</p> : (

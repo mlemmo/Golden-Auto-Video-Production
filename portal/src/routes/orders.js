@@ -5,6 +5,7 @@ import { Router } from 'express';
 import { audit } from '../lib/audit.js';
 import { accessChecks } from '../lib/access.js';
 import { removeFiles } from '../lib/photos.js';
+import { addStudioClient, listStudioClients } from '../lib/studio.js';
 import { getOrder, listOrders, moveOrder, orderView, placeOrder, PRODUCTS, statusFilter } from '../lib/orders.js';
 
 export function orderRoutes({ pool, config }) {
@@ -60,6 +61,19 @@ export function staffRoutes({ pool }) {
   r.get('/orders/:orderId', async (req, res) => {
     staffOnly(req);
     res.json({ order: orderView(await getOrder(pool, req.params.orderId)) });
+  });
+
+  // The video studio's dealers, to add to the portal with one click.
+  r.get('/studio-clients', async (req, res) => {
+    staffOnly(req);
+    res.json({ clients: await listStudioClients(pool) });
+  });
+
+  r.post('/studio-clients/:clientId/add', async (req, res) => {
+    const user = staffOnly(req);
+    const dealer = await addStudioClient(pool, req.params.clientId);
+    await audit(pool, { dealerId: dealer.id, userId: user.id, action: 'dealer_create', targetType: 'dealer', targetId: dealer.id, details: { name: dealer.name, slug: dealer.slug, from_studio: req.params.clientId }, ip: req.ip });
+    res.status(201).json({ dealer });
   });
 
   // Stands in for payment until Stripe (Milestone 3).
