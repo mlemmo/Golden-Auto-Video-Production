@@ -69,7 +69,9 @@ export function createApp({ pool, config, publicDir = join(PORTAL_DIR, 'public')
   app.use('/api/staff', staffRoutes({ pool }));
   app.use('/api', (req) => { throw new HttpError(404, `No such API route: ${req.method} ${req.path}`); });
 
-  if (existsSync(publicDir)) {
+  // The pages are served here only when they share this address (local runs). When they have their own address
+  // (CORS_ORIGINS set, e.g. staging.lotspotlight.com), the API address answers the API only.
+  if (!(config.corsOrigins ?? []).length && existsSync(publicDir)) {
     app.use(express.static(publicDir, { index: 'index.html' }));
     // React handles its own pages: unknown GET paths get the app shell.
     app.use((req, res, next) => (req.method === 'GET' ? res.sendFile(join(publicDir, 'index.html')) : next()));
