@@ -116,7 +116,7 @@ export function workerRoutes({ pool, config }) {
   });
 
   r.get('/dealers/:id/config', async (req, res) => {
-    const [rows] = await pool.query('SELECT id, name, slug, website, timezone, status, spokesperson_id, voice_id, brand_json AS brand FROM dealers WHERE id = ?', [Number(req.params.id) || 0]);
+    const [rows] = await pool.query('SELECT id, name, slug, website, city, state, phone, timezone, status, spokesperson_id, voice_id, brand_json AS brand, updated_at FROM dealers WHERE id = ?', [Number(req.params.id) || 0]);
     if (!rows.length) throw new HttpError(404, 'Dealer not found.');
     res.json({ dealer: rows[0], disclaimer: 'Plus tax, title and fees. See dealer for details.' });
   });

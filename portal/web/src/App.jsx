@@ -5,14 +5,15 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from './api.js';
 import { Cars } from './Cars.jsx';
 import { Orders, StaffOrders } from './Orders.jsx';
+import { DealerDetails } from './DealerDetails.jsx';
 
 const POLL_MS = 5000;
 const ROLE_NAMES = { staff: 'eShield staff', owner: 'Owner', admin: 'Admin', approver: 'Approver', viewer: 'Viewer' };
 const canManage = (role) => ['staff', 'owner', 'admin'].includes(role);
-/** Tabs this person sees: everyone Cars and Orders; owners and admins People; eShield staff the worker check and every dealer's orders. */
+/** Tabs this person sees: everyone Cars and Orders; owners and admins People and Dealer details; eShield staff the worker check and every dealer's orders. */
 const tabsFor = (role, isStaff) => [
   ['cars', 'Cars'], ['orders', 'Orders'],
-  ...(canManage(role) ? [['people', 'People']] : []),
+  ...(canManage(role) ? [['people', 'People'], ['dealer', 'Dealer details']] : []),
   ...(isStaff ? [['jobs', 'Worker check'], ['all-orders', 'All dealers’ orders']] : []),
 ];
 const when = (t) => (t ? new Date(t).toLocaleString() : '');
@@ -65,7 +66,7 @@ function Jobs({ dealerId, isStaff }) {
   );
 }
 
-const TIMEZONES = [
+export const TIMEZONES = [
   ['America/Los_Angeles', 'Pacific'], ['America/Denver', 'Mountain'], ['America/Phoenix', 'Arizona'], ['America/Chicago', 'Central'],
   ['America/New_York', 'Eastern'], ['America/Anchorage', 'Alaska'], ['Pacific/Honolulu', 'Hawaii'],
 ];
@@ -95,7 +96,7 @@ function AddDealer({ onAdded, onCancel }) {
       <label>Short name<input value={slug} maxLength={80} required
         onChange={(e) => { setSlug(e.target.value.toLowerCase()); setSlugEdited(true); }} />
         <span className="muted small">Lowercase letters, numbers and dashes. It can't be reused.</span></label>
-      <label>Website <span className="muted small">(optional)</span><input type="url" placeholder="https://" value={website}
+      <label>Website <span className="muted small">(optional)</span><input placeholder="www.example.com" value={website}
         onChange={(e) => setWebsite(e.target.value.trim())} /></label>
       <label>Time zone<select value={timezone} onChange={(e) => setTimezone(e.target.value)}>
         {TIMEZONES.map(([tz, label]) => <option key={tz} value={tz}>{label}</option>)}
@@ -136,6 +137,10 @@ export default function App() {
   if (!me) return <Login onSignedIn={setMe} />;
   const dealer = me.dealers.find((d) => d.id === dealerId) ?? me.dealers[0];
   async function signOut() { await api('POST', '/api/auth/logout', {}).catch(() => {}); setMe(null); }
+  function dealerSaved(d) {
+    const dealers = me.dealers.map((x) => (x.id === d.id ? { ...x, name: d.name, slug: d.slug } : x));
+    setMe({ ...me, dealers: dealers.sort((a, b) => a.name.localeCompare(b.name)) });
+  }
   function dealerAdded(d) {
     const dealers = [...me.dealers, { id: d.id, name: d.name, slug: d.slug, status: d.status, role: 'staff' }];
     setMe({ ...me, dealers: dealers.sort((a, b) => a.name.localeCompare(b.name)) });
@@ -172,6 +177,7 @@ export default function App() {
             const shown = tabsFor(dealer.role, me.user.is_staff).some(([id]) => id === tab) ? tab : 'cars';
             if (shown === 'orders') return <Orders dealerId={dealer.id} canOrder={['staff', 'owner', 'admin'].includes(dealer.role)} />;
             if (shown === 'people') return <Members dealerId={dealer.id} />;
+            if (shown === 'dealer') return <DealerDetails dealerId={dealer.id} isStaff={me.user.is_staff} onSaved={dealerSaved} />;
             if (shown === 'jobs') return <Jobs dealerId={dealer.id} isStaff={me.user.is_staff} />;
             if (shown === 'all-orders') return <StaffOrders />;
             return <Cars dealerId={dealer.id} role={dealer.role} />;

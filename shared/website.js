@@ -44,31 +44,31 @@ function getOnce(url, host, ip) {
       headers: { Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', 'User-Agent': 'Mozilla/5.0 (compatible; GoldenAutoVideoStudio/1.0; inventory check)' },
     }, (res) => {
       headers = `HTTP/${res.httpVersion} ${res.statusCode} ${res.statusMessage}\r\n` + Object.entries(res.headers).map(([k, v]) => `${k}: ${[].concat(v).join(', ')}`).join('\r\n') + '\r\n\r\n';
-      res.on('data', (d) => { body = Buffer.concat([body, d]); if (body.length > 3_000_000) { req.destroy(); resolve({ code: 0, body: '', url, headers: '', location: '' }); } });
+      res.on('data', (d) => { body = Buffer.concat([body, d]); if (body.length > 3_000_000) { req.destroy(); resolve({ code: 0, body: '', url, headers: '', location: '', error: 'the page is larger than 3 MB' }); } });
       res.on('end', () => resolve({ code: res.statusCode, body: body.toString('utf8'), bodyBuffer: body, url, headers, location: res.headers.location ?? '' }));
-      res.on('error', () => resolve({ code: 0, body: '', url, headers: '', location: '' }));
+      res.on('error', () => resolve({ code: 0, body: '', url, headers: '', location: '', error: 'the connection broke off' }));
     });
     req.on('timeout', () => req.destroy(new Error('timeout')));
-    req.on('error', () => resolve({ code: 0, body: '', url, headers: '', location: '' }));
+    req.on('error', (e) => resolve({ code: 0, body: '', url, headers: '', location: '', error: e?.message === 'timeout' ? 'it did not answer within 20 seconds' : 'it did not answer' }));
     req.end();
   });
 }
 /**
  * Fetch a public https page: no redirects to other schemes, private addresses or other ports; 3 MB cap.
- * Returns { code, body, url, headers } (code 0 when unreachable).
+ * Returns { code, body, url, headers } (code 0 when unreachable, with `error` saying why in plain words).
  */
 export async function clientFetch(url, redirects = 3) {
   for (let i = 0; i <= redirects; i++) {
     const p = parseUrl(url) || {};
     const host = lower(p.host ?? '');
-    if (p.scheme !== 'https' || host === '' || p.port !== undefined || p.user !== undefined) return { code: 0, body: '', url, headers: '' };
+    if (p.scheme !== 'https' || host === '' || p.port !== undefined || p.user !== undefined) return { code: 0, body: '', url, headers: '', error: 'it is not a plain https address' };
     const ip = await publicAddress(host);
-    if (!ip) return { code: 0, body: '', url, headers: '' };
+    if (!ip) return { code: 0, body: '', url, headers: '', error: `the address ${host} was not found` };
     const r = await getOnce(url, host, ip);
     if (r.code >= 300 && r.code < 400 && r.location !== '') { url = new URL(r.location, url).href; continue; }
-    return { code: r.code, body: r.body, bodyBuffer: r.bodyBuffer, url: r.url, headers: r.headers };  // bodyBuffer: the raw bytes (photos)
+    return { code: r.code, body: r.body, bodyBuffer: r.bodyBuffer, url: r.url, headers: r.headers, ...(r.error ? { error: r.error } : {}) };  // bodyBuffer: the raw bytes (photos)
   }
-  return { code: 0, body: '', url, headers: '' };
+  return { code: 0, body: '', url, headers: '', error: 'it keeps redirecting (a redirect loop)' };
 }
 
 // ---- Website analysis -------------------------------------------------------------------------------------------
@@ -164,7 +164,8 @@ export async function clientAnalyze(website, fetchFn = clientFetch) {
   if (blocked || !reachable) options.push({ method: 'browser_snapshot', title: 'Browser snapshot (as Golden Auto today)',
     why: 'The site ' + (blocked ? 'blocks' : 'does not answer') + ' this server, but it can be read in a normal browser and the snapshot fed in.', effort: 'Manual or scheduled run in Chrome; photos are downloaded by the server.' });
   options.push({ method: 'zip', title: 'Manual import (form + photo ZIP)', why: 'Works for any dealer and for cars not online yet.', effort: 'Per car, by hand. Fine for a few cars.' });
-  return { checked_at: gmdateC(), reachable, blocked, platform, dealer: hasDealer ? dealer : (dealer === null ? null : []), sitemap,
+  const problem = reachable || blocked ? null : home.error ?? `it answered with HTTP ${home.code}`;
+  return { checked_at: gmdateC(), reachable, blocked, problem, platform, dealer: hasDealer ? dealer : (dealer === null ? null : []), sitemap,
     vehicle_pages: vdp, signals, options, best: options[0].method };
 }
 export const CLIENT_DCS_EFFORT = 'Ready: use “Import inventory from website” in step 1 (free; reads each listing page, then copies and sorts its photos, keeping exterior shots).';

@@ -202,6 +202,21 @@ describe('cars, website pulls and orders', { skip: NO_DB }, () => {
     assert.equal(pull.status, 'blocked');
     assert.match(pull.message, /We will import your cars for you/);
     assert.equal((await staff.post(`/api/dealers/${otherDealerId}/pulls`)).status, 400, 'no website saved');
+
+    // A site that does not answer says why; a bare address that fails is tried with www. (as mygoldenauto.net needs).
+    const loop = (await staff.post('/api/dealers', { name: 'Loop Cars', slug: 'loop', website: 'loop.example' })).data.dealer.id;
+    const bare = (await staff.post('/api/dealers', { name: 'Bare Cars', slug: 'bare', website: 'bare.example' })).data.dealer.id;
+    site.fetch = async (url) => {
+      if (url.startsWith('https://www.bare.example')) return { code: 403, body: 'cf-chl', url, headers: '' };
+      if (url.includes('.example') && !url.startsWith(SITE)) return { code: 0, body: '', url, headers: '', error: 'it keeps redirecting (a redirect loop)' };
+      return realFetch(url);
+    };
+    const failed = (await staff.post(`/api/dealers/${loop}/pulls`)).data.pull;
+    const viaWww = (await staff.post(`/api/dealers/${bare}/pulls`)).data.pull;
+    site.fetch = realFetch;
+    assert.equal(failed.status, 'failed');
+    assert.match(failed.message, /https:\/\/loop\.example: it keeps redirecting/);
+    assert.equal(viaWww.status, 'blocked', 'www.bare.example answered (and blocks us)');
   });
 
   test('staff import a browser snapshot for a site that blocks us', async () => {

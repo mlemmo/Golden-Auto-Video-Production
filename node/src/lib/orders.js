@@ -2,10 +2,11 @@
 // The portal keeps every dealer's cars; this server only receives the one car an order is for. "Open in studio"
 // links the portal dealer to a client here (created on first use, or an existing client with the same name), copies
 // the ordered car and its photos into that client's inventory (source 'portal'), and marks the order in progress on
-// the portal. Settings: config "portal": { "api", "worker_id", "worker_secret" }; without them the window says how to
+// the portal. Dealer details edited on the portal (name, city, website, phone) are copied into the client's script
+// details whenever the orders are listed or opened. Settings: config "portal": { "api", "worker_id", "worker_secret" }; without them the window says how to
 // connect and nothing is sent anywhere. Free: no paid API is called here.
 import { portalClient } from './portal-client.js';
-import { clientsLoad, clientInventoryKey, clientFetch, clientWebsite } from './clients.js';
+import { clientsLoad, clientInventoryKey, clientFetch, clientWebsite, clientFind, clientDetails, clientSaveDetails } from './clients.js';
 import { dcsStorePhotos } from './photos.js';
 import { dcPhotoId, dcPhotoUrl } from './dealercenter.js';
 import { state, save } from './db.js';
@@ -32,8 +33,41 @@ function orderRow(o, clients) {
 
 export async function portalOrders(db, cfg, portal = portalFromConfig(cfg)) {
   if (!portal) return { configured: false, orders: [] };
+  const orders = await portal.orders();
+  // Dealers edit their details on the portal: bring linked clients up to date while listing (a failure only skips it).
+  for (const id of new Set(orders.map((o) => o.dealer_id))) {
+    const linked = clientsLoad(db).items.find((c) => c.portal_dealer_id === id);
+    if (linked) try { await syncPortalDealer(db, portal, linked.id, id); } catch { /* listed with the details we have */ }
+  }
   const clients = clientsLoad(db).items;
-  return { configured: true, orders: (await portal.orders()).map((o) => orderRow(o, clients)) };
+  return { configured: true, orders: orders.map((o) => orderRow(o, clients)) };
+}
+
+/**
+ * The portal dealer's details (name, city, website, phone; edited on the portal by the dealer or eShield staff) into
+ * the linked client's script details here, and its name in the client list. An empty portal field keeps what the
+ * client has, so Golden Auto stays "San Ramon" until the portal gives a city. Returns true when something changed.
+ */
+export function applyPortalDealer(db, clientId, dealer) {
+  const cur = clientDetails(clientFind(db, clientId));
+  let host = '';
+  try { host = dealer.website ? new URL(dealer.website).hostname.replace(/^www\./, '') : ''; } catch { /* keep ours */ }
+  const next = { name: dealer.name || cur.name, city: dealer.city || cur.city, website: host || cur.website, phone: dealer.phone || cur.phone,
+    website_spoken: host && host !== cur.website ? '' : cur.website_spoken };
+  if (['name', 'city', 'website', 'phone'].every((k) => next[k] === cur[k])) return false;
+  clientSaveDetails(db, clientId, next);
+  const c = clientsLoad(db);
+  const item = c.items.find((x) => x.id === clientId);
+  if (dealer.name && item.name !== dealer.name && !c.items.some((x) => x.id !== clientId && lower(x.name) === lower(dealer.name))) {
+    item.name = String(dealer.name).slice(0, 80);
+    save(db, 'clients', c);
+  }
+  return true;
+}
+
+export async function syncPortalDealer(db, portal, clientId, dealerId) {
+  const { dealer } = await portal.dealerConfig(dealerId);
+  return applyPortalDealer(db, clientId, dealer);
 }
 
 /** The client for a portal dealer: already linked, else an unlinked client with the same name, else a new one. */
@@ -71,6 +105,9 @@ export async function portalOrderOpen(db, cfg, id, { portal = portalFromConfig(c
   if (!['paid', 'in_progress'].includes(order.status)) throw new Error('Only paid orders can be opened in the studio.');
   const v = order.vehicle ?? {};
   const client = portalDealerClient(db, order);
+  let detailsNote = '';
+  try { if (await syncPortalDealer(db, portal, client, order.dealer_id)) detailsNote = ' Dealer details updated from the portal.'; }
+  catch (e) { detailsNote = ` Dealer details were not updated (${e.message}).`; }
 
   // Photos, in the order's order: website links downloaded, uploads fetched from the portal (signed), earlier copies reused.
   const known = state(db, 'portal_photos') ?? {};
@@ -116,5 +153,5 @@ export async function portalOrderOpen(db, cfg, id, { portal = portalFromConfig(c
   await portal.claimOrder(order.id, client + '/' + stock);
   const copied = fresh.filter((pid) => known[pid]);
   if (copied.length) await portal.photosCopied(order.id, copied).catch(() => {});  // the portal keeps them; harmless
-  return { client, stock, message: `Order ${order.id} opened: ${car.Year} ${car.Make} ${car.Model} is in ${order.dealer_name}'s cars (stock ${stock}).` };
+  return { client, stock, message: `Order ${order.id} opened: ${car.Year} ${car.Make} ${car.Model} is in ${order.dealer_name}'s cars (stock ${stock}).${detailsNote}` };
 }

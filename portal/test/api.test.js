@@ -70,7 +70,9 @@ describe('portal API', { skip: NO_DB }, () => {
     await staff.login('staff@eshield.test', PW);
     assert.equal((await staff.post('/api/dealers', { name: '', slug: 'empty' })).status, 400);
     assert.equal((await staff.post('/api/dealers', { name: 'Bad Slug', slug: 'Bad Slug!' })).status, 400);
-    assert.equal((await staff.post('/api/dealers', { name: 'Plain Http', slug: 'plain-http', website: 'http://example.com' })).status, 400);
+    assert.equal((await staff.post('/api/dealers', { name: 'Not A Site', slug: 'not-a-site', website: 'not a website' })).status, 400);
+    const plain = await staff.post('/api/dealers', { name: 'Plain Http', slug: 'plain-http', website: 'http://Example.com/used-cars' });
+    assert.equal(plain.data.dealer.website, 'https://example.com', 'websites are kept as their https address');
     assert.equal((await staff.post('/api/dealers', { name: 'Golden Again', slug: 'golden-auto' })).status, 409);
     const added = await staff.post('/api/dealers', { name: 'Bay Motors', slug: 'bay-motors', website: '', timezone: 'America/Denver' });
     assert.equal(added.status, 201);
@@ -78,6 +80,23 @@ describe('portal API', { skip: NO_DB }, () => {
     assert.equal(added.data.dealer.timezone, 'America/Denver');
     const me = (await staff.get('/api/auth/me')).data;
     assert.ok(me.dealers.some((d) => d.slug === 'bay-motors' && d.role === 'staff'));
+  });
+
+  test('owners and admins edit their dealer; only staff change the short name', async () => {
+    const owner = browser(app.url), viewer = browser(app.url), admin = browser(app.url), staff = browser(app.url);
+    await owner.login('owner@golden.test', PW); await viewer.login('viewer@golden.test', PW);
+    await admin.login('admin@golden.test', PW); await staff.login('staff@eshield.test', PW);
+    assert.equal((await viewer.patch(`/api/dealers/${dealerId}`, { city: 'X' })).status, 403);
+    const r = await owner.patch(`/api/dealers/${dealerId}`, { website: 'mygoldenauto.net', city: 'San Ramon', state: 'CA', phone: '(925) 555-1234' });
+    assert.equal(r.status, 200);
+    assert.deepEqual([r.data.dealer.website, r.data.dealer.city, r.data.dealer.phone, r.data.changed.length], ['https://mygoldenauto.net', 'San Ramon', '(925) 555-1234', 4]);
+    assert.equal((await admin.patch(`/api/dealers/${dealerId}`, { phone: '12' })).status, 400);
+    assert.equal((await admin.patch(`/api/dealers/${dealerId}`, { timezone: 'Mars/Base' })).status, 400);
+    assert.equal((await admin.patch(`/api/dealers/${dealerId}`, { slug: 'golden' })).status, 403, 'short name is staff only');
+    assert.equal((await staff.patch(`/api/dealers/${dealerId}`, { slug: 'bay-motors' })).status, 409, 'short names stay unique');
+    assert.equal((await staff.patch(`/api/dealers/${dealerId}`, { name: 'Golden Auto Sales' })).data.dealer.name, 'Golden Auto Sales');
+    assert.equal((await owner.get('/api/auth/me')).data.dealers[0].name, 'Golden Auto Sales');
+    await staff.patch(`/api/dealers/${dealerId}`, { name: 'Golden Auto' });
   });
 
   test('a dealer you do not belong to looks like it does not exist', async () => {

@@ -43,15 +43,22 @@ export async function startPull(pool, dealer, user, siteFetch) {
     const [rows] = await pool.query('SELECT * FROM website_pulls WHERE id = ?', [r.insertId]);
     return rows[0];
   };
-  const analysis = await clientAnalyze(dealer.website, siteFetch);
+  let website = dealer.website.replace(/\/+$/, '');
+  let analysis = await clientAnalyze(website, siteFetch);
+  // Some sites only answer on www. (mygoldenauto.net without www redirects to itself): try that before giving up.
+  const host = new URL(website).host;
+  if (!analysis.reachable && !analysis.blocked && !host.startsWith('www.')) {
+    const www = await clientAnalyze('https://www.' + host, siteFetch);
+    if (www.reachable || www.blocked) { website = 'https://www.' + host; analysis = www; }
+  }
   if (analysis.blocked) return insert('blocked', `Your website blocks automatic reading. ${WE_IMPORT}`);
-  if (!analysis.reachable) return insert('failed', 'Your website could not be reached. Check that it is up and try again.');
+  if (!analysis.reachable) return insert('failed', `We could not read ${website}: ${analysis.problem}. Check the website address in Dealer details and try again.`);
   if (analysis.platform !== 'Dealer Car Search') {
     return insert('blocked', `We can't read ${analysis.platform ? analysis.platform + ' websites' : 'this kind of website'} automatically yet. ${WE_IMPORT}`);
   }
   let pages;
   try {
-    pages = await dcsVehiclePages(dealer.website, analysis.sitemap, siteFetch);
+    pages = await dcsVehiclePages(website, analysis.sitemap, siteFetch);
   } catch (err) {
     return insert('failed', err.message);
   }

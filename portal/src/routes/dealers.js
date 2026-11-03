@@ -1,13 +1,13 @@
 // /api/dealers: dealers, their members and roles, audit log, and jobs. Roles are checked here on the server for
-// every request: viewers read; owners and admins manage members; only eShield staff create dealers or send test jobs.
+// every request: viewers read; owners and admins manage members and edit the dealer's details; only eShield staff
+// create dealers, change a short name or send test jobs.
 import { Router } from 'express';
 import { HttpError } from '../lib/errors.js';
 import { audit, auditList } from '../lib/audit.js';
 import { accessChecks } from '../lib/access.js';
 import { ROLES, atLeast, dealersFor, dealerMembers, findUserByEmail, createUser, ownerCount, normalEmail } from '../lib/users.js';
 import { enqueueJob, listJobs } from '../lib/jobs.js';
-
-const SLUG = /^[a-z0-9](?:[a-z0-9-]{0,78}[a-z0-9])?$/;
+import { cleanDealer } from '../lib/dealers.js';
 
 export function dealerRoutes({ pool }) {
   const r = Router();
@@ -18,22 +18,36 @@ export function dealerRoutes({ pool }) {
 
   r.post('/', async (req, res) => {
     const user = staffOnly(req);
-    const name = String(req.body?.name ?? '').trim();
-    const slug = String(req.body?.slug ?? '').trim().toLowerCase();
-    const website = String(req.body?.website ?? '').trim() || null;
-    const timezone = String(req.body?.timezone ?? '').trim() || 'America/Los_Angeles';
-    if (!name || name.length > 190) throw new HttpError(400, 'Enter the dealer name.');
-    if (!SLUG.test(slug)) throw new HttpError(400, 'The short name may use lowercase letters, numbers and dashes.');
-    if (website && !/^https:\/\/[^\s]+$/.test(website)) throw new HttpError(400, 'The website must start with https://');
+    const d = cleanDealer(req.body, { creating: true, staff: true });
     let id;
     try {
-      [{ insertId: id }] = await pool.query('INSERT INTO dealers (name, slug, website, timezone) VALUES (?,?,?,?)', [name, slug, website, timezone]);
+      [{ insertId: id }] = await pool.query('INSERT INTO dealers (name, slug, website, city, state, phone, timezone) VALUES (?,?,?,?,?,?,?)',
+        [d.name, d.slug, d.website, d.city, d.state, d.phone, d.timezone]);
     } catch (err) {
       if (err.code === 'ER_DUP_ENTRY') throw new HttpError(409, 'That short name is already used.');
       throw err;
     }
-    await audit(pool, { dealerId: id, userId: user.id, action: 'dealer_create', targetType: 'dealer', targetId: id, details: { name, slug }, ip: req.ip });
-    res.status(201).json({ dealer: { id, name, slug, website, timezone, status: 'active' } });
+    await audit(pool, { dealerId: id, userId: user.id, action: 'dealer_create', targetType: 'dealer', targetId: id, details: { name: d.name, slug: d.slug }, ip: req.ip });
+    res.status(201).json({ dealer: { id, ...d, status: 'active' } });
+  });
+
+  // Owners and admins edit their dealer's details; eShield staff edit any dealer, including its short name.
+  r.patch('/:dealerId', async (req, res) => {
+    const { user, dealer, role } = await dealerAccess(req, 'admin');
+    const d = cleanDealer(req.body, { staff: role === 'staff' });
+    const changed = Object.keys(d).filter((k) => d[k] !== (dealer[k] ?? null));
+    if (changed.length) {
+      try {
+        await pool.query(`UPDATE dealers SET ${changed.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`, [...changed.map((k) => d[k]), dealer.id]);
+      } catch (err) {
+        if (err.code === 'ER_DUP_ENTRY') throw new HttpError(409, 'That short name is already used.');
+        throw err;
+      }
+      await audit(pool, { dealerId: dealer.id, userId: user.id, action: 'dealer_edit', targetType: 'dealer', targetId: dealer.id,
+        details: Object.fromEntries(changed.map((k) => [k, { from: dealer[k] ?? null, to: d[k] }])), ip: req.ip });
+    }
+    const [rows] = await pool.query('SELECT * FROM dealers WHERE id = ?', [dealer.id]);
+    res.json({ dealer: rows[0], changed });
   });
 
   r.get('/:dealerId', async (req, res) => {

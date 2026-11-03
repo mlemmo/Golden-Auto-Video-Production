@@ -6,8 +6,8 @@ import { existsSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openMemoryDb, state } from '../src/lib/db.js';
-import { clientsLoad, clientInventory } from '../src/lib/clients.js';
-import { portalDealerClient, portalFromConfig, portalOrderOpen, portalOrders } from '../src/lib/orders.js';
+import { clientsLoad, clientInventory, clientDetails, clientFind } from '../src/lib/clients.js';
+import { applyPortalDealer, portalDealerClient, portalFromConfig, portalOrderOpen, portalOrders } from '../src/lib/orders.js';
 import { JPEG_1800x900, JPEG_1800x900_B } from './fixtures/images.js';
 
 const VIN = '1HGBH41JXMN109186';
@@ -20,10 +20,13 @@ const order = (status = 'paid') => ({
 });
 const PHOTOS = [{ id: 1, url: 'https://imagescf.dealercenter.net/640/480/overlay-x/abc123.jpg' }, { id: 2, path: '/api/worker/orders/7/photos/2' }];
 
-function fakePortal(o = order()) {
+const DEALER = { id: 3, name: 'Golden Auto', website: 'https://www.mygoldenauto.net', city: null, state: null, phone: '925-555-0100' };
+
+function fakePortal(o = order(), dealer = DEALER) {
   const calls = [];
   return {
     calls,
+    dealerConfig: async (id) => { calls.push(['dealer', id]); return { dealer }; },
     orders: async () => [o],
     order: async (id) => { calls.push(['order', id]); return { order: o, photos: PHOTOS }; },
     orderPhoto: async (id, photoId) => { calls.push(['photo', id, photoId]); return Buffer.from(JPEG_1800x900_B, 'base64'); },
@@ -76,7 +79,9 @@ test('Open in studio copies only the ordered car and its photos, then claims the
   assert.deepEqual([car.source, car.StockNumber, car.Vin, car.Make, car.Model, car.price, car.portal_order, car.photos.length, car.active],
     ['portal', '0931', VIN, 'HONDA', 'CIVIC', 15688, 7, 2, true]);
   for (const url of car.photos) assert.ok(existsSync(join(cfg.asset_dir, url.split('/').pop())), url);
-  assert.deepEqual(portal.calls.filter((c) => c[0] !== 'order'), [['photo', 7, 2], ['claim', 7, 'golden-auto/0931'], ['copied', 7, [2]]]);
+  assert.deepEqual(portal.calls.filter((c) => !['order', 'dealer'].includes(c[0])), [['photo', 7, 2], ['claim', 7, 'golden-auto/0931'], ['copied', 7, [2]]]);
+  assert.match(r.message, /Dealer details updated/);
+  assert.equal(clientDetails(clientFind(db, 'golden-auto')).phone, '925-555-0100');
   assert.ok(state(db, 'portal_photos')['2'], 'the uploaded photo is remembered');
 
   // Opening it again reuses the uploaded photo (the portal may have deleted its full copy) and keeps one car.
@@ -90,4 +95,26 @@ test('only paid orders open in the studio', async () => {
   for (const status of ['awaiting_payment', 'cancelled', 'approved']) {
     await assert.rejects(portalOrderOpen(openMemoryDb(), config(), 7, { portal: fakePortal(order(status)), siteFetch: siteFetchLog().fetch }), /Only paid orders/);
   }
+});
+
+test('dealer details edited on the portal reach the client; empty portal fields keep ours', () => {
+  const db = openMemoryDb();
+  const before = clientDetails(clientFind(db, 'golden-auto'));
+  assert.equal(applyPortalDealer(db, 'golden-auto', { name: 'Golden Auto', website: 'https://www.mygoldenauto.net', city: null, phone: null }), false, 'nothing new');
+  assert.equal(applyPortalDealer(db, 'golden-auto', { name: 'Golden Auto', website: 'https://www.mygoldenauto.net', city: '', phone: '(925) 555-1234' }), true);
+  let d = clientDetails(clientFind(db, 'golden-auto'));
+  assert.deepEqual([d.city, d.website, d.website_spoken, d.phone], [before.city, 'mygoldenauto.net', before.website_spoken, '(925) 555-1234'], 'San Ramon and the spoken website stay');
+  portalDealerClient(db, { dealer_id: 9, dealer_name: 'Bay Motors', dealer_website: 'https://baymotors.com' });
+  assert.equal(applyPortalDealer(db, 'bay-motors', { name: 'Bay Motors of Dublin', website: 'https://www.dublincars.com', city: 'Dublin', phone: null }), true);
+  d = clientDetails(clientFind(db, 'bay-motors'));
+  assert.deepEqual([d.name, d.city, d.website, d.website_spoken], ['Bay Motors of Dublin', 'Dublin', 'dublincars.com', 'dublincars dot com']);
+  assert.equal(clientFind(db, 'bay-motors').name, 'Bay Motors of Dublin', 'the client list shows the new name');
+  assert.throws(() => applyPortalDealer(db, 'bay-motors', { name: 'Bay Motors', website: null, city: 'Dublin', phone: '12' }), /phone/);
+});
+
+test('listing orders brings linked dealers up to date', async () => {
+  const db = openMemoryDb();
+  portalDealerClient(db, order());
+  await portalOrders(db, {}, fakePortal(order(), { ...DEALER, city: 'Danville' }));
+  assert.equal(clientDetails(clientFind(db, 'golden-auto')).city, 'Danville');
 });

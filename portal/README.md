@@ -52,6 +52,12 @@ started by any service yet.
   API and "Open in studio" copies just that car and its photos into the dealer's client there (an existing client with
   the same name, else a new one), claims the order (in progress) and opens the car in step 1. It appears once
   `private/config.json` has `"portal": { "api": "https://…/api/worker", "worker_id": "…", "worker_secret": "…" }`.
+- **Dealer details** (tab for staff, owners and admins; `PATCH /api/dealers/:id`, migration 003): name, website, city,
+  state, phone, time zone; only staff change the short name. Websites are stored as their https address (typing
+  `www.example.com` is fine). The video app copies name, city, website and phone into the linked client's script
+  details whenever it lists or opens that dealer's orders; an empty portal field keeps what the video app has.
+- A pull that cannot reach the site says why (no answer, redirect loop, HTTP status). A bare address that fails is
+  tried with `www.` first: `mygoldenauto.net` without www redirects to itself.
 - Tests: `test/cars.test.js` (needs `TEST_DATABASE_URL`), and `node/test/orders.test.js` in the video app.
 
 ## Status and handoff (2026-11-02)
