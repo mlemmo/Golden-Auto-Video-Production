@@ -40,7 +40,7 @@ started by any service yet.
   has copied an order's uploads, the full files are deleted here and the thumbnails stay.
 - **Website pulls** (`/api/dealers/:id/pulls`): run on the portal, four car pages per request (SiteGround stops long
   work), kept going by the customer's open page. Only Dealer Car Search sites can be read today; for other sites and
-  sites that block us the customer is told we will import their cars, and staff run the browser snapshot reader
+  sites that block us the customer is asked to contact eShield, and staff run the browser snapshot reader
   (`tools/inventory-snapshot.js`, new last step `step3Portal(<dealer id>)`). Cars no longer on the site are marked
   "not on your website anymore", never deleted.
 - **Orders** (`/api/dealers/:id/orders`): owners and admins order an AI spokesperson video (15/30 s) or a photo

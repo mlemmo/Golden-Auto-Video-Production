@@ -26,7 +26,7 @@ export async function latestPull(db, dealerId) {
   return rows[0] ?? null;
 }
 
-const WE_IMPORT = 'We will import your cars for you; eShield has been told.';
+const WE_IMPORT = "Contact eShield and we'll import your cars for you.";
 
 /**
  * Checks the dealer's website and starts a pull. A pull already running is returned instead. A site we cannot read

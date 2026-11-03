@@ -193,14 +193,14 @@ describe('cars, website pulls and orders', { skip: NO_DB }, () => {
     assert.ok(!(await viewer.get(path('/vehicles'))).data.vehicles.some((v) => v.vin === VIN_B));
   });
 
-  test('a website that blocks us, or that we cannot read yet, tells the customer we will import', async () => {
+  test('a website that blocks us, or that we cannot read yet, asks the customer to contact eShield', async () => {
     const blockedDealer = (await staff.post('/api/dealers', { name: 'Golden Auto', slug: 'golden-auto', website: 'https://blocked.example' })).data.dealer.id;
     const realFetch = site.fetch;
     site.fetch = async (url) => (url.startsWith('https://blocked.example') ? { code: 403, body: '<title>Just a moment...</title> cf-chl', url, headers: '' } : realFetch(url));
     const pull = (await staff.post(`/api/dealers/${blockedDealer}/pulls`)).data.pull;
     site.fetch = realFetch;
     assert.equal(pull.status, 'blocked');
-    assert.match(pull.message, /We will import your cars for you/);
+    assert.equal(pull.message, "Your website blocks automatic reading. Contact eShield and we'll import your cars for you.");
     assert.equal((await staff.post(`/api/dealers/${otherDealerId}/pulls`)).status, 400, 'no website saved');
 
     // A site that does not answer says why; a bare address that fails is tried with www. (as mygoldenauto.net needs).
