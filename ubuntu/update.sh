@@ -21,11 +21,11 @@ python3 -I -m py_compile private/*.py
 (cd web && npm ci --no-audit --no-fund >/dev/null && npm run build >/dev/null) || { echo "Dashboard build failed; Node service not restarted." >&2; exit 1; }
 (cd node && npm test >/dev/null) || { echo "Node tests failed; Node service not restarted." >&2; exit 1; }
 [ -f private/config.json ] || { echo "private/config.json missing (see private/config.example.json)." >&2; exit 1; }
-# LotSpotlight portal API (portal/, set up by ubuntu/portal/setup-portal-root.sh): its locked dependencies and a restart,
-# once it is installed for this site. Its tests need a MySQL test database, so they run before merging, not here.
+# LotSpotlight portal (portal/, set up by ubuntu/portal/setup-portal-root.sh), once it is installed for this site: its
+# dependencies, the customer pages rebuilt for this site's API, and a restart of the API. Its tests need a MySQL test database, so they run before merging, not here.
 portal_service="${service%-node.service}-portal.service"
 if [ -f "/etc/systemd/system/$portal_service" ]; then
-  (cd portal && npm ci --no-audit --no-fund >/dev/null) && sudo systemctl restart "$portal_service" && echo "Portal API restarted ($portal_service)"
+  bash ubuntu/portal/build-pages.sh "$(pwd)" && sudo systemctl restart "$portal_service" && echo "Portal API restarted ($portal_service)"
 fi
 if [ -f "/etc/systemd/system/$service" ]; then
   sudo systemctl restart "$service" && echo "Node service restarted ($service)"

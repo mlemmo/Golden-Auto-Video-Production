@@ -58,15 +58,23 @@ started by any service yet.
 
 ## Deploying
 
-1. **API on our server** (once per site): `sudo bash ubuntu/portal/setup-portal-root.sh staging [api-host]
-   [customer-site-origin]`. It installs MySQL if needed, makes the site's database and user, writes `portal/.env` with
-   new secrets, starts `golden-auto-staging-portal` on 127.0.0.1:4362 (production: 4363) and prints the `"portal"`
-   settings for the studio's config (the studio reaches it on localhost). With an api-host that has a certificate it
-   also adds the Nginx site on port 4343. After that, `ubuntu/update.sh` updates and restarts it with each deploy.
-2. **Customer pages on SiteGround**: `bash ubuntu/portal/build-static.sh https://<api-host>:4343` makes
-   `portal/static-site.zip`; upload and extract it into the site's `public_html`.
-3. The pages and the API must share one domain (e.g. `staging.lotspotlight.com` and `api-staging.lotspotlight.com`) so
-   the sign-in cookie goes with the pages' requests; list the pages' address in `CORS_ORIGINS` in `portal/.env`.
+Addresses (DNS on Cloudflare, all pointing at our server, HTTPS on port 4343 and, once the router forwards it, 443):
+
+| | Production | Staging |
+| --- | --- | --- |
+| Customer pages | lotspotlight.com | staging.lotspotlight.com |
+| Portal API | api.lotspotlight.com | staging-api.lotspotlight.com |
+| Video studio | studio.lotspotlight.com (and video.mygoldenauto.net) | staging-studio.lotspotlight.com (and staging.mygoldenauto.net) |
+
+1. Once per site, on the server: `sudo bash ubuntu/portal/setup-portal-root.sh staging --api staging-api.lotspotlight.com
+   --pages staging.lotspotlight.com --studio staging-studio.lotspotlight.com`. It installs MySQL if needed, makes the
+   site's database, writes `portal/.env` (printing the `"portal"` settings for the studio's config the first time),
+   starts `golden-auto-staging-portal` (127.0.0.1:4362; production 4363), builds the customer pages for that API,
+   gets certificates through Cloudflare DNS and adds the Nginx sites. Safe to run again.
+2. After that, `ubuntu/update.sh` rebuilds the pages and restarts the API on every deploy.
+3. The pages and the API share the lotspotlight.com domain, so the sign-in cookie goes with the pages' requests;
+   `CORS_ORIGINS` in `portal/.env` lists the pages' addresses. (`ubuntu/portal/build-static.sh` still builds a zip of
+   the pages for hosting them elsewhere, e.g. SiteGround.)
 - Tests: `npm test` with `TEST_DATABASE_URL` (on a PC, never on the server); `test/cars.test.js` covers this milestone.
 
 ## Status and handoff (2026-11-02)
