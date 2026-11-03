@@ -65,6 +65,21 @@ describe('portal API', { skip: NO_DB }, () => {
     assert.equal((await ownerB.patch(`/api/dealers/${dealerId}/users/${owner.id}`, { role: 'admin' })).status, 409, 'the last owner stays');
   });
 
+  test('staff add dealers from the form: checks and the new dealer in /me', async () => {
+    const staff = browser(app.url);
+    await staff.login('staff@eshield.test', PW);
+    assert.equal((await staff.post('/api/dealers', { name: '', slug: 'empty' })).status, 400);
+    assert.equal((await staff.post('/api/dealers', { name: 'Bad Slug', slug: 'Bad Slug!' })).status, 400);
+    assert.equal((await staff.post('/api/dealers', { name: 'Plain Http', slug: 'plain-http', website: 'http://example.com' })).status, 400);
+    assert.equal((await staff.post('/api/dealers', { name: 'Golden Again', slug: 'golden-auto' })).status, 409);
+    const added = await staff.post('/api/dealers', { name: 'Bay Motors', slug: 'bay-motors', website: '', timezone: 'America/Denver' });
+    assert.equal(added.status, 201);
+    assert.equal(added.data.dealer.website, null, 'a blank website is stored as none');
+    assert.equal(added.data.dealer.timezone, 'America/Denver');
+    const me = (await staff.get('/api/auth/me')).data;
+    assert.ok(me.dealers.some((d) => d.slug === 'bay-motors' && d.role === 'staff'));
+  });
+
   test('a dealer you do not belong to looks like it does not exist', async () => {
     const staff = browser(app.url);
     await staff.login('staff@eshield.test', PW);
