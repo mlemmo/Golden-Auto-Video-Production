@@ -74,7 +74,7 @@ export async function syncInventory(db, cfg, client, { getText = requestText, fe
   if (!Array.isArray(list)) list = Object.values(list);
   const old = state(db, 'inventory') ?? {};
   const stocks = list.map((v) => v.StockNumber);
-  for (const v of old.vehicles ?? []) if ((v.source ?? '') === 'zip' && !stocks.includes(v.StockNumber)) list.push(v);
+  for (const v of old.vehicles ?? []) if (['zip', 'portal'].includes(v.source ?? '') && !stocks.includes(v.StockNumber)) list.push(v);
   const checked = gmdateC();
   save(db, 'inventory', { vehicles: list, checked_at: checked });
   return { vehicles: list, checked_at: checked };

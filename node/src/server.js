@@ -23,6 +23,7 @@ import { sessionStore, newSessionId, newCsrf, sameSecret, parseCookies, sessionC
 import { loginPage, dashboardPage, sharePage } from './lib/pages.js';
 import { recordActivity, usageReport } from './lib/activity.js';
 import { libraryVideos, libraryStills, stillDelete } from './lib/jobs.js';
+import { portalOrders, portalOrderOpen } from './lib/orders.js';
 import { signIn, userById, userCount, publicUser, allowedClients, usersList, userCreate, userUpdate, userDelete, passwordChange } from './lib/users.js';
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
@@ -59,6 +60,9 @@ const sessionRoutes = {
   user_create: ({ db, user, body }) => ({ user: publicUser(userCreate(db, user, body)), message: 'Account created.' }),
   user_update: ({ db, user, body }) => ({ user: publicUser(userUpdate(db, user, body)), message: 'Account saved.' }),
   user_delete: ({ db, user, body }) => { userDelete(db, user, body.id); return { message: 'Account deleted.' }; },
+  // Admins: customer orders from the LotSpotlight portal (src/lib/orders.js). Opening one selects its client here.
+  portal_orders: ({ db, cfg }) => portalOrders(db, cfg),
+  portal_order_open: async ({ db, cfg, body, session }) => { const r = await portalOrderOpen(db, cfg, body.id); session.data.client = r.client; return r; },
   // Admins: the Usage dashboard (days: 7, 30, 90 or 0 = all time; optional client and user).
   usage: ({ db, cfg, body }) => usageReport(db, cfg, { days: Number(body.days ?? 30) || 0, client: String(body.client ?? ''), user: String(body.user ?? '') }),
 };
@@ -66,9 +70,9 @@ const sessionRoutes = {
 // What each role may do. Viewers only read; admins alone manage users, clients and the shared spokesperson library;
 // users do everything else (including paid steps) for the clients assigned to them.
 const VIEWER_ACTIONS = new Set(['library', 'music_list', 'backdrop_list', 'scene_list', 'clients', 'client_select', 'inventory', 'sync_log', 'jobs', 'narration_list', 'spokesperson_list', 'detail', 'speech', 'logout', 'me', 'password_change']);
-const ADMIN_ACTIONS = new Set(['usage', 'music_upload', 'music_delete', 'backdrop_upload', 'backdrop_delete', 'ad_settings_save', 'facebook_disconnect', 'spokesperson_describe', 'spokesperson_picture', 'spokesperson_save_draft', 'snapshot_import', 'scene_save', 'scene_delete', 'scene_default', 'scene_suggest', 'client_add', 'client_analyze', 'client_details', 'spokesperson_upload', 'spokesperson_default', 'spokesperson_delete', 'users_list', 'user_create', 'user_update', 'user_delete']);
+const ADMIN_ACTIONS = new Set(['usage', 'portal_orders', 'portal_order_open', 'music_upload', 'music_delete', 'backdrop_upload', 'backdrop_delete', 'ad_settings_save', 'facebook_disconnect', 'spokesperson_describe', 'spokesperson_picture', 'spokesperson_save_draft', 'snapshot_import', 'scene_save', 'scene_delete', 'scene_default', 'scene_suggest', 'client_add', 'client_analyze', 'client_details', 'spokesperson_upload', 'spokesperson_default', 'spokesperson_delete', 'users_list', 'user_create', 'user_update', 'user_delete']);
 // Actions that need no current client (an account without clients can still use them).
-const NO_CLIENT = new Set(['library', 'still_delete', 'ad_preview', 'ad_status', 'ad_list', 'ad_request', 'ad_cancel', 'ad_remove', 'ad_switch_on', 'ad_pause', 'ad_retry', 'social_status', 'social_list', 'social_post', 'social_cancel', 'social_retry', 'usage', 'clients', 'logout', 'me', 'password_change', 'users_list', 'user_create', 'user_update', 'user_delete', 'client_add']);
+const NO_CLIENT = new Set(['portal_orders', 'portal_order_open', 'library', 'still_delete', 'ad_preview', 'ad_status', 'ad_list', 'ad_request', 'ad_cancel', 'ad_remove', 'ad_switch_on', 'ad_pause', 'ad_retry', 'social_status', 'social_list', 'social_post', 'social_cancel', 'social_retry', 'usage', 'clients', 'logout', 'me', 'password_change', 'users_list', 'user_create', 'user_update', 'user_delete', 'client_add']);
 // Actions recorded for the Usage dashboard (who, which client, what, when; never passwords).
 const TRACKED = new Set(['generate', 'ad_request', 'ad_cancel', 'ad_remove', 'ad_switch_on', 'ad_pause', 'ad_retry', 'ad_settings_save', 'facebook_page', 'facebook_disconnect', 'social_post', 'social_cancel', 'social_retry', 'spokesperson_picture', 'spokesperson_save_draft', 'narration_preview', 'narration_lipsync', 'footage_build', 'slideshow_build', 'music_upload', 'music_delete', 'backdrop_upload', 'backdrop_delete', 'still_delete', 'finish', 'narration_approve', 'job_delete',
   'narration_delete', 'narration_lipsync_delete', 'sync', 'import', 'client_add', 'client_details', 'client_analyze', 'spokesperson_upload',

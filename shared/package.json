@@ -1,0 +1,6 @@
+{
+  "name": "lotspotlight-shared",
+  "private": true,
+  "description": "Code used by both the video app (node/) and the LotSpotlight portal (portal/): HTML and text helpers, dealer website fetching, analysis and listing-page readers. No npm dependencies.",
+  "type": "module"
+}

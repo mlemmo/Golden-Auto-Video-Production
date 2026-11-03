@@ -14,6 +14,7 @@ import LookStep from './LookStep.jsx';
 import GenerateStep from './GenerateStep.jsx';
 import Videos from './Videos.jsx';
 import { AdminMenu, ToolsMenu, ToolWindows } from './Tools.jsx';
+import { OrdersWindow } from './CustomerOrders.jsx';
 
 const Studio = createContext(null);
 export const useStudio = () => useContext(Studio);
@@ -127,6 +128,9 @@ export default function App() {
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [postsOpen, setPostsOpen] = useState(false);
   const [adsOpen, setAdsOpen] = useState(false);
+  const [ordersOpen, setOrdersOpen] = useState(false);
+  // A car to open in step 1 once its client's cars are loaded (Customer orders → Open in studio).
+  const [openStock, setOpenStock] = useState(null);
   // Collapsed steps: only step 1 is open when the page loads.
   const [collapsed, setCollapsed] = useState(START_COLLAPSED);
   const toggleStep = useCallback((id) => setCollapsed((c) => ({ ...c, [id]: !c[id] })), []);
@@ -294,7 +298,7 @@ export default function App() {
     sheetUrl, setSheetUrl, footage, setFootage, shapes, setShapes, music, setMusic, background, setBackground, adCut, setAdCut, aiApprove, setAiApprove, approve, setApprove, confirmCurrent, setConfirmCurrent, resolution, setResolution,
     captionJob, setCaptionJob, tool, setTool, collapsed, toggleStep, openStep, closeStep, stepClass,
     busy, run, statuses, loadClients, loadInventory, loadJobs, loadSyncLog, refreshNarrations, showSpokespersons,
-    clearVehicle, switchClient, formStore, defaultScript,
+    clearVehicle, switchClient, formStore, defaultScript, openStock, setOpenStock,
   };
 
   const signOut = async () => { try { await api('logout'); } finally { location.reload(); } };
@@ -309,6 +313,7 @@ export default function App() {
           {!readOnly && <button type="button" className="secondary small" id="postsOpen" aria-label="Posts" onClick={() => setPostsOpen(true)}>📣<span className="label-long"> Posts</span></button>}
           {!readOnly && <button type="button" className="secondary small" id="adsOpen" aria-label="Ads" onClick={() => setAdsOpen(true)}>💲<span className="label-long"> Ads</span></button>}
           {!readOnly && <ToolsMenu />}
+          {isAdmin && boot.portal && <button type="button" className="secondary small" id="ordersOpen" aria-label="Customer orders" onClick={() => setOrdersOpen(true)}>🧾<span className="label-long"> Orders</span></button>}
           {isAdmin && <AdminMenu />}
           <AccountMenu onSignOut={signOut} />
           <Notifications />
@@ -346,6 +351,7 @@ export default function App() {
       <Library open={libraryOpen} onClose={() => setLibraryOpen(false)} />
       <PostsWindow open={postsOpen} onClose={() => setPostsOpen(false)} />
       <AdsWindow open={adsOpen} onClose={() => setAdsOpen(false)} />
+      {isAdmin && boot.portal && <OrdersWindow open={ordersOpen} onClose={() => setOrdersOpen(false)} />}
     </Studio.Provider>
   );
 }

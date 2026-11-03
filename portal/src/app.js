@@ -9,8 +9,16 @@ import { loadSession, parseCookies, COOKIE } from './lib/sessions.js';
 import { authRoutes } from './routes/auth.js';
 import { dealerRoutes } from './routes/dealers.js';
 import { workerRoutes } from './routes/worker.js';
+import { vehicleRoutes } from './routes/vehicles.js';
+import { orderRoutes, staffRoutes } from './routes/orders.js';
+import { pullRoutes, snapshotRoutes } from './routes/pulls.js';
+import { clientFetch } from '../../shared/website.js';
 
-export function createApp({ pool, config, publicDir = join(PORTAL_DIR, 'public') }) {
+const PHOTO_UPLOAD = /^\/dealers\/\d+\/vehicles\/\d+\/photos(\/\d+\/thumb)?$/;
+
+// fetchFn: outgoing API requests (VIN lookup); siteFetch: dealer website pages (shared/website.js, public https only).
+// Tests pass fakes for both, so nothing outside is called.
+export function createApp({ pool, config, publicDir = join(PORTAL_DIR, 'public'), fetchFn = fetch, siteFetch = clientFetch }) {
   const app = express();
   app.set('trust proxy', 1);
   app.disable('x-powered-by');
@@ -26,13 +34,16 @@ export function createApp({ pool, config, publicDir = join(PORTAL_DIR, 'public')
   // Worker API first: it reads its own raw body and has no browser session.
   app.use('/api/worker', workerRoutes({ pool, config }));
 
+  // A browser snapshot of a dealer's whole inventory is bigger than any other request (staff only, checked below).
+  app.use('/api/staff/dealers/:dealerId/snapshot', express.json({ limit: '5mb' }));
   app.use('/api', express.json({ limit: '100kb' }), async (req, res, next) => {
     res.setHeader('Cache-Control', 'no-store');
     req.cookies = parseCookies(req.headers.cookie);
     req.session = await loadSession(pool, req.cookies[COOKIE]);
     if (req.method !== 'GET' && req.method !== 'HEAD') {
-      // JSON only (an HTML form on another site cannot send it), and the session's CSRF token on every change.
-      if (!req.is('application/json')) throw new HttpError(415, 'Send JSON.');
+      // JSON only (an HTML form on another site cannot send it; photo uploads are JPEG), and the session's CSRF token on
+      // every change.
+      if (!req.is('application/json') && !(req.is('image/jpeg') && PHOTO_UPLOAD.test(req.path))) throw new HttpError(415, 'Send JSON.');
       if (req.path !== '/auth/login' && req.session && req.get('x-csrf-token') !== req.session.csrf) {
         throw new HttpError(403, 'Your session changed. Reload the page and try again.');
       }
@@ -41,6 +52,11 @@ export function createApp({ pool, config, publicDir = join(PORTAL_DIR, 'public')
   });
   app.use('/api/auth', authRoutes({ pool, config }));
   app.use('/api/dealers', dealerRoutes({ pool }));
+  app.use('/api/dealers', vehicleRoutes({ pool, config, fetchFn }));
+  app.use('/api/dealers', orderRoutes({ pool }));
+  app.use('/api/dealers', pullRoutes({ pool, siteFetch }));
+  app.use('/api/staff', staffRoutes({ pool }));
+  app.use('/api/staff', snapshotRoutes({ pool }));
   app.use('/api', (req) => { throw new HttpError(404, `No such API route: ${req.method} ${req.path}`); });
 
   if (existsSync(publicDir)) {

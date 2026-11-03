@@ -18,7 +18,7 @@ export function portalClient({ api, workerId, secret, fetchFn = fetch }) {
   if (base.protocol !== 'https:' && !['localhost', '127.0.0.1', '[::1]'].includes(base.hostname)) throw new Error('PORTAL_API must use https');
   if (!workerId || String(secret ?? '').length < 32) throw new Error('WORKER_ID and a WORKER_SECRET of at least 32 characters are required');
 
-  async function call(method, path, payload) {
+  async function send(method, path, payload) {
     const url = new URL(path.replace(/^\//, ''), base);
     const body = payload === undefined ? '' : JSON.stringify(payload);
     const res = await fetchFn(url, {
@@ -28,10 +28,15 @@ export function portalClient({ api, workerId, secret, fetchFn = fetch }) {
       redirect: 'error',
       signal: AbortSignal.timeout(30_000),
     });
-    if (res.status === 204) return null;
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw Object.assign(new Error(`portal ${method} ${url.pathname}: ${res.status} ${data.error ?? ''}`.trim()), { status: res.status });
-    return data;
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw Object.assign(new Error(`portal ${method} ${url.pathname}: ${res.status} ${data.error ?? ''}`.trim()), { status: res.status });
+    }
+    return res;
+  }
+  async function call(method, path, payload) {
+    const res = await send(method, path, payload);
+    return res.status === 204 ? null : res.json().catch(() => ({}));
   }
 
   return {
@@ -41,6 +46,13 @@ export function portalClient({ api, workerId, secret, fetchFn = fetch }) {
     fail: (id, error, retryable = true) => call('POST', `/jobs/${id}/fail`, { error, retryable }),
     syncInventory: (dealerId, vehicles, complete = false) => call('POST', '/inventory/sync', { dealer_id: dealerId, vehicles, complete }),
     dealerConfig: (dealerId) => call('GET', `/dealers/${dealerId}/config`),
+    // Customer orders (Milestone 2): paid and in-progress orders, one order with its photos, an uploaded photo's
+    // bytes, opening it in the studio (claim), and telling the portal which uploads we now have.
+    orders: async (statuses = ['paid', 'in_progress']) => (await call('GET', `/orders?status=${statuses.join(',')}`)).orders,
+    order: (id) => call('GET', `/orders/${id}`),
+    orderPhoto: async (id, photoId) => Buffer.from(await (await send('GET', `/orders/${id}/photos/${photoId}`)).arrayBuffer()),
+    claimOrder: async (id, studioRef) => (await call('POST', `/orders/${id}/claim`, { studio_ref: studioRef })).order,
+    photosCopied: (id, photoIds) => call('POST', `/orders/${id}/photos-copied`, { photo_ids: photoIds }),
   };
 }
 

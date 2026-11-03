@@ -1,11 +1,20 @@
-// Milestone 1 portal screens: sign in, pick a dealer (eShield staff see every dealer and can add one), see its jobs (refreshed every
-// 5 seconds; SiteGround has no WebSockets) and members. Staff can send a test job to check the worker connection.
+// Portal screens: sign in, pick a dealer (eShield staff see every dealer and can add one), then tabs: Cars (Cars.jsx),
+// Orders (Orders.jsx), People for owners and admins, and for staff the worker check (jobs, refreshed every 5 seconds;
+// SiteGround has no WebSockets) and every dealer's orders.
 import { useCallback, useEffect, useState } from 'react';
 import { api } from './api.js';
+import { Cars } from './Cars.jsx';
+import { Orders, StaffOrders } from './Orders.jsx';
 
 const POLL_MS = 5000;
 const ROLE_NAMES = { staff: 'eShield staff', owner: 'Owner', admin: 'Admin', approver: 'Approver', viewer: 'Viewer' };
 const canManage = (role) => ['staff', 'owner', 'admin'].includes(role);
+/** Tabs this person sees: everyone Cars and Orders; owners and admins People; eShield staff the worker check and every dealer's orders. */
+const tabsFor = (role, isStaff) => [
+  ['cars', 'Cars'], ['orders', 'Orders'],
+  ...(canManage(role) ? [['people', 'People']] : []),
+  ...(isStaff ? [['jobs', 'Worker check'], ['all-orders', 'All dealers’ orders']] : []),
+];
 const when = (t) => (t ? new Date(t).toLocaleString() : '');
 
 function Login({ onSignedIn }) {
@@ -118,7 +127,9 @@ export default function App() {
   const [me, setMe] = useState(undefined);
   const [dealerId, setDealerId] = useState(() => { try { return Number(localStorage.getItem('dealer')) || null; } catch { return null; } });
   const [adding, setAdding] = useState(false);
+  const [tab, setTab] = useState(() => { try { return localStorage.getItem('tab') || 'cars'; } catch { return 'cars'; } });
   useEffect(() => { api('GET', '/api/auth/me').then(setMe, () => setMe(null)); }, []);
+  useEffect(() => { try { localStorage.setItem('tab', tab); } catch { /* private window */ } }, [tab]);
   useEffect(() => { try { if (dealerId) localStorage.setItem('dealer', String(dealerId)); } catch { /* private window */ } }, [dealerId]);
 
   if (me === undefined) return <p className="muted center">Loading…</p>;
@@ -153,9 +164,18 @@ export default function App() {
         </>
       ) : !dealer ? <p className="card muted">Your account is not linked to a dealer yet. Ask your dealer's owner or eShield to add you.</p> : (
         <main>
-          <h1>{dealer.name} <span className="muted small">{ROLE_NAMES[dealer.role]}</span></h1>
-          <Jobs dealerId={dealer.id} isStaff={me.user.is_staff} />
-          {canManage(dealer.role) && <Members dealerId={dealer.id} />}
+          {tab !== 'all-orders' && <h1>{dealer.name} <span className="muted small">{ROLE_NAMES[dealer.role]}</span></h1>}
+          <nav className="tabs">
+            {tabsFor(dealer.role, me.user.is_staff).map(([id, label]) => <button key={id} className={tab === id ? 'tab active' : 'tab'} onClick={() => setTab(id)}>{label}</button>)}
+          </nav>
+          {(() => {
+            const shown = tabsFor(dealer.role, me.user.is_staff).some(([id]) => id === tab) ? tab : 'cars';
+            if (shown === 'orders') return <Orders dealerId={dealer.id} canOrder={['staff', 'owner', 'admin'].includes(dealer.role)} />;
+            if (shown === 'people') return <Members dealerId={dealer.id} />;
+            if (shown === 'jobs') return <Jobs dealerId={dealer.id} isStaff={me.user.is_staff} />;
+            if (shown === 'all-orders') return <StaffOrders />;
+            return <Cars dealerId={dealer.id} role={dealer.role} />;
+          })()}
         </main>
       )}
     </div>

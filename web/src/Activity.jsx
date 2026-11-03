@@ -12,7 +12,7 @@ const POST_FILTERS = [['', 'All'], ['pending', 'Scheduled & in progress'], ['pub
 const AD_FILTERS = [['', 'All'], ['requested', 'Waiting to launch'], ['launched_paused', 'Paused'], ['active', 'Running'], ['ended', 'Ended'], ['problem', 'Problems']];
 
 /** Full-page window shared by both: header, client and status filters, auto-refresh while something is under way. */
-function Window({ id, title, open, onClose, load, filters, children }) {
+export function Window({ id, title, open, onClose, load, filters, children }) {
   const [, say] = useStatus(id);
   const s = useStudio();
   const [rows, setRows] = useState(null);

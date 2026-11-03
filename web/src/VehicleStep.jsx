@@ -326,6 +326,10 @@ function Inventory({ say }) {
       setTimeout(() => document.getElementById('stepScript')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 0);
     } catch (e) { say(e.message, true); }
   });
+  // A car just copied from a customer order: open it once this client's cars include it.
+  useEffect(() => {
+    if (s.openStock && active.some((v) => v.StockNumber === s.openStock)) { const stock = s.openStock; s.setOpenStock(null); select(stock); }
+  }, [s.openStock, active]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <>
     <div id="inventory" className="vehicle-list" ref={listRef}>

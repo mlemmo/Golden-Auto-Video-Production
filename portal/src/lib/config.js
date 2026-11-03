@@ -19,6 +19,8 @@ export function loadConfig(env = process.env) {
     appUrl,
     databaseUrl: env.DATABASE_URL || '',
     workerSecrets: parseWorkerSecrets(env.WORKER_SHARED_SECRETS || ''),
+    // Customers' uploaded car photos (full size until our server has copied them, then thumbnails only).
+    uploadDir: env.UPLOAD_DIR || join(PORTAL_DIR, 'uploads'),
     secureCookies: appUrl.startsWith('https://'),
   };
 }

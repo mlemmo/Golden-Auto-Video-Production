@@ -20,7 +20,10 @@ only then fast-forward `main` and deploy production (`bash /srv/golden-auto/ubun
 │   ├── STAGING.md         Production vs staging, everyday flow
 │   ├── DEPLOY_UBUNTU.md   Deploying, cron workers, logs, rollback
 │   ├── META_SETUP.md      Connecting a dealer's Facebook Page and Instagram for posting
-│   └── ADS_LAUNCH.md      Paid ads: Meta through the Marketing API (ads worker), TikTok by hand
+│   ├── ADS_LAUNCH.md      Paid ads: Meta through the Marketing API (ads worker), TikTok by hand
+│   └── LOTSPOTLIGHT_PLAN.md  The approved customer portal plan (branch siteground)
+├── portal/                The LotSpotlight customer portal (SiteGround, MySQL): see portal/README.md
+├── shared/                Code used by both node/ and portal/: HTML/text helpers, dealer website fetching and readers
 ├── node/                  The server (Node.js): sign-in, accounts, every dashboard action, background workers
 │   ├── package.json       Server dependencies (bcryptjs) and scripts (npm test, npm start, npm run password-hash)
 │   ├── src/server.js      HTTP server: pages, sessions, role checks, action routing, share pages, static files
@@ -78,6 +81,8 @@ only then fast-forward `main` and deploy production (`bash /srv/golden-auto/ubun
 | `speech.js` | How text is spoken: numbers, prices, acronyms, shorthand (4WD…), respellings for Seedance |
 | `prompts.js` | The Seedance video prompts |
 | `captions.js` | Caption engine: splitting, line length, timing, Call For Price |
+| `orders.js` | Customer orders from the LotSpotlight portal: the admin's Orders window, Open in studio |
+| `dom.js`, `html.js`, `text.js` | Re-export `shared/` (HTML parsing and text helpers, shared with the portal) |
 | `finishing.js`, `worker.js`, `autobuild.js` | Building the final captioned video (caption style, FFmpeg render, auto build) |
 | `jobs.js` | Paid generation, status checks, jobs list, My footage, library list |
 | `slideshow.js` | Photo slideshow videos: timeline, FFmpeg zoom/cross-fade graph, one job per shape (9:16, 4:5, 16:9, 1:1) |

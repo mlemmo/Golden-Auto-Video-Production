@@ -35,3 +35,39 @@ th { color: var(--muted); font-weight: 600; }
 .status.queued, .status.leased { color: var(--wait); }
 .form { max-width: 480px; display: flex; flex-direction: column; gap: 12px; }
 .actions { display: flex; align-items: center; gap: 12px; }
+:root { --warn-bg: #fdf1dc; --ok-bg: #e5f4ea; --pill: #eceef1; }
+@media (prefers-color-scheme: dark) { :root { --warn-bg: #3a2f17; --ok-bg: #173323; --pill: #2a2f37; } }
+textarea { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--text); resize: vertical; }
+.tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
+.tab { background: none; color: var(--muted); border-radius: 6px 6px 0 0; font-weight: 600; padding: 8px 14px; }
+.tab.active { color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
+.ok { color: var(--ok); margin: 0; }
+.note { background: var(--warn-bg); border-radius: 6px; padding: 8px 12px; margin: 0; }
+.nowrap { white-space: nowrap; }
+button.small { padding: 4px 10px; font-size: .85rem; }
+button.secondary { background: var(--pill); color: var(--text); }
+button.danger { background: var(--bad); color: #fff; }
+.pill { display: inline-block; font-size: .75rem; font-weight: 600; padding: 2px 8px; border-radius: 99px; background: var(--pill); color: var(--muted); }
+.pill.warn, .pill.order-awaiting_payment { background: var(--warn-bg); color: var(--wait); }
+.pill.order-paid, .pill.order-in_progress { background: var(--ok-bg); color: var(--ok); }
+.pill.order-cancelled, .pill.order-rejected { color: var(--bad); }
+.pull { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; align-items: flex-start; }
+.car-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.car { display: flex; flex-direction: column; gap: 0; padding: 0; background: var(--card); color: var(--text); border: 1px solid var(--line); text-align: left; font-weight: normal; overflow: hidden; }
+.car img, .car .no-photo { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; background: var(--pill); display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: .85rem; }
+.car-text { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px 12px; }
+.badges { display: flex; gap: 6px; flex-wrap: wrap; }
+.car-editor { display: flex; flex-direction: column; gap: 20px; }
+.car-editor .form { display: flex; flex-direction: column; gap: 12px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+.vin-row { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
+.vin-row label { flex: 1; min-width: 220px; }
+.photos { display: flex; flex-direction: column; gap: 10px; }
+h3 { font-size: 1rem; margin: 0; }
+.photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+.photo-grid figure { margin: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.photo-grid img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; display: block; }
+.photo-grid figcaption { display: flex; justify-content: space-between; padding: 2px 4px; }
+.upload { flex-direction: row; align-items: center; gap: 10px; font-weight: 600; }
+.order-form { display: flex; flex-direction: column; gap: 12px; border-top: 1px solid var(--line); padding-top: 16px; }
+.confirm { display: inline-flex; align-items: center; gap: 6px; }

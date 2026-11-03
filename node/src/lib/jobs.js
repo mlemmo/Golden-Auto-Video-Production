@@ -160,9 +160,13 @@ export function galleryPhotos(html) {
   return [...new Set(photos)];
 }
 
+// Cars imported rather than read from Golden Auto's website: a ZIP, a client website import, or a LotSpotlight portal
+// order. Their availability and price are confirmed by the user, never re-read live.
+export const IMPORTED_SOURCES = ['zip', 'dcs', 'portal'];
+
 /** enrich(): price, description and photos from the car's own page (website cars); imported cars as they are. */
 export async function enrich(v, get = requestText) {
-  if (['zip', 'dcs'].includes(v.source ?? '')) return v;
+  if (IMPORTED_SOURCES.includes(v.source ?? '')) return v;
   const html = await get(v.url); const doc = parseHtml(html); const detail = [];
   v = { ...v };
   // Price only from this vehicle's metadata and its own price widget: never related cars or loan calculators.
@@ -204,9 +208,9 @@ export async function generateJob(db, cfg, client, inp, opts = {}) {
   for (const candidate of a.vehicles ?? []) if (candidate.StockNumber === (inp.stock ?? '')) v = candidate;
   if (!v) throw new Error('Select a current vehicle first.');
   if ((v.active ?? true) === false) throw new Error('This vehicle is no longer in DealerCenter active inventory. Generation stopped.');
-  // Imported cars (ZIP, client website import): availability and price are confirmed by the user, not re-read live.
+  // Imported cars (ZIP, client website import, portal order): availability and price are confirmed by the user, not re-read live.
   let fresh;
-  if (['zip', 'dcs'].includes(v.source ?? '')) {
+  if (IMPORTED_SOURCES.includes(v.source ?? '')) {
     if (!truthy(inp.confirm_current ?? false)) throw new Error('Confirm that imported availability and highest advertised price are still current.');
     fresh = v;
   } else {

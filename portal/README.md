@@ -1,10 +1,16 @@
 # LotSpotlight portal
 
 The customer-facing site (app.lotspotlight.com, SiteGround): sign-in, dealers, roles, audit log, and the job API the
-video worker on the Ubuntu server calls. Spec: [docs/lotspotlight-architecture.md](../docs/lotspotlight-architecture.md).
-Milestone 1 (foundations) is what is here now.
+video worker on the Ubuntu server calls. The approved plan (customers order, pay and approve here; staff make the videos
+with the existing video app) is [docs/LOTSPOTLIGHT_PLAN.md](../docs/LOTSPOTLIGHT_PLAN.md); it replaces Milestones 2–4 of
+the original spec, [docs/lotspotlight-architecture.md](../docs/lotspotlight-architecture.md). "LotSpotlight" is a working
+name until the new business has one. Milestones 1 (foundations) and 2 (cars and orders) are here now.
 
-- `src/` — Express app (Node ≥ 22, MySQL 8). `src/lib/jobs.js` is the queue, `src/lib/hmac.js` the worker signatures.
+- `src/` — Express app (Node ≥ 22, MySQL 8). `src/lib/jobs.js` is the queue, `src/lib/hmac.js` the worker signatures,
+  `src/lib/vehicles.js` cars, `src/lib/photos.js` uploaded photos, `src/lib/pulls.js` website pulls,
+  `src/lib/orders.js` orders.
+- `../shared/` — website fetching and listing-page readers used by both the portal and the video app. The portal
+  imports them from the repository, so SiteGround needs the whole repository, with the app root set to `portal/`.
 - `migrations/` — SQL applied in order by `npm run migrate` (the server also applies them when it starts).
 - `web/` — React front end (Vite), built into `public/` with `npm run build` (not committed).
 - `test/` — `npm test`. Tests that need a database use `TEST_DATABASE_URL`, an empty database they may wipe;
@@ -22,6 +28,31 @@ started by any service yet.
 4. Worker against it: set `PORTAL_API=http://localhost:3000/api/worker`, `WORKER_ID` and `WORKER_SECRET` (one pair from
    `WORKER_SHARED_SECRETS`), then `node ../node/src/cli/portal-worker.js`. "Send test job" (staff only) should show
    **done** within a few seconds.
+
+## Milestone 2: cars and orders (2026-11-03)
+
+- **Cars** (`/api/dealers/:id/vehicles`): added by form (VIN required; "Look up" fills year, make, model, trim and
+  drive from the free NHTSA VIN service), pulled from the dealer's website, or sent by a DMS sync. Fields a customer
+  changes, and photos they reorder or delete, are kept when the website is pulled again. Viewers read; owners, admins
+  and approvers change cars.
+- **Photos**: website photos stay links to the dealer's own photo host. Uploads are shrunk and re-saved as JPEG in the
+  browser (2400 px, plus a 480 px thumbnail), at most 30 per car and 10 MB each, stored in `UPLOAD_DIR`. When our server
+  has copied an order's uploads, the full files are deleted here and the thumbnails stay.
+- **Website pulls** (`/api/dealers/:id/pulls`): run on the portal, four car pages per request (SiteGround stops long
+  work), kept going by the customer's open page. Only Dealer Car Search sites can be read today; for other sites and
+  sites that block us the customer is told we will import their cars, and staff run the browser snapshot reader
+  (`tools/inventory-snapshot.js`, new last step `step3Portal(<dealer id>)`). Cars no longer on the site are marked
+  "not on your website anymore", never deleted.
+- **Orders** (`/api/dealers/:id/orders`): owners and admins order an AI spokesperson video (15/30 s) or a photo
+  slideshow (15/30/60 s) for a car with at least one photo; the car is frozen into the order. Status: awaiting
+  payment → paid → in progress (→ ready for review → approved / rejected in Milestone 4), or cancelled. Customers cancel
+  only before payment.
+- **Staff** (`/api/staff/orders`): every dealer's orders; "Release as paid" stands in for Stripe until Milestone 3.
+- **Video app** ("Orders" button for admins, `node/src/lib/orders.js`): lists paid orders through the signed worker
+  API and "Open in studio" copies just that car and its photos into the dealer's client there (an existing client with
+  the same name, else a new one), claims the order (in progress) and opens the car in step 1. It appears once
+  `private/config.json` has `"portal": { "api": "https://…/api/worker", "worker_id": "…", "worker_secret": "…" }`.
+- Tests: `test/cars.test.js` (needs `TEST_DATABASE_URL`), and `node/test/orders.test.js` in the video app.
 
 ## Status and handoff (2026-11-02)
 
