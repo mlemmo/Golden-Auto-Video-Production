@@ -41,7 +41,7 @@ API only through the signed worker API.
 ## Milestones
 
 1. **M1 Foundations** — done (Mark, 2026-10-31; Add dealer page 2026-11-03).
-2. **M2 Cars and orders** — built 2026-11-03 on `siteground`, reworked the same day for the static site and live
+2. **M2 Cars and orders** — built 2026-11-03 on the `siteground` branch (since merged into `staging` and deleted), reworked the same day for the static site and live
    website reads (see portal/README.md). Done when a Golden Auto car added by hand and an eLease Returns car from its
    website are ordered, released by staff, shown in both staff views, and opened in the studio on staging.
 3. **M3 Payments** — Stripe Checkout per order, a credits balance (top-ups, spending, refunds as credits), the Stripe

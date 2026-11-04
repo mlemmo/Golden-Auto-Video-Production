@@ -21,7 +21,7 @@ only then fast-forward `main` and deploy production (`bash /srv/golden-auto/ubun
 │   ├── DEPLOY_UBUNTU.md   Deploying, cron workers, logs, rollback
 │   ├── META_SETUP.md      Connecting a dealer's Facebook Page and Instagram for posting
 │   ├── ADS_LAUNCH.md      Paid ads: Meta through the Marketing API (ads worker), TikTok by hand
-│   └── LOTSPOTLIGHT_PLAN.md  The approved customer portal plan (branch siteground)
+│   └── LOTSPOTLIGHT_PLAN.md  The approved customer portal plan
 ├── portal/                The LotSpotlight portal's static pages (portal/web); its API is node/src/portal (see portal/README.md)
 ├── shared/                Code used by both node/ and portal/: HTML/text helpers, dealer website fetching and readers
 ├── node/                  The server (Node.js): sign-in, accounts, every dashboard action, background workers

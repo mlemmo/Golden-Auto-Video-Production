@@ -1,7 +1,7 @@
 # LotSpotlight — Architecture & Build Spec (for Claude Code)
 
 > Save this file in the repo as `docs/lotspotlight-architecture.md`.
-> Repo: `mlemmo/Golden-Auto-Video-Production` · Work on the `siteground` branch (replaced `nodejs` on 2026-11-02; never `staging` or `main` without asking).
+> Repo: `mlemmo/Golden-Auto-Video-Production` · Work on `staging` (the `siteground` branch was merged into it and deleted on 2026-11-04); `main` only after staging is checked.
 > Owner: Mark Lemmo (mark@lotspotlight.com)
 > Last updated: 2026-10-31
 
