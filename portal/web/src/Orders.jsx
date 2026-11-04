@@ -9,6 +9,9 @@ export const ORDER_STATUS = {
 };
 const FORMAT = { instagram_reels: 'Vertical 9:16 (Reels, Stories, TikTok)', facebook_reels: 'Vertical 9:16', facebook_feed: 'Feed 4:5', youtube: 'Wide 16:9 (YouTube)', square: 'Square 1:1' };
 const POLL_MS = 10000;
+/** What was chosen with the order: spokesperson, setting or background, shapes, where it will be posted. */
+const choiceText = (n) => [n.spokesperson && `Spokesperson: ${n.spokesperson}`, n.scene && `Setting: ${n.scene}`, n.background && `Background: ${n.background}`,
+  n.formats?.length && `Shapes: ${n.formats.join(', ')}`, n.platforms?.length && `For ${n.platforms.join(', ')}`].filter(Boolean).join(' · ');
 const when = (t) => (t ? new Date(t).toLocaleString() : '');
 export const carTitle = (v) => [v?.year, v?.make, v?.model, v?.trim].filter(Boolean).join(' ') || v?.vin || 'Car';
 export const StatusPill = ({ status }) => <span className={`pill order-${status}`}>{ORDER_STATUS[status] ?? status}</span>;
@@ -35,6 +38,7 @@ function OrderDetail({ dealerId, o, canOrder, onChanged }) {
   const reviewing = o.status === 'ready_for_review';
   return (
     <div className="order-detail">
+      {o.choices?.names && <p className="muted small">{choiceText(o.choices.names)}</p>}
       {o.remake && <p className="note small">You asked for changes: “{o.remake.reason}”. We are making the new version.</p>}
       {o.status === 'rejected' && <p className="note small">You asked for changes again: “{o.rejections.at(-1)?.reason}”. eShield will contact you about the next step.</p>}
       {o.videos.length === 0 ? <p className="muted small">Your video appears here when it is ready.</p> : (
@@ -135,7 +139,7 @@ export function StaffOrders() {
               <td>{o.id}</td>
               <td>{o.dealer_name}</td>
               <td>{carTitle(o.vehicle)}<div className="muted small">VIN {o.vehicle?.vin} · {o.vehicle?.photos?.length ?? 0} photos</div>{o.notes && <div className="muted small">{o.notes}</div>}</td>
-              <td>{o.product_name}, {o.length_s} s</td>
+              <td>{o.product_name}, {o.length_s} s{o.choices?.names && <div className="muted small">{choiceText(o.choices.names)}</div>}</td>
               <td><StatusPill status={o.status} />{o.studio_ref && <div className="muted small">{o.studio_ref}</div>}</td>
               <td>{when(o.created_at)}<div className="muted small">{o.ordered_by_email}</div></td>
               <td className="nowrap">

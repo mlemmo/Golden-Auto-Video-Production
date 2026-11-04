@@ -18,6 +18,7 @@ import { newCsrf, newSessionId, parseCookies, sameSecret, sessionStore } from '.
 import { websiteListing } from './listing.js';
 import { deps, onDepsChange, setPortalDeps } from './deps.js';
 import { decodeVin } from './vin.js';
+import { orderChoices } from './options.js';
 import {
   addUpload, carView, deleteUpload, getCar, getOrder, getUpload, listCars, listOrders, MAX_PHOTO_BYTES, MAX_THUMB_BYTES, moveOrder, orderView,
   placeOrder, PRODUCTS, reviewOrder, setThumb, statusFilter, uploadPath,
@@ -160,7 +161,7 @@ route('GET', '/api/dealers/:dealer/photos/:photo', 'viewer', ({ db, cfg, client,
 
 // Orders.
 const clientName = (db) => { const names = new Map(clientsLoad(db).items.map((c) => [c.id, c.name])); return (id) => names.get(id) ?? id; };
-route('GET', '/api/dealers/:dealer/products', 'viewer', () => ({ products: PRODUCTS }));
+route('GET', '/api/dealers/:dealer/products', 'viewer', ({ db, cfg }) => ({ products: PRODUCTS, choices: orderChoices(db, cfg) }));
 route('GET', '/api/dealers/:dealer/orders', 'viewer', ({ db, client, query }) => ({
   orders: listOrders(db, { clients: [client.id], statuses: statusFilter(query.get('status')) }).map((o) => orderView(o, clientName(db))),
 }));

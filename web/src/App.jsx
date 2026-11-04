@@ -285,11 +285,21 @@ export default function App() {
    * A customer order opened from the Orders window: its length and video type (product ai_video or slideshow), set
    * together so the length/type rules above do not undo each other. Slideshows use the approved ElevenLabs voice.
    */
-  function applyOrder({ length_s, product }) {
+  function applyOrder({ length_s, product, choices }) {
     const len = String(length_s), src = product === 'slideshow' ? 'slideshow' : 'ai';
     setSourceRaw(src);
     setDurationRaw(src === 'ai' && len === '60' ? '30' : len);
     if (src === 'slideshow') setVoiceRaw('elevenlabs');
+    // The customer's choices on the portal (node/src/portal/options.js); ones removed from the libraries since are skipped.
+    if (!choices) return;
+    if (src === 'ai') {
+      if (spokespersons.items.some((x) => x.id === choices.spokesperson)) setSpokespersonId(choices.spokesperson);
+      if (scenes.items.some((x) => x.id === choices.scene)) setSceneId(choices.scene);
+      if (choices.formats?.[0]) setFormat(choices.formats[0]);
+    } else {
+      if (choices.formats?.length) setShapes(choices.formats);
+      if (choices.background !== undefined) setBackground(choices.background);
+    }
   }
 
   const spokesperson = spokespersons.items.find((s) => s.id === spokespersonId) ?? null;

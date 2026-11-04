@@ -104,8 +104,11 @@ test('a customer orders; staff release it; the studio opens it into the dealerâ€
   const up = await owner.upload('/api/dealers/elease/uploads', Buffer.from(JPEG_1800x900_B, 'base64'));
   assert.equal(up.status, 201);
   assert.equal((await owner.upload('/api/dealers/elease/uploads', Buffer.from('nope'))).status, 415);
-  const body = { car: { ...webCar, price: 14999 }, photos: [{ url: webCar.photos[0] }, { upload_id: up.data.photo_id }], source: 'website', product: 'slideshow', length_s: 30, notes: 'New tyres' };
+  const body = { car: { ...webCar, price: 14999 }, photos: [{ url: webCar.photos[0] }, { upload_id: up.data.photo_id }], source: 'website', product: 'slideshow', length_s: 30, notes: 'New tyres',
+    background: '', platforms: ['facebook', 'youtube'], formats: ['instagram_reels', 'youtube'] };
   assert.equal((await owner.post('/api/dealers/elease/orders', { ...body, length_s: 45 })).status, 400);
+  assert.equal((await owner.post('/api/dealers/elease/orders', { ...body, formats: [] })).status, 400, 'a shape is needed');
+  assert.equal((await owner.post('/api/dealers/elease/orders', { ...body, background: 'studio' })).status, 400, 'no cut-out on this server: original photos only');
   const order = (await owner.post('/api/dealers/elease/orders', body)).data.order;
   assert.deepEqual([order.status, order.vehicle.vin, order.vehicle.price, order.dealer_name], ['awaiting_payment', VIN_A, 14999, 'eLease Returns']);
   assert.deepEqual((await owner.get('/api/dealers/elease/vehicles')).data.vehicles.map((v) => [v.vin, v.order_status, v.photo_count]), [[VIN_A, 'awaiting_payment', 2]]);
@@ -123,6 +126,7 @@ test('a customer orders; staff release it; the studio opens it into the dealerâ€
   const opened = await actions.portal_order_open({ db, cfg, body: { id: order.id }, session, user });
   assert.deepEqual([opened.client, opened.stock, session.data.client], ['elease', 'S1', 'elease']);
   assert.deepEqual([opened.length_s, opened.product, opened.notes], [30, 'slideshow', 'New tyres'], 'the studio takes the orderâ€™s length and type');
+  assert.deepEqual([opened.choices.background, opened.choices.formats, opened.choices.names.platforms], ['', ['instagram_reels', 'youtube'], ['Facebook', 'YouTube']]);
   assert.match(opened.message, /make a 30-second photo slideshow .* Customer notes: New tyres/);
   const car = state(db, 'inventory:elease').vehicles.find((v) => v.StockNumber === 'S1');
   assert.deepEqual([car.source, car.price, car.photos.length], ['portal', 14999, 2]);
@@ -225,4 +229,37 @@ test('password change works on both sites; only the pagesâ€™ address may call th
   const nochange = portalBrowser(); await nochange.login('staff@eshield.test');
   const noToken = await fetch(base + '/api/dealers/elease/orders', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
   assert.equal(noToken.status, 401, 'no session');
+});
+
+test('an AI video order carries the spokesperson, setting and shape; the walkaround keeps only outside photos', async () => {
+  save(db, 'spokespersons', { items: [{ id: 'bella', name: 'Bella', file: 'bella.png', created_at: '2026-11-03T00:00:00+00:00' }], default: 'bella' });
+  const owner = portalBrowser(); await owner.login('owner@lr.test');
+  const offer = (await owner.get('/api/dealers/elease/products')).data.choices;
+  assert.deepEqual(offer.spokespersons, [{ id: 'bella', name: 'Bella', url: 'https://studio.example.com:4343/assets/bella.png' }]);
+  assert.ok(offer.scenes.some((x) => x.id === offer.default_scene), 'the studioâ€™s background settings');
+  assert.ok(!offer.backdrops.some((b) => b.id.startsWith('ai:')));
+  const webCar = (await owner.get('/api/dealers/elease/website-cars')).data.cars[1];
+  const up = await owner.upload('/api/dealers/elease/uploads', Buffer.from(JPEG_1800x900_B, 'base64'));
+  const body = { car: webCar, photos: [{ upload_id: up.data.photo_id }, { url: webCar.photos[0] }], source: 'website', product: 'ai_video', length_s: 15,
+    spokesperson: 'bella', scene: offer.default_scene, platforms: ['tiktok'], formats: ['instagram_reels'] };
+  assert.equal((await owner.post('/api/dealers/elease/orders', { ...body, formats: ['instagram_reels', 'square'] })).status, 400, 'one shape per AI video');
+  assert.equal((await owner.post('/api/dealers/elease/orders', { ...body, formats: ['youtube'] })).status, 400, 'no wide AI video');
+  assert.equal((await owner.post('/api/dealers/elease/orders', { ...body, spokesperson: 'nobody' })).status, 400);
+  const order = (await owner.post('/api/dealers/elease/orders', body)).data.order;
+  assert.deepEqual([order.choices.spokesperson, order.choices.names.spokesperson, order.choices.names.formats], ['bella', 'Bella', ['Vertical 9:16']]);
+  const staff = portalBrowser(); await staff.login('staff@eshield.test');
+  await staff.post(`/api/staff/orders/${order.id}/release`);
+
+  // The sorter calls the uploaded photo an interior shot: the walkaround is made from the outside one only.
+  const user = userByEmail(db, 'staff@eshield.test');
+  const sorted = [];
+  setPortalDeps({ classify: async (paths) => { sorted.push(paths.length); return Object.fromEntries(paths.map((p, i) => [p, i === 0 ? 'interior' : 'exterior'])); } });
+  try {
+    const opened = await actions.portal_order_open({ db, cfg, body: { id: order.id }, session: { data: {} }, user });
+    assert.deepEqual([opened.choices.spokesperson, opened.choices.scene, opened.choices.formats], ['bella', offer.default_scene, ['instagram_reels']]);
+    assert.match(opened.message, /Kept 1 outside photo of 2/);
+    const car = state(db, 'inventory:elease').vehicles.find((v) => v.StockNumber === 'S2');
+    assert.deepEqual([car.photos.length, car.photo_labels], [1, { interior: 1, exterior: 1 }]);
+    assert.deepEqual(sorted, [2]);
+  } finally { setPortalDeps({ classify: null }); }
 });

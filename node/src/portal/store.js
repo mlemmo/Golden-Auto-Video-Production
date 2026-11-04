@@ -8,6 +8,7 @@ import { existsSync, mkdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import { HttpError } from '../lib/auth.js';
 import { gmdateC } from '../lib/text.js';
 import { cleanFields, cleanVin, EDITABLE, HTTPS, MAX_PHOTOS } from './cars.js';
+import { choiceNames, cleanChoices } from './options.js';
 
 export const PRODUCTS = {
   ai_video: { name: 'AI spokesperson video', lengths: [15, 30] },
@@ -126,7 +127,7 @@ export function orderView(row, clientName = (c) => c) {
   const p = JSON.parse(row.payload);
   const rejections = p.rejections ?? [];
   return { id: row.id, dealer_id: row.client, dealer_name: clientName(row.client), status: row.status, created_at: row.created_at, updated_at: row.updated_at,
-    product: p.product, product_name: PRODUCTS[p.product]?.name ?? p.product, length_s: p.length_s, notes: p.notes ?? null, vehicle: p.vehicle,
+    product: p.product, product_name: PRODUCTS[p.product]?.name ?? p.product, length_s: p.length_s, notes: p.notes ?? null, vehicle: p.vehicle, choices: p.choices ?? null,
     ordered_by_email: p.ordered_by ?? null, paid_via: p.paid_via ?? null, paid_at: p.paid_at ?? null, studio_ref: p.studio_ref ?? null,
     // Delivery and review (Milestone 4): the videos sent, when, and the customer's answers.
     videos: p.delivery?.videos ?? [], delivered_at: p.delivery?.sent_at ?? null, approved_at: p.approved_at ?? null, approved_by: p.approved_by ?? null,
@@ -137,7 +138,7 @@ export function orderView(row, clientName = (c) => c) {
 /**
  * Places an order: the car as the customer filled it in (from their website or by hand) and its photos are saved as one
  * of their cars with videos, then frozen into the order. input: { car, photos: [{ url } | { upload_id }], source,
- * product, length_s, notes }. Returns the order id.
+ * product, length_s, notes, spokesperson, scene, background, platforms, formats } (options.js). Returns the order id.
  */
 export function placeOrder(db, cfg, client, user, input) {
   tables(db);
@@ -145,6 +146,8 @@ export function placeOrder(db, cfg, client, user, input) {
   const length = Number(input?.length_s);
   if (!PRODUCTS[product]) throw new HttpError(400, 'Choose a video type.');
   if (!PRODUCTS[product].lengths.includes(length)) throw new HttpError(400, `Choose a length: ${PRODUCTS[product].lengths.join(', ')} seconds.`);
+  const picked = cleanChoices(db, cfg, product, input);
+  const choices = { ...picked, names: choiceNames(db, cfg, picked) };
   const notes = String(input?.notes ?? '').trim();
   if (notes.length > MAX_NOTES) throw new HttpError(400, `Notes can be up to ${MAX_NOTES} characters.`);
   const vin = cleanVin(input?.car?.vin);
@@ -174,7 +177,7 @@ export function placeOrder(db, cfg, client, user, input) {
     db.prepare('INSERT INTO portal_cars VALUES (?,?,?,?) ON CONFLICT(client, vin) DO UPDATE SET payload = excluded.payload, updated_at = excluded.updated_at')
       .run(client, vin, JSON.stringify(car), now);
     const vehicle = { vin, ...Object.fromEntries(EDITABLE.map((k) => [k, fields[k]])), photos: photos.map((p) => ({ ...p })) };
-    const payload = { product, length_s: length, notes: notes || null, vehicle, ordered_by: user.email };
+    const payload = { product, length_s: length, notes: notes || null, choices, vehicle, ordered_by: user.email };
     return Number(db.prepare('INSERT INTO portal_orders (client, vin, status, payload, created_at, updated_at) VALUES (?,?,?,?,?,?)')
       .run(client, vin, 'awaiting_payment', JSON.stringify(payload), now, now).lastInsertRowid);
   });

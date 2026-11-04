@@ -15,6 +15,9 @@ const KIND = { ai: 'AI video', slideshow: 'Slideshow', footage: 'Footage' };
 const FORMAT = { instagram_reels: '9:16', facebook_reels: '9:16', facebook_feed: '4:5', youtube: '16:9', square: '1:1' };
 const dollars = (n) => (n === null || n === undefined ? 'no price' : '$' + Number(n).toLocaleString('en-US'));
 const miles = (n) => (n === null || n === undefined ? '' : Number(n).toLocaleString('en-US') + ' mi');
+/** The customer's choices in one line: spokesperson, setting or background, shapes and where it will be posted. */
+const choiceText = (n) => [n.spokesperson && 'Spokesperson ' + n.spokesperson, n.scene && 'setting ' + n.scene, n.background && 'background ' + n.background,
+  n.formats?.length && n.formats.join(', '), n.platforms?.length && 'for ' + n.platforms.join(', ')].filter(Boolean).join(' · ');
 const when = (t) => (t ? new Date(t).toLocaleString([], { month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '');
 
 /** The finished videos of an order's car, ticked to send (the ones already sent start ticked). */
@@ -80,6 +83,7 @@ export function OrdersWindow({ open, onClose }) {
                   <strong>{o.vehicle.title || o.vehicle.vin}</strong>
                   <small>{[o.dealer, `${o.product_name}, ${o.length_s} s`, `order ${o.id}`, when(o.paid_at || o.created_at), o.ordered_by].filter(Boolean).join(' · ')}</small>
                   <small className="hint">{[o.vehicle.stock && 'stock ' + o.vehicle.stock, 'VIN ' + o.vehicle.vin, dollars(o.vehicle.price), miles(o.vehicle.mileage), `${o.vehicle.photos} photo${o.vehicle.photos === 1 ? '' : 's'}`].filter(Boolean).join(' · ')}</small>
+                  {o.choices?.names && <small className="hint">{choiceText(o.choices.names)}</small>}
                   {o.notes && <small className="hint activity-caption">Customer notes: {o.notes}</small>}
                   {o.remake && <small className="note-important">Free remake asked for: {o.remake.reason}</small>}
                   {o.status === 'rejected' && o.rejections.map((r, i) => <small key={i} className="note-important">Rejected {when(r.at)}: {r.reason}</small>)}

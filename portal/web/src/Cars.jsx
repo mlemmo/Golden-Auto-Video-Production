@@ -16,6 +16,69 @@ const dollars = (n) => (n === null || n === undefined ? '' : '$' + Number(n).toL
 const miles = (n) => (n === null || n === undefined ? '' : Number(n).toLocaleString('en-US') + ' mi');
 const formOf = (car) => Object.fromEntries(Object.keys(EMPTY).map((k) => [k, car?.[k] ?? '']));
 
+/** Shapes suggested for the platforms ticked: an AI video gets one shape (each is its own render), a slideshow all. */
+function suggestFormats(choices, product, platforms) {
+  const all = [...new Set(platforms.flatMap((p) => choices.platform_formats[p] ?? []))];
+  if (product !== 'ai_video') return all.length ? all : ['instagram_reels'];
+  return [all.find((f) => choices.formats[f]?.ai) ?? 'instagram_reels'];
+}
+
+/** The order's look and destination: spokesperson and setting (AI video) or background (slideshow), platforms, shapes. */
+function OrderChoices({ choices, product, value, onChange }) {
+  const set = (k, v) => onChange({ ...value, [k]: v });
+  const ai = product === 'ai_video';
+  function platform(p) {
+    const platforms = value.platforms.includes(p) ? value.platforms.filter((x) => x !== p) : [...value.platforms, p];
+    onChange({ ...value, platforms, formats: suggestFormats(choices, product, platforms) });
+  }
+  const format = (f) => set('formats', ai ? [f] : value.formats.includes(f) ? value.formats.filter((x) => x !== f) : [...value.formats, f]);
+  return (
+    <section className="choices">
+      {ai && (
+        <>
+          <h3>Spokesperson</h3>
+          {choices.spokespersons.length === 0 ? <p className="muted small">No spokespersons yet: eShield picks one for you.</p> : (
+            <div className="people">
+              {choices.spokespersons.map((p) => (
+                <label key={p.id} className={`person${value.spokesperson === p.id ? ' picked' : ''}`}>
+                  <input type="radio" name="spokesperson" checked={value.spokesperson === p.id} onChange={() => set('spokesperson', p.id)} />
+                  {p.url ? <img src={p.url} alt="" loading="lazy" /> : <span className="no-photo">No picture</span>}
+                  <span className="small">{p.name}</span>
+                </label>
+              ))}
+            </div>
+          )}
+          <label>Background setting<select value={value.scene ?? ''} onChange={(e) => set('scene', e.target.value)}>
+            {choices.scenes.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+          </select></label>
+        </>
+      )}
+      {!ai && (
+        <label>Background behind the car<select value={value.background} onChange={(e) => set('background', e.target.value)}>
+          {choices.backdrops.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+        </select>
+          <span className="muted small">{value.background ? 'The car is cut out of its outside photos and set on this background; inside photos stay as they are.' : 'Your photos as they are.'}</span>
+        </label>
+      )}
+      <h3>Where will you post it?</h3>
+      <div className="checks">
+        {Object.entries(choices.platforms).map(([k, name]) => (
+          <label key={k} className="check"><input type="checkbox" checked={value.platforms.includes(k)} onChange={() => platform(k)} />{name}</label>
+        ))}
+      </div>
+      <h3>Video shape{ai ? '' : 's'} <span className="muted small">{ai ? 'one shape per AI video' : 'one video in each shape, at no extra cost'}</span></h3>
+      <div className="checks">
+        {Object.entries(choices.formats).filter(([, f]) => !ai || f.ai).map(([k, f]) => (
+          <label key={k} className="check" title={f.hint}>
+            <input type={ai ? 'radio' : 'checkbox'} name="format" checked={value.formats.includes(k)} onChange={() => format(k)} />
+            {f.name} <span className="muted small">{f.hint}</span>
+          </label>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 /** A car card: photo, name, price and miles, its latest order. */
 function CarCard({ car, photo, onClick, action }) {
   return (
@@ -38,10 +101,23 @@ function OrderForm({ dealerId, start, onDone, onCancel }) {
   const [product, setProduct] = useState('ai_video');
   const [length, setLength] = useState(30);
   const [notes, setNotes] = useState('');
+  const [choices, setChoices] = useState(null);   // what is offered
+  const [picked, setPicked] = useState(null);     // what is chosen
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState('');
-  useEffect(() => { api('GET', `/api/dealers/${dealerId}/products`).then((d) => setProducts(d.products), (e) => setError(e.message)); }, [dealerId]);
+  useEffect(() => {
+    api('GET', `/api/dealers/${dealerId}/products`).then((d) => {
+      setProducts(d.products); setChoices(d.choices);
+      const platforms = ['instagram', 'facebook'];
+      setPicked({ spokesperson: d.choices.default_spokesperson, scene: d.choices.default_scene, background: '', platforms, formats: suggestFormats(d.choices, 'ai_video', platforms) });
+    }, (e) => setError(e.message));
+  }, [dealerId]);
+  function chooseProduct(next) {
+    setProduct(next);
+    if (!products[next].lengths.includes(length)) setLength(products[next].lengths.at(-1));
+    setPicked((v) => ({ ...v, formats: suggestFormats(choices, next, v.platforms) }));
+  }
   const field = (k) => ({ id: `order-${k}`, value: form[k], onChange: (e) => setForm({ ...form, [k]: e.target.value }) });
 
   async function lookUp() {
@@ -81,7 +157,7 @@ function OrderForm({ dealerId, start, onDone, onCancel }) {
     setBusy('Placing the order…');
     try {
       const { order } = await api('POST', `/api/dealers/${dealerId}/orders`, {
-        car: form, photos: photos.map((p) => (p.upload_id ? { upload_id: p.upload_id } : { url: p.url })), source: start.source, product, length_s: length, notes,
+        car: form, photos: photos.map((p) => (p.upload_id ? { upload_id: p.upload_id } : { url: p.url })), source: start.source, product, length_s: length, notes, ...picked,
       });
       onDone(`Order ${order.id} placed: ${order.product_name} of the ${carTitle(order.vehicle)}. We start once it is paid.`);
     } catch (err) { setError(err.message); setBusy(''); }
@@ -119,7 +195,7 @@ function OrderForm({ dealerId, start, onDone, onCancel }) {
 
       {products && (
         <div className="grid">
-          <label>Video<select value={product} onChange={(e) => { setProduct(e.target.value); if (!products[e.target.value].lengths.includes(length)) setLength(products[e.target.value].lengths.at(-1)); }}>
+          <label>Video<select value={product} onChange={(e) => chooseProduct(e.target.value)}>
             {Object.entries(products).map(([k, p]) => <option key={k} value={k}>{p.name}</option>)}
           </select></label>
           <label>Length<select value={length} onChange={(e) => setLength(Number(e.target.value))}>
@@ -127,11 +203,12 @@ function OrderForm({ dealerId, start, onDone, onCancel }) {
           </select></label>
         </div>
       )}
+      {choices && picked && <OrderChoices choices={choices} product={product} value={picked} onChange={setPicked} />}
       <label>Notes for us <span className="muted small">(optional)</span><textarea rows={3} maxLength={2000} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Anything to mention or leave out" /></label>
       {error && <p className="error">{error}</p>}
       {note && <p className="ok">{note}</p>}
       {busy && <p className="muted small">{busy}</p>}
-      <div className="actions"><button disabled={!!busy || photos.length === 0}>Place order</button>{photos.length === 0 && <span className="muted small">Add at least one photo.</span>}</div>
+      <div className="actions"><button disabled={!!busy || photos.length === 0 || !picked?.formats.length}>Place order</button>{photos.length === 0 && <span className="muted small">Add at least one photo.</span>}</div>
     </form>
   );
 }
