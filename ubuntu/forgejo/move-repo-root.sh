@@ -12,7 +12,7 @@
 #      and adds it to the organisation's Owners.
 #   4. Adds the server's deploy key (~mark/.ssh/golden_deploy.pub, the one GitHub has) read-only, so update.sh can
 #      pull over SSH.
-#   5. --switch: for /srv/golden-auto-staging and /srv/golden-auto, only when clean and level with GitHub:
+#   5. --switch: for /srv/golden-auto-staging and /srv/golden-auto, only when clean and not ahead of the copy:
 #      origin → git@<host>:<org>/<repo>.git, the old address kept as "github", then a test fetch.
 # The short-lived admin token this script uses is deleted at the end.
 set -euo pipefail
@@ -130,11 +130,13 @@ if [ "$switch" -eq 1 ]; then
     g remote get-url github >/dev/null 2>&1 || g remote add github "$(g remote get-url origin)"
     g remote set-url origin "$remote"
     g fetch -q origin "$branch"
-    if [ "$(g rev-parse HEAD)" != "$(g rev-parse "origin/$branch")" ]; then
+    # Behind is fine (update.sh fast-forwards on the next deploy); ahead or apart would lose commits.
+    if ! g merge-base --is-ancestor HEAD "origin/$branch"; then
       g remote set-url origin "$(g remote get-url github)"
-      echo "$dir ($branch) is not level with the copy; left on GitHub." >&2; continue
+      echo "$dir ($branch) has commits the copy does not; left on GitHub." >&2; continue
     fi
-    echo "$dir ($branch) now pulls from Forgejo; GitHub kept as remote \"github\"."
+    behind="$(g rev-list --count "HEAD..origin/$branch")"
+    echo "$dir ($branch) now pulls from Forgejo; GitHub kept as remote \"github\"$([ "$behind" -gt 0 ] && echo "; $behind commit(s) to deploy with update.sh")."
   done
 fi
 
