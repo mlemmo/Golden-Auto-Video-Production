@@ -22,7 +22,7 @@ only then fast-forward `main` and deploy production (`bash /srv/golden-auto/ubun
 │   ├── META_SETUP.md      Connecting a dealer's Facebook Page and Instagram for posting
 │   ├── ADS_LAUNCH.md      Paid ads: Meta through the Marketing API (ads worker), TikTok by hand
 │   └── LOTSPOTLIGHT_PLAN.md  The approved customer portal plan (branch siteground)
-├── portal/                The LotSpotlight customer portal (SiteGround, MySQL): see portal/README.md
+├── portal/                The LotSpotlight portal's static pages (portal/web); its API is node/src/portal (see portal/README.md)
 ├── shared/                Code used by both node/ and portal/: HTML/text helpers, dealer website fetching and readers
 ├── node/                  The server (Node.js): sign-in, accounts, every dashboard action, background workers
 │   ├── package.json       Server dependencies (bcryptjs) and scripts (npm test, npm start, npm run password-hash)
@@ -82,6 +82,7 @@ only then fast-forward `main` and deploy production (`bash /srv/golden-auto/ubun
 | `prompts.js` | The Seedance video prompts |
 | `captions.js` | Caption engine: splitting, line length, timing, Call For Price |
 | `orders.js` | Customer orders from the LotSpotlight portal: the admin's Orders window, Open in studio |
+| `../portal/` (node/src/portal) | The LotSpotlight portal's API (`api.js`), its tables (`store.js`), the live website read (`listing.js`), VIN lookup |
 | `dom.js`, `html.js`, `text.js` | Re-export `shared/` (HTML parsing and text helpers, shared with the portal) |
 | `finishing.js`, `worker.js`, `autobuild.js` | Building the final captioned video (caption style, FFmpeg render, auto build) |
 | `jobs.js` | Paid generation, status checks, jobs list, My footage, library list |

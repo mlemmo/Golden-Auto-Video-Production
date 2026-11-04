@@ -4,11 +4,13 @@ import { api } from './api.js';
 import { useStudio } from './App.jsx';
 import { DangerButton, useStatus } from './ui.jsx';
 
-export const ROLE_NAME = { admin: 'Admin', user: 'User', viewer: 'Viewer' };
+export const ROLE_NAME = { admin: 'Admin', user: 'User', viewer: 'Viewer', customer: 'Portal customer', customer_viewer: 'Portal viewer' };
 const ROLE_HINT = {
   admin: 'Everything, plus users and clients',
   user: 'Makes videos for the clients below, including paid steps',
   viewer: 'Sees and downloads videos for the clients below; changes nothing',
+  customer: 'LotSpotlight portal only: orders videos and adds people for the clients below',
+  customer_viewer: 'LotSpotlight portal only: sees the clients below; changes nothing',
 };
 
 /** Top bar: who is signed in, with Change password and Sign out. */
@@ -121,7 +123,7 @@ function UserForm({ user, self, clients, onSave, onCancel }) {
         <label>Name (optional)<input maxLength={80} autoComplete="off" value={f.name} onChange={set('name')} /></label>
         <label>Role
           <select value={f.role} disabled={self} onChange={set('role')}>
-            {['admin', 'user', 'viewer'].map((r) => <option key={r} value={r}>{ROLE_NAME[r]} — {ROLE_HINT[r]}</option>)}
+            {['admin', 'user', 'viewer', 'customer', 'customer_viewer'].map((r) => <option key={r} value={r}>{ROLE_NAME[r]} — {ROLE_HINT[r]}</option>)}
           </select>
         </label>
         <label>{user ? 'New password (leave empty to keep)' : 'Starting password (at least 10 characters)'}

@@ -23,8 +23,9 @@ import { sessionStore, newSessionId, newCsrf, sameSecret, parseCookies, sessionC
 import { loginPage, dashboardPage, sharePage } from './lib/pages.js';
 import { recordActivity, usageReport } from './lib/activity.js';
 import { libraryVideos, libraryStills, stillDelete } from './lib/jobs.js';
-import { portalOrders, portalOrderOpen, pushClientsSoon } from './lib/orders.js';
-import { signIn, userById, userCount, publicUser, allowedClients, usersList, userCreate, userUpdate, userDelete, passwordChange } from './lib/users.js';
+import { portalOrders, portalOrderOpen } from './lib/orders.js';
+import { handlePortal, isPortalPath } from './portal/api.js';
+import { isCustomer, signIn, userById, userCount, publicUser, allowedClients, usersList, userCreate, userUpdate, userDelete, passwordChange } from './lib/users.js';
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 const HOST = process.env.HOST ?? '127.0.0.1';
@@ -60,8 +61,8 @@ const sessionRoutes = {
   user_create: ({ db, user, body }) => ({ user: publicUser(userCreate(db, user, body)), message: 'Account created.' }),
   user_update: ({ db, user, body }) => ({ user: publicUser(userUpdate(db, user, body)), message: 'Account saved.' }),
   user_delete: ({ db, user, body }) => { userDelete(db, user, body.id); return { message: 'Account deleted.' }; },
-  // Admins: customer orders from the LotSpotlight portal (src/lib/orders.js). Opening one selects its client here.
-  portal_orders: ({ db, cfg }) => portalOrders(db, cfg),
+  // Admins: customer orders from the LotSpotlight portal (src/lib/orders.js, same database). Opening one selects its client.
+  portal_orders: ({ db }) => portalOrders(db),
   portal_order_open: async ({ db, cfg, body, session }) => { const r = await portalOrderOpen(db, cfg, body.id); session.data.client = r.client; return r; },
   // Admins: the Usage dashboard (days: 7, 30, 90 or 0 = all time; optional client and user).
   usage: ({ db, cfg, body }) => usageReport(db, cfg, { days: Number(body.days ?? 30) || 0, client: String(body.client ?? ''), user: String(body.user ?? '') }),
@@ -151,7 +152,8 @@ function currentClient(db, data, user) {
 /** The signed-in account, or null (no session, deleted or switched off). */
 function sessionUser(db, session) {
   const u = session.data.user ? userById(db, session.data.user) : null;
-  return u && u.active !== false ? u : null;
+  // Portal customers never use the studio.
+  return u && u.active !== false && !isCustomer(u) ? u : null;
 }
 
 async function runAction(name, req, res, cfg, store, session, https) {
@@ -179,8 +181,6 @@ async function runAction(name, req, res, cfg, store, session, https) {
     const sites = client === null ? {} : clientSpeechSites(client, dealer);
     let out = await withSpeechSites(sites, () => handler({ cfg, db, client, dealer, body, files, req, session, user }));
     if (TRACKED.has(name)) recordActivity(db, { user: user.email, client: client ?? '', action: name, detail: activityDetail(name, body, out) });
-    // A new or edited client: tell the LotSpotlight portal (in the background; nothing waits for it).
-    if (['client_add', 'client_details', 'client_analyze'].includes(name)) pushClientsSoon(db, cfg);
     // Accounts see only their own clients.
     if (name === 'clients') { const allowed = allowedClients(db, user); out = { ...out, items: out.items.filter((c) => allowed.includes(c.id)), current: client }; }
     send(res, 200, out, closeSession(store, session, https));
@@ -286,6 +286,8 @@ export const server = createServer(async (req, res) => {
       return res.end();
     } catch (e) { console.error(e); return sendText(res, 500, 'Internal error', 'text/plain; charset=UTF-8'); }
   }
+  // The LotSpotlight portal's API (src/portal/api.js): same server, same database.
+  if (isPortalPath(url.pathname)) return handlePortal(req, res, url, connection(req)).catch((e) => { console.error(e); if (!res.headersSent) send(res, 500, { error: 'Internal error' }); });
   if (req.method === 'GET' && url.pathname === '/api/node/health') return send(res, 200, { ok: true, service: pkg.name, version: pkg.version, node: process.version });
   const api = url.pathname.match(/^\/api\/node\/([a-z_]+)$/)?.[1] ?? null;
   const isPage = api === null && url.pathname === '/' && ['GET', 'POST'].includes(req.method);
@@ -309,7 +311,5 @@ export const server = createServer(async (req, res) => {
 if (import.meta.url === `file://${process.argv[1]}`) {
   server.listen(PORT, HOST, () => {
     console.log(`golden-auto-node listening on http://${HOST}:${PORT}`);
-    // The portal learns this studio's clients on every start (staff add them there with one click).
-    try { const cfg = loadConfig(); pushClientsSoon(openDb(cfg), cfg, { retryMs: [5000, 30000, 120000] }); } catch (e) { console.error('portal client sync: ' + e.message); }
   });
 }

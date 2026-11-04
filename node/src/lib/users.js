@@ -1,7 +1,9 @@
 // Dashboard accounts. There is no registration page: the first admin is created at the first sign-in (with the old
 // shared dashboard password, config password_hash), and admins create and manage everyone else.
 // Roles: admin (everything, plus users and clients), user (makes videos for the clients assigned to them, including
-// paid steps), viewer (sees and downloads videos for their clients; changes nothing).
+// paid steps), viewer (sees and downloads videos for their clients; changes nothing). Dealer customers of the
+// LotSpotlight portal (src/portal/api.js) are accounts here too, for their own clients only, and sign in only there:
+// customer (orders videos and adds their dealer's people) and customer_viewer (looks only).
 // Stored in agent.sqlite, table users (id, email UNIQUE, payload JSON). Passwords are bcrypt hashes.
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'node:crypto';
@@ -9,7 +11,9 @@ import { gmdateC, str } from './text.js';
 import { jsonEncode } from './storedjson.js';
 import { CLIENT_DEFAULT, clientsLoad } from './clients.js';
 
-export const ROLES = ['admin', 'user', 'viewer'];
+export const ROLES = ['admin', 'user', 'viewer', 'customer', 'customer_viewer'];
+export const CUSTOMER_ROLES = ['customer', 'customer_viewer'];
+export const isCustomer = (u) => CUSTOMER_ROLES.includes(u?.role);
 export const MIN_PASSWORD = 10;
 
 function table(db) {
@@ -57,6 +61,16 @@ export async function signIn(db, cfg, email, password) {
   dummyHash ??= hash(randomBytes(12).toString('hex'));
   const ok = await bcrypt.compare(str(password), u?.password_hash ?? dummyHash).catch(() => false);
   if (!u || !ok || u.active === false) return null;
+  if (isCustomer(u)) throw new Error('This account is for the LotSpotlight portal. Sign in there instead.');
+  return signedIn(db, u);
+}
+
+/** Portal sign-in: any active account (studio accounts and customers), by email and password; null when wrong. */
+export async function portalSignIn(db, email, password) {
+  const u = userByEmail(db, email);
+  dummyHash ??= hash(randomBytes(12).toString('hex'));
+  const ok = await bcrypt.compare(str(password), u?.password_hash ?? dummyHash).catch(() => false);
+  if (!u || !ok || u.active === false) return null;
   return signedIn(db, u);
 }
 function signedIn(db, u) { u.last_sign_in = gmdateC(); save(db, u); return u; }
@@ -70,7 +84,7 @@ export function allowedClients(db, u) {
 // ---- Admin: managing accounts --------------------------------------------------------------------------------------
 function cleanFields(db, input) {
   const role = str(input.role);
-  if (!ROLES.includes(role)) throw new Error('Choose a role: admin, user or viewer.');
+  if (!ROLES.includes(role)) throw new Error('Choose a role: admin, user, viewer, or a portal customer.');
   const known = clientsLoad(db).items.map((c) => c.id);
   const clients = role === 'admin' ? [] : [...new Set((Array.isArray(input.clients) ? input.clients : []).map(str))].filter((c) => known.includes(c));
   const name = str(input.name).trim().slice(0, 80);
@@ -116,6 +130,37 @@ export async function passwordChange(db, u, current, next) {
   if (!(await bcrypt.compare(str(current), u.password_hash).catch(() => false))) throw new Error('The current password is not right.');
   checkPassword(next);
   u.password_hash = hash(next); u.updated_at = gmdateC();
+  save(db, u);
+}
+
+/**
+ * Portal: a dealer's owner (or eShield staff) gives someone access to that dealer. A new email becomes a customer
+ * account for this dealer; an existing customer account gets the dealer added. Studio accounts are managed in the studio.
+ */
+export function customerAdd(db, by, { email, name, password, role, client }) {
+  email = normalEmail(email);
+  checkEmail(email);
+  if (!CUSTOMER_ROLES.includes(role)) throw new Error('Choose: can order, or view only.');
+  const u = userByEmail(db, email);
+  if (u) {
+    if (!isCustomer(u)) throw new Error('That email belongs to an eShield studio account; manage it in the studio.');
+    if ((u.clients ?? []).includes(client)) throw new Error('That person already has access to this dealer.');
+    Object.assign(u, { clients: [...(u.clients ?? []), client], updated_at: gmdateC(), updated_by: by.email });
+    save(db, u);
+    return { user: u, created: false };
+  }
+  checkPassword(password);
+  const created = { id: randomBytes(12).toString('hex'), email, name: str(name).trim().slice(0, 80), role, clients: [client], active: true,
+    password_hash: hash(password), created_at: gmdateC(), created_by: by.email };
+  save(db, created);
+  return { user: created, created: true };
+}
+/** Portal: takes a customer account's access to one dealer away (the account stays for its other dealers). */
+export function customerRemove(db, by, id, client) {
+  const u = userById(db, id);
+  if (!u || !isCustomer(u) || !(u.clients ?? []).includes(client)) throw new Error('That person has no portal access to this dealer.');
+  if (u.id === by.id) throw new Error('You cannot remove your own access.');
+  Object.assign(u, { clients: u.clients.filter((c) => c !== client), updated_at: gmdateC(), updated_by: by.email });
   save(db, u);
 }
 

@@ -1,11 +1,10 @@
 // A dealer's cars, read live from their website when they open the Cars page (Sawyer, 2026-11-03: customers' cars are
 // not stored; only cars that are ordered are kept, with the order). A read is held in memory for 15 minutes, never
-// saved, so moving between pages does not read the site again; "Refresh" reads it now. Readers come from shared/
-// (the same code as the video app). Only Dealer Car Search sites can be read today; others are asked to add cars by
+// saved, so moving between pages does not read the site again; "Refresh" reads it now. Readers come from shared/. Only Dealer Car Search sites can be read today; others are asked to add cars by
 // hand or contact eShield.
 import { clientAnalyze } from '../../../shared/website.js';
 import { dcsVehiclePages, dcsParseVdp, dcsPageError } from '../../../shared/dcs.js';
-import { MAX_PHOTOS, VIN } from './vehicles.js';
+import { MAX_PHOTOS, VIN } from './cars.js';
 
 export const HOLD_MS = 15 * 60_000;
 const PARALLEL = 4;

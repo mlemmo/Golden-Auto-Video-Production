@@ -37,8 +37,8 @@ export function dashboardPage(cfg, csrf, root = ROOT, user = null) {
   try { html = readFileSync(root + '/public/app/index.html', 'utf8'); } catch { return null; }
   const { env, test, label, prefix } = envBits(cfg);
   const boot = { csrf, env, user, banner: test ? label + ' — test copy. Paid generations here cost real money; production is video.mygoldenauto.net.' : '' };
-  // Admins get the "Customer orders" button only once the LotSpotlight portal is connected (config "portal").
-  if (user?.role === 'admin' && cfg.portal?.api && cfg.portal?.worker_id && cfg.portal?.worker_secret) boot.portal = true;
+  // Admins get the "Orders" button once the LotSpotlight portal is in use here (config portal_api).
+  if (user?.role === 'admin' && cfg.portal_api) boot.portal = true;
   // JSON inside <script>: "<" escaped so no value can close the tag.
   const script = '<script>window.GA=' + JSON.stringify(boot).replace(/</g, '\\u003c') + ';</script>';
   return html.replace('<!--GA_BOOT-->', script).replace(/<title>([^<]*)<\/title>/, (_, t) => '<title>' + esc(prefix) + t + '</title>');

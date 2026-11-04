@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
-# Install the portal's locked dependencies and build its customer pages into portal/public, pointed at this site's
-# portal API (APP_URL in portal/.env). Run as mark by setup-portal-root.sh and by update.sh:
-#   bash ubuntu/portal/build-pages.sh /srv/golden-auto-staging
+# Build the LotSpotlight portal's pages (portal/web) into portal/public, pointed at this site's portal API: the
+# studio's own server, on the address in private/config.json → portal_api.url (e.g. https://staging-api.lotspotlight.com:4343).
+# Run as mark by update.sh and setup-portal-root.sh:  bash ubuntu/portal/build-pages.sh /srv/golden-auto-staging
 set -euo pipefail
 dir="${1:?site folder, e.g. /srv/golden-auto-staging}"
 . "$dir/ubuntu/node/nvm-env.sh"
-cd "$dir/portal"
-npm ci --no-audit --no-fund >/dev/null
 api=""
-[ -f .env ] && api="$(sed -n 's/^APP_URL=//p' .env | tail -1)"
-# Pages on their own address call the API on its address; without one (https://localhost) they share the API's.
-if [[ -z "$api" || "$api" == https://localhost* ]]; then api=""; fi
-(cd web && npm ci --no-audit --no-fund >/dev/null && VITE_API_BASE="$api" npx vite build >/dev/null)
-echo "Customer pages built (API: ${api:-same address as the pages})."
+[ -f "$dir/private/config.json" ] && api="$(node -e 'try { const c = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); process.stdout.write(String(c.portal_api?.url ?? "")); } catch {}' "$dir/private/config.json")"
+cd "$dir/portal/web"
+npm ci --no-audit --no-fund >/dev/null
+VITE_API_BASE="$api" npx vite build >/dev/null
+echo "Portal pages built (API: ${api:-same address as the pages})."

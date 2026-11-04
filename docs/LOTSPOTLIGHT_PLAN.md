@@ -7,11 +7,11 @@ working names: a new business will run this project and its name is not decided 
 
 ## Where it runs (Sawyer, 2026-11-03)
 
-The customer pages are a static site on SiteGround (the React build). The portal API runs on our Ubuntu server as its
-own service, with MySQL on the server, next to the video studio; the studio reaches it on localhost. If the server is
-down the pages still load but cannot sign in or order. Planned addresses (the domain follows the new business name):
-customers lotspotlight.com, staging.lotspotlight.com; API api.lotspotlight.com, api-staging.lotspotlight.com; studio
-admin.lotspotlight.com.
+One backend and one database: the portal's API is part of the video studio's own Node service and uses the studio's
+database, so accounts, dealers (the studio's clients), orders and cars are shared. The portal's pages are static files
+that call that API. If the server is down the pages still load but cannot sign in or order. Addresses: pages
+lotspotlight.com / staging.lotspotlight.com; API api. / staging-api.; studio studio. / staging-studio. (see
+portal/README.md).
 
 ## The idea
 
@@ -26,7 +26,8 @@ API only through the signed worker API.
 | --- | --- |
 | Payment | Stripe, pay per order, plus prepaid credits. Prices and margins still to be worked out. Subscriptions with a set number of videos may come later, so credits are a balance subscriptions can top up. |
 | Car information | Picked from the dealer's website (read live) or added by hand; editable on the order form either way. |
-| Where staff work | A staff area in the portal and an "Orders" window in the video app. |
+| Where staff work | A staff area in the portal and an "Orders" window in the video studio, on the same data. |
+| Accounts | The studio's accounts sign in on both sites; dealer customers are studio accounts with a portal-only role for their own dealer. |
 | Customers' cars | Not stored: the dealer's website is read live when they open the Cars page (held in memory 15 minutes). A car is stored only when it is ordered, with the details and photos it was ordered with. |
 | Posting | Customers post by hand for free, or pay extra for auto posting. |
 | Meta app | A new Meta app under the new business, created once the business exists. The existing "Golden Auto Video Publisher" app is not used for customers. |

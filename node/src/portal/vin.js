@@ -1,7 +1,7 @@
 // Year, make, model, trim and drive from a VIN, using the free NHTSA vPIC service (no key). Only fills in the car
 // form; the customer checks and edits the result. fetchFn is replaceable in tests (never call NHTSA from tests).
-import { HttpError } from './errors.js';
-import { cleanVin } from './vehicles.js';
+import { HttpError } from '../lib/auth.js';
+import { cleanVin } from './cars.js';
 
 export async function decodeVin(vin, fetchFn = fetch) {
   const v = cleanVin(vin);

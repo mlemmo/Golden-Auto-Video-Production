@@ -8,7 +8,8 @@ export const COOKIE = 'ga_sid';
 export const IDLE_SECONDS = 1440;
 
 const stores = new Map();
-export function sessionStore(path) {
+/** idle: seconds a session lasts unused (the dashboard's 24 minutes; the portal keeps its own store with 12 hours). */
+export function sessionStore(path, idle = IDLE_SECONDS) {
   if (stores.has(path)) return stores.get(path);
   const db = new DatabaseSync(path);
   db.exec('PRAGMA busy_timeout=5000; CREATE TABLE IF NOT EXISTS sessions (id TEXT PRIMARY KEY, data TEXT NOT NULL, seen INTEGER NOT NULL)');
@@ -17,12 +18,12 @@ export function sessionStore(path) {
       if (!/^[a-f0-9]{64}$/.test(id ?? '')) return null;
       const row = db.prepare('SELECT data, seen FROM sessions WHERE id=?').get(id);
       if (!row) return null;
-      if (row.seen < now - IDLE_SECONDS) { db.prepare('DELETE FROM sessions WHERE id=?').run(id); return null; }
+      if (row.seen < now - idle) { db.prepare('DELETE FROM sessions WHERE id=?').run(id); return null; }
       return JSON.parse(row.data);
     },
     save(id, data, now = Date.now() / 1000) {
       db.prepare('INSERT INTO sessions VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data, seen=excluded.seen').run(id, JSON.stringify(data), Math.floor(now));
-      if (Math.random() < 0.01) db.prepare('DELETE FROM sessions WHERE seen < ?').run(Math.floor(now - IDLE_SECONDS));
+      if (Math.random() < 0.01) db.prepare('DELETE FROM sessions WHERE seen < ?').run(Math.floor(now - idle));
     },
     destroy(id) { db.prepare('DELETE FROM sessions WHERE id=?').run(id); },
     close() { db.close(); stores.delete(path); },

@@ -1,99 +1,52 @@
 # LotSpotlight portal
 
-The customer site and its API. Plan: [docs/LOTSPOTLIGHT_PLAN.md](../docs/LOTSPOTLIGHT_PLAN.md) (customers order, pay
-and approve here; staff make the videos with the existing video studio). It replaces Milestones 2–4 of the original
-spec, [docs/lotspotlight-architecture.md](../docs/lotspotlight-architecture.md). "LotSpotlight" is a working name until
-the new business has one. Milestones 1 (foundations) and 2 (cars and orders) are here now.
+The customer site. Plan: [docs/LOTSPOTLIGHT_PLAN.md](../docs/LOTSPOTLIGHT_PLAN.md) (customers order, pay and approve
+here; staff make the videos in the video studio). "LotSpotlight" is a working name until the new business has one.
 
-**Where it runs (Sawyer, 2026-11-03):** the customer pages (`web/`) are a static site on SiteGround; the API (`src/`)
-runs on our Ubuntu server as its own service with MySQL there, next to the video studio. If the server is down the
-pages still load but cannot sign in or order.
+**One backend, one database (Sawyer, 2026-11-03).** The portal's pages (`web/`, React, built into `public/`) are
+static files. Everything they show comes from the API, which is part of the studio's own Node service
+(`node/src/portal/`) and uses the studio's database (`agent.sqlite`):
 
-- `src/` — the API (Express, Node ≥ 22, MySQL 8). `src/lib/jobs.js` is the queue, `src/lib/hmac.js` the worker
-  signatures, `src/lib/listing.js` the live website read, `src/lib/vehicles.js` cars with videos,
-  `src/lib/photos.js` uploaded photos, `src/lib/orders.js` orders.
-- `../shared/` — website fetching and listing-page readers, shared with the video studio.
-- `migrations/` — SQL applied in order by `npm run migrate` (the server also applies them when it starts).
-- `web/` — React front end (Vite), built into `public/` with `npm run build` (not committed).
-- `test/` — `npm test`. Tests that need a database use `TEST_DATABASE_URL`, an empty database they may wipe;
-  without it they are skipped.
+- **Accounts** are the studio's accounts. Studio admins are eShield staff on the portal (every dealer, add dealers,
+  release orders); studio users order for their clients; studio viewers look. Dealer customers are studio accounts
+  with the role *Portal customer* (orders and adds their dealer's people) or *Portal viewer* (looks), for their own
+  clients only; they sign in on the portal and are refused by the studio. The same password works on both sites;
+  either site can change it.
+- **Dealers** are the studio's clients: adding one on the portal adds it to the studio; Dealer details are the
+  client's script details (name, city, website, phone) plus a time zone.
+- **Cars** are read live from the dealer's website (held 15 minutes in memory, nothing saved; only Dealer Car Search
+  sites today). A car is stored only when ordered (`portal_cars`), with the details and photos it was ordered with.
+- **Uploads** (`portal_uploads`, files in `<data_dir>/portal-uploads`): shrunk and re-saved as JPEG in the browser,
+  up to 10 MB; unused ones are deleted after a day.
+- **Orders** (`portal_orders`): AI spokesperson (15/30 s) or photo slideshow (15/30/60 s); awaiting payment → paid
+  (staff "Release as paid" until Stripe) → in progress → ready for review → approved / rejected, or cancelled. The
+  studio's **Orders** window (admins) lists paid orders and "Open in studio" copies the car and its photos into the
+  dealer's cars there.
 
-The worker side lives with the video app: `node/src/lib/portal-client.js` (signing, lease → run → complete/fail,
-heartbeats) and `node/src/cli/portal-worker.js` (the loop; settings PORTAL_API, WORKER_ID, WORKER_SECRET). It is not
-started by any service yet.
+API paths: `/api/auth/…`, `/api/dealers/…`, `/api/staff/…` (`node/src/portal/api.js`); tests: `node/test/portal.test.js`.
 
-## Run it locally
-
-1. Copy `.env.example` to `.env` and fill in `DATABASE_URL`, `TEST_DATABASE_URL` and `WORKER_SHARED_SECRETS`.
-2. `npm ci`, then `npm run build` (front end) and `npm start` → http://localhost:3000.
-3. First account: `npm run create-user -- --email you@example.com --name "Your Name" --staff` (password asked twice, hidden).
-4. Worker against it: set `PORTAL_API=http://localhost:3000/api/worker`, `WORKER_ID` and `WORKER_SECRET` (one pair from
-   `WORKER_SHARED_SECRETS`), then `node ../node/src/cli/portal-worker.js`. "Send test job" (staff only) should show
-   **done** within a few seconds.
-
-## Milestone 2: cars and orders (2026-11-03, reworked the same day)
-
-- **Cars are not stored until they are ordered.** The Cars page reads the dealer's website live
-  (`GET /api/dealers/:id/website-cars`), holds the read in memory for 15 minutes (Refresh reads again) and saves
-  nothing. Only Dealer Car Search sites can be read today (eLease Returns: 25 cars in about 3 seconds); other sites and
-  sites that block us (Golden Auto) are told to add cars by hand or contact eShield. A bare address that fails is tried
-  with `www.` (mygoldenauto.net without www redirects to itself), and a site that cannot be read says why.
-- **Ordering** (owners and admins, `POST /api/dealers/:id/orders` with `{ car, photos, source, product, length_s,
-  notes }`): the customer checks and edits the car's details (VIN lookup from the free NHTSA service for cars added by
-  hand), picks photos (website photos as links, first 30, plus uploads) and the video: AI spokesperson (15/30 s) or
-  photo slideshow (15/30/60 s). The car is then stored as one of their "cars with videos" and frozen into the order;
-  ordering it again updates it.
-- **Uploads** (`/api/dealers/:id/uploads`): shrunk and re-saved as JPEG in the browser (2400 px, plus a 480 px
-  thumbnail), up to 10 MB each, in `UPLOAD_DIR`. Uploads no order used are deleted after a day; once the studio has
-  copied an order's uploads the full files go and the thumbnails stay.
-- **Order status**: awaiting payment → paid → in progress (→ ready for review → approved / rejected in Milestone 4), or
-  cancelled. Customers cancel only before payment. **Staff** (`/api/staff/orders`) see every dealer's orders and
-  "Release as paid" until Stripe (Milestone 3).
-- **Dealer details** (owners, admins, staff; `PATCH /api/dealers/:id`): name, website, city, state, phone, time zone;
-  only staff change the short name. The studio copies name, city, website and phone into its client when it lists or
-  opens that dealer's orders.
-- **Video studio** ("Orders" button for admins, `node/src/lib/orders.js`): lists paid orders through the signed worker
-  API; "Open in studio" copies just that car and its photos into the dealer's client there, claims the order and opens
-  the car in step 1. Shown once `private/config.json` has `"portal": { "api", "worker_id", "worker_secret" }`.
-
-## Deploying
-
-Addresses (DNS on Cloudflare, all pointing at our server, HTTPS on port 4343 and, once the router forwards it, 443):
+## Addresses
 
 | | Production | Staging |
 | --- | --- | --- |
-| Customer pages | lotspotlight.com | staging.lotspotlight.com |
-| Portal API | api.lotspotlight.com | staging-api.lotspotlight.com |
+| Portal pages | lotspotlight.com | staging.lotspotlight.com |
+| Portal API (the studio's service, portal paths only) | api.lotspotlight.com | staging-api.lotspotlight.com |
 | Video studio | studio.lotspotlight.com (and video.mygoldenauto.net) | staging-studio.lotspotlight.com (and staging.mygoldenauto.net) |
 
-1. Once per site, on the server: `sudo bash ubuntu/portal/setup-portal-root.sh staging --api staging-api.lotspotlight.com
-   --pages staging.lotspotlight.com --studio staging-studio.lotspotlight.com`. It installs MySQL if needed, makes the
-   site's database, writes `portal/.env` (printing the `"portal"` settings for the studio's config the first time),
-   starts `golden-auto-staging-portal` (127.0.0.1:4362; production 4363), builds the customer pages for that API,
-   gets certificates through Cloudflare DNS and adds the Nginx sites. Safe to run again.
-2. After that, `ubuntu/update.sh` rebuilds the pages and restarts the API on every deploy.
-3. The pages and the API share the lotspotlight.com domain, so the sign-in cookie goes with the pages' requests;
-   `CORS_ORIGINS` in `portal/.env` lists the pages' addresses. (`ubuntu/portal/build-static.sh` still builds a zip of
-   the pages for hosting them elsewhere, e.g. SiteGround.)
-- Tests: `npm test` with `TEST_DATABASE_URL` (on a PC, never on the server); `test/cars.test.js` covers this milestone.
+All on our server, HTTPS on port 4343 and, once the router forwards it, 443.
 
-## Status and handoff (2026-11-02)
+## Setting up a site
 
-- Branch `siteground` (replaces `nodejs`). Milestone 1 done: `npm test` → 22 passing against MySQL 8.4, and a live
-  "Send test job" round trip through the screens worked on Mark's PC.
-- Differences from the spec, on purpose: a `sessions` table (sign-in), `users.is_staff` (eShield staff), and
-  `jobs.available_at` (retry backoff) plus a `ping` job type for the round-trip check.
-- Spec §3/§10 say the worker is `node.mygoldenauto.net` on 4343; that site is retired. The live servers are
-  video.mygoldenauto.net (Node on 4353) and staging.mygoldenauto.net (4352), both behind Nginx with HTTPS on :4343.
-- Overlap to decide with Mark: the video app already has accounts, per-dealer clients, Facebook/Instagram posting and
-  Meta ads (CLAUDE.md); the spec moves those to the portal over Milestones 3–4.
-- Not done yet: password reset (needs a mail service), MFA, SiteGround deployment and DNS for app.lotspotlight.com,
-  running `portal-worker.js` under systemd on the server.
-- Open questions in spec §13 are still unanswered except §13.5: the front end is React (Mark, 2026-10-31).
+1. `sudo bash ubuntu/portal/setup-portal-root.sh staging --api staging-api.lotspotlight.com --pages
+   staging.lotspotlight.com --studio staging-studio.lotspotlight.com` records `portal_api: { url, origins }` in
+   `private/config.json`, builds the pages for that API, restarts the studio service, gets certificates through
+   Cloudflare DNS (token per domain in `/root/.secrets/cloudflare-<domain>.ini`) and adds the Nginx sites. Safe to run
+   again. It also removes the separate MySQL-based portal service an earlier version installed.
+2. After that, `ubuntu/update.sh` rebuilds the pages on every deploy.
+3. The pages and the API share the lotspotlight.com domain, so the sign-in cookie (SameSite=Lax) goes with the pages'
+   requests; only the addresses in `portal_api.origins` may call the API from a browser.
 
-## Rules
+## Working on the pages
 
-- Roles are checked on the server: staff (eShield) → every dealer; owner > admin > approver > viewer per dealer.
-- Every change from the browser needs JSON and the session's `X-CSRF-Token`.
-- Worker requests need a valid HMAC signature within 300 s; video files never pass through the portal.
-- Never commit `.env` or secrets.
+`cd portal/web && npm ci && npm run dev`, with the studio running locally (`cd node && npm start`, port 4350): the dev
+server forwards `/api` to it.
