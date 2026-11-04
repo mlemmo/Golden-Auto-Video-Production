@@ -44,7 +44,7 @@ remote="git@$host:$org/$repo.git"
 as_git() { sudo -u git -H env FORGEJO_WORK_DIR="$work" "$@"; }
 command -v jq >/dev/null || apt-get install -y -q jq >/dev/null
 command -v sqlite3 >/dev/null || apt-get install -y -q sqlite3 >/dev/null
-curl -fs -o /dev/null "$api/version" || { echo "Forgejo is not running; run setup-forgejo-root.sh first." >&2; exit 1; }
+curl -fs -o /dev/null "http://127.0.0.1:3000/api/healthz" || { echo "Forgejo is not running; run setup-forgejo-root.sh first." >&2; exit 1; }
 
 # ---- A short-lived token for the admin, removed on exit ----
 token_name="move-repo-$(date +%s)"
