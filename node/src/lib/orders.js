@@ -32,7 +32,7 @@ function photoSource(url) {
   return id ? dcPhotoUrl(id) : url;
 }
 
-/** Opens a paid order in the studio. Returns { client, stock, message }. */
+/** Opens a paid order in the studio. Returns { client, stock, length_s, product, notes, message }. */
 export async function portalOrderOpen(db, cfg, id, { siteFetch = (url) => deps.siteFetch(url) } = {}) {
   const order = orderView(getOrder(db, Number(id)));
   if (!['paid', 'in_progress'].includes(order.status)) throw new Error('Only paid orders can be opened in the studio.');
@@ -70,5 +70,8 @@ export async function portalOrderOpen(db, cfg, id, { siteFetch = (url) => deps.s
   save(db, key, inv);
 
   if (order.status === 'paid') moveOrder(db, order.id, ['paid'], 'in_progress', { studio_ref: client + '/' + stock, claimed_at: new Date().toISOString() });
-  return { client, stock, message: `Order ${order.id} opened: ${car.Year} ${car.Make} ${car.Model} is in ${order.dealer_name}'s cars (stock ${stock}).` };
+  // The studio's length and video type follow the order (web/src/CustomerOrders.jsx applies them).
+  return { client, stock, length_s: order.length_s, product: order.product, notes: order.notes ?? '',
+    message: `Order ${order.id} opened: make a ${order.length_s}-second ${String(order.product_name).toLowerCase()} of the ${car.Year} ${car.Make} ${car.Model} (stock ${stock}, ${order.dealer_name}).`
+      + (order.notes ? ` Customer notes: ${order.notes}` : '') };
 }

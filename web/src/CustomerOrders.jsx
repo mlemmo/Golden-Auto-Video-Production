@@ -29,9 +29,12 @@ export function OrdersWindow({ open, onClose }) {
     say(`Copying order ${o.id} from the portal…`);
     try {
       const r = await api('portal_order_open', { id: o.id });
-      s.setOpenStock(r.stock);
       await s.switchClient(r.client);
-      say(r.message);
+      // After the switch (it restores the client's last choices): the order's length and type, then open the car,
+      // whose script is drafted for that length.
+      s.applyOrder(r);
+      s.setOpenStock(r.stock);
+      say(r.message, r.notes ? 'warn' : false);
       onClose();
     } catch (e) { say(e.message, true); } finally { setOpening(false); }
   };

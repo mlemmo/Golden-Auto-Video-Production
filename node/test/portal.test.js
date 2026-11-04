@@ -122,6 +122,8 @@ test('a customer orders; staff release it; the studio opens it into the dealerâ€
   const session = { data: {} };
   const opened = await actions.portal_order_open({ db, cfg, body: { id: order.id }, session, user });
   assert.deepEqual([opened.client, opened.stock, session.data.client], ['elease', 'S1', 'elease']);
+  assert.deepEqual([opened.length_s, opened.product, opened.notes], [30, 'slideshow', 'New tyres'], 'the studio takes the orderâ€™s length and type');
+  assert.match(opened.message, /make a 30-second photo slideshow .* Customer notes: New tyres/);
   const car = state(db, 'inventory:elease').vehicles.find((v) => v.StockNumber === 'S1');
   assert.deepEqual([car.source, car.price, car.photos.length], ['portal', 14999, 2]);
   assert.equal((await owner.get(`/api/dealers/elease/orders/${order.id}`)).data.order.status, 'in_progress');

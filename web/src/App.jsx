@@ -281,6 +281,16 @@ export default function App() {
     if (s !== 'ai' && voice !== 'elevenlabs') setVoice('elevenlabs');
     if (s === 'ai' && duration === '60') setDuration('30');
   }
+  /**
+   * A customer order opened from the Orders window: its length and video type (product ai_video or slideshow), set
+   * together so the length/type rules above do not undo each other. Slideshows use the approved ElevenLabs voice.
+   */
+  function applyOrder({ length_s, product }) {
+    const len = String(length_s), src = product === 'slideshow' ? 'slideshow' : 'ai';
+    setSourceRaw(src);
+    setDurationRaw(src === 'ai' && len === '60' ? '30' : len);
+    if (src === 'slideshow') setVoiceRaw('elevenlabs');
+  }
 
   const spokesperson = spokespersons.items.find((s) => s.id === spokespersonId) ?? null;
   const scene = scenes.items.find((x) => x.id === sceneId) ?? null;
@@ -298,7 +308,7 @@ export default function App() {
     sheetUrl, setSheetUrl, footage, setFootage, shapes, setShapes, music, setMusic, background, setBackground, adCut, setAdCut, aiApprove, setAiApprove, approve, setApprove, confirmCurrent, setConfirmCurrent, resolution, setResolution,
     captionJob, setCaptionJob, tool, setTool, collapsed, toggleStep, openStep, closeStep, stepClass,
     busy, run, statuses, loadClients, loadInventory, loadJobs, loadSyncLog, refreshNarrations, showSpokespersons,
-    clearVehicle, switchClient, formStore, defaultScript, openStock, setOpenStock,
+    clearVehicle, switchClient, formStore, defaultScript, openStock, setOpenStock, applyOrder,
   };
 
   const signOut = async () => { try { await api('logout'); } finally { location.reload(); } };
