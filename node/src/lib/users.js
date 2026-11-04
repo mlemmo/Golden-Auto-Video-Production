@@ -3,7 +3,8 @@
 // Roles: admin (everything, plus users and clients), user (makes videos for the clients assigned to them, including
 // paid steps), viewer (sees and downloads videos for their clients; changes nothing). Dealer customers of the
 // LotSpotlight portal (src/portal/api.js) are accounts here too, for their own clients only, and sign in only there:
-// customer (orders videos and adds their dealer's people) and customer_viewer (looks only).
+// customer, with two permissions per client (perms: { <client>: { order, people } }: order videos, add people; neither
+// = looks only), and customer_viewer (looks only; older accounts).
 // Stored in agent.sqlite, table users (id, email UNIQUE, payload JSON). Passwords are bcrypt hashes.
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'node:crypto';
@@ -133,34 +134,57 @@ export async function passwordChange(db, u, current, next) {
   save(db, u);
 }
 
+/** A portal customer's permissions at one client: { order, people } (customer accounts without perms had both). */
+export function customerPerms(u, client) {
+  if (u?.role !== 'customer' || !(u.clients ?? []).includes(client)) return { order: false, people: false };
+  const p = u.perms?.[client];
+  return p ? { order: !!p.order, people: !!p.people } : { order: true, people: true };
+}
+
 /**
- * Portal: a dealer's owner (or eShield staff) gives someone access to that dealer. A new email becomes a customer
- * account for this dealer; an existing customer account gets the dealer added. Studio accounts are managed in the studio.
+ * Portal: someone with "add people" (or eShield staff) gives a person access to that dealer, with the two permissions
+ * (order videos, add people; neither = looks only). A new email becomes a customer account; an existing customer
+ * account gets the dealer added. Studio accounts are managed in the studio.
  */
-export function customerAdd(db, by, { email, name, password, role, client }) {
+export function customerAdd(db, by, { email, name, password, order = false, people = false, client }) {
   email = normalEmail(email);
   checkEmail(email);
-  if (!CUSTOMER_ROLES.includes(role)) throw new Error('Choose: can order, or view only.');
+  const perms = { order: !!order, people: !!people };
   const u = userByEmail(db, email);
   if (u) {
     if (!isCustomer(u)) throw new Error('That email belongs to an eShield studio account; manage it in the studio.');
-    if ((u.clients ?? []).includes(client)) throw new Error('That person already has access to this dealer.');
-    Object.assign(u, { clients: [...(u.clients ?? []), client], updated_at: gmdateC(), updated_by: by.email });
+    if ((u.clients ?? []).includes(client)) throw new Error('That person already has access to this dealer; change their permissions instead.');
+    // An older view-only account becomes a customer account whose other dealers stay view-only.
+    if (u.role === 'customer_viewer') u.perms = Object.fromEntries((u.clients ?? []).map((c) => [c, { order: false, people: false }]));
+    else u.perms = { ...Object.fromEntries((u.clients ?? []).map((c) => [c, customerPerms(u, c)])), ...(u.perms ?? {}) };
+    Object.assign(u, { role: 'customer', clients: [...(u.clients ?? []), client], perms: { ...u.perms, [client]: perms }, updated_at: gmdateC(), updated_by: by.email });
     save(db, u);
     return { user: u, created: false };
   }
   checkPassword(password);
-  const created = { id: randomBytes(12).toString('hex'), email, name: str(name).trim().slice(0, 80), role, clients: [client], active: true,
-    password_hash: hash(password), created_at: gmdateC(), created_by: by.email };
+  const created = { id: randomBytes(12).toString('hex'), email, name: str(name).trim().slice(0, 80), role: 'customer', clients: [client],
+    perms: { [client]: perms }, active: true, password_hash: hash(password), created_at: gmdateC(), created_by: by.email };
   save(db, created);
   return { user: created, created: true };
+}
+/** Portal: change a customer's permissions at one dealer. Nobody can take away their own "add people". */
+export function customerSetPerms(db, by, id, client, { order, people }) {
+  const u = userById(db, id);
+  if (!u || !isCustomer(u) || !(u.clients ?? []).includes(client)) throw new Error('That person has no portal access to this dealer.');
+  if (u.id === by.id && !people) throw new Error('You cannot take away your own permission to add people.');
+  const perms = Object.fromEntries((u.clients ?? []).map((c) => [c, u.role === 'customer_viewer' ? { order: false, people: false } : customerPerms(u, c)]));
+  Object.assign(u, { role: 'customer', perms: { ...perms, [client]: { order: !!order, people: !!people } }, updated_at: gmdateC(), updated_by: by.email });
+  save(db, u);
+  return u;
 }
 /** Portal: takes a customer account's access to one dealer away (the account stays for its other dealers). */
 export function customerRemove(db, by, id, client) {
   const u = userById(db, id);
   if (!u || !isCustomer(u) || !(u.clients ?? []).includes(client)) throw new Error('That person has no portal access to this dealer.');
   if (u.id === by.id) throw new Error('You cannot remove your own access.');
-  Object.assign(u, { clients: u.clients.filter((c) => c !== client), updated_at: gmdateC(), updated_by: by.email });
+  const perms = { ...(u.perms ?? {}) };
+  delete perms[client];
+  Object.assign(u, { clients: u.clients.filter((c) => c !== client), perms, updated_at: gmdateC(), updated_by: by.email });
   save(db, u);
 }
 

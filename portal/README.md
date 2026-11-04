@@ -8,9 +8,10 @@ static files. Everything they show comes from the API, which is part of the stud
 (`node/src/portal/`) and uses the studio's database (`agent.sqlite`):
 
 - **Accounts** are the studio's accounts. Studio admins are eShield staff on the portal (every dealer, add dealers,
-  release orders); studio users order for their clients; studio viewers look. Dealer customers are studio accounts
-  with the role *Portal customer* (orders and adds their dealer's people) or *Portal viewer* (looks), for their own
-  clients only; they sign in on the portal and are refused by the studio. The same password works on both sites;
+  release orders); studio users order (and edit Dealer details) for their clients; studio viewers look. Dealer
+  customers are studio accounts with the role *Portal customer*, for their own clients only, with two separate
+  permissions per dealer: **order videos** and **add people** (which also covers Dealer details); neither means view
+  only. They sign in on the portal and are refused by the studio. The same password works on both sites;
   either site can change it.
 - **Dealers** are the studio's clients: adding one on the portal adds it to the studio; Dealer details are the
   client's script details (name, city, website, phone) plus a time zone.

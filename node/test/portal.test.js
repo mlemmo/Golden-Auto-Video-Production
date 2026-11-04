@@ -76,8 +76,9 @@ test('studio accounts and customers sign in; each sees only their dealers; custo
   const me = (await staff.login('staff@eshield.test')).data;
   assert.equal(me.user.is_staff, true);
   assert.deepEqual(me.dealers.map((d) => [d.id, d.role]), [['elease', 'staff'], ['golden-auto', 'staff']], 'every studio client is a dealer');
+  assert.deepEqual(me.dealers[0].can, { staff: true, order: true, people: true, details: true });
   const owner = portalBrowser();
-  assert.deepEqual((await owner.login('owner@lr.test')).data.dealers.map((d) => [d.id, d.role]), [['elease', 'owner']]);
+  assert.deepEqual((await owner.login('owner@lr.test')).data.dealers.map((d) => [d.id, d.role]), [['elease', 'order_people']], 'a customer account from before the split keeps both');
   assert.equal((await owner.get('/api/dealers/golden-auto/vehicles')).status, 404);
   assert.equal((await portalBrowser().call('POST', '/api/auth/login', { email: 'owner@lr.test', password: 'wrong password' })).status, 401);
   assert.equal((await portalBrowser().get('/api/auth/me')).status, 401);
@@ -126,16 +127,34 @@ test('a customer orders; staff release it; the studio opens it into the dealerâ€
   assert.equal((await owner.get(`/api/dealers/elease/orders/${order.id}`)).data.order.status, 'in_progress');
 });
 
-test('people: owners add customers to their dealer; studio accounts are managed in the studio', async () => {
+test('people: order videos and add people are separate permissions, alone or together', async () => {
   const owner = portalBrowser(); await owner.login('owner@lr.test');
-  const r = await owner.post('/api/dealers/elease/users', { email: 'sales@lr.test', name: 'Sam', password: PW, role: 'viewer' });
-  assert.deepEqual([r.status, r.data.created, r.data.user.role], [201, true, 'viewer']);
-  assert.equal(userByEmail(db, 'sales@lr.test').role, 'customer_viewer');
-  assert.equal((await owner.post('/api/dealers/elease/users', { email: 'maker@eshield.test', role: 'owner' })).status, 400);
+  const add = (email, order, people) => owner.post('/api/dealers/elease/users', { email, name: email, password: PW, order, people });
+  assert.deepEqual((await add('buyer@lr.test', true, false)).data.user.role, 'order');
+  assert.deepEqual((await add('hr@lr.test', false, true)).data.user.role, 'people');
+  assert.deepEqual((await add('both@lr.test', true, true)).data.user.role, 'order_people');
+  assert.deepEqual((await add('sales@lr.test', false, false)).data.user.role, 'viewer');
+  assert.equal((await owner.post('/api/dealers/elease/users', { email: 'maker@eshield.test', order: true })).status, 400, 'studio accounts are managed in the studio');
+
+  // Each permission on its own.
+  const buyer = portalBrowser(); await buyer.login('buyer@lr.test');
+  assert.deepEqual((await buyer.get('/api/auth/me')).data.dealers[0].can, { staff: false, order: true, people: false, details: false });
+  assert.equal((await buyer.get('/api/dealers/elease/users')).status, 403);
+  assert.equal((await buyer.patch('/api/dealers/elease', { city: 'X' })).status, 403);
+  assert.equal((await buyer.upload('/api/dealers/elease/uploads', Buffer.from(JPEG_1800x900_B, 'base64'))).status, 201, 'can order: uploads allowed');
+  const hr = portalBrowser(); await hr.login('hr@lr.test');
+  assert.equal((await hr.post('/api/dealers/elease/orders', {})).status, 403, 'add people only: no ordering');
+  assert.equal((await hr.get('/api/dealers/elease/vin/1HGBH41JXMN109101')).status, 403);
+  assert.equal((await hr.post('/api/dealers/elease/users', { email: 'new@lr.test', password: PW, order: true })).status, 201);
+  assert.equal((await hr.patch('/api/dealers/elease', { city: 'San Ramon' })).status, 200, 'add people includes Dealer details');
+
+  // Permissions change later; nobody takes away their own "add people".
   const people = (await owner.get('/api/dealers/elease/users')).data.users;
-  assert.deepEqual(people.map((u) => [u.email, u.role, u.studio]).sort(), [['look@lr.test', 'viewer', false], ['maker@eshield.test', 'admin', true], ['owner@lr.test', 'owner', false], ['sales@lr.test', 'viewer', false]]);
-  const sam = people.find((u) => u.email === 'sales@lr.test');
-  assert.equal((await owner.del(`/api/dealers/elease/users/${sam.id}`)).status, 200);
+  const byEmail = Object.fromEntries(people.map((u) => [u.email, u]));
+  assert.deepEqual([byEmail['maker@eshield.test'].role, byEmail['maker@eshield.test'].studio], ['order', true]);
+  assert.deepEqual((await owner.patch(`/api/dealers/elease/users/${byEmail['buyer@lr.test'].id}`, { order: true, people: true })).data.user.role, 'order_people');
+  assert.equal((await hr.patch(`/api/dealers/elease/users/${byEmail['hr@lr.test'].id}`, { order: false, people: false })).status, 400);
+  assert.equal((await owner.del(`/api/dealers/elease/users/${byEmail['sales@lr.test'].id}`)).status, 200);
   const look = portalBrowser(); await look.login('look@lr.test');
   assert.equal((await look.get('/api/dealers/elease/users')).status, 403);
 });

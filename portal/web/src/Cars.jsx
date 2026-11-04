@@ -167,8 +167,7 @@ function WebsiteCars({ dealerId, canOrder, onOrder }) {
   );
 }
 
-export function Cars({ dealerId, role }) {
-  const canOrder = ['staff', 'owner', 'admin'].includes(role);
+export function Cars({ dealerId, canOrder }) {
   const [ordered, setOrdered] = useState(null);
   const [error, setError] = useState('');
   const [done, setDone] = useState('');

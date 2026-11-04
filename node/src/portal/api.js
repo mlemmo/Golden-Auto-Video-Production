@@ -2,9 +2,10 @@
 // 2026-11-03). The portal pages are a static site (portal/web, built into portal/public) on their own address that call
 // this API on the API address (config portal_api: { url, origins }). Paths: /api/auth/…, /api/dealers/…, /api/staff/….
 //
-// Dealers are the studio's clients; accounts are the studio's accounts. Role at a dealer: studio admins are eShield
-// staff (every dealer, release orders, add dealers); studio users order for their clients (admin); studio viewers and
-// customer_viewer accounts look (viewer); customer accounts order and add their dealer's people (owner).
+// Dealers are the studio's clients; accounts are the studio's accounts. What an account may do at a dealer (canAt):
+// studio admins are eShield staff (everything, every dealer, release orders, add dealers); studio users order and edit
+// Dealer details for their clients; studio viewers look; customer accounts have two separate permissions per dealer,
+// order videos and add people (Dealer details go with add people); neither, or a customer_viewer account, looks.
 // Sign-in uses its own cookie (ls_sid, SameSite=Lax so the pages on the same domain send it; 12 idle hours) and every
 // change carries the session's CSRF token in X-CSRF-Token.
 import { HttpError } from '../lib/auth.js';
@@ -12,7 +13,7 @@ import { loadConfig } from '../lib/config.js';
 import { openDb } from '../lib/db.js';
 import { clientAdd, clientDetails, clientFind, clientSaveDetails, clientsLoad, clientWebsite } from '../lib/clients.js';
 import { save } from '../lib/db.js';
-import { allowedClients, customerAdd, customerRemove, isCustomer, passwordChange, portalSignIn, userById, usersList } from '../lib/users.js';
+import { allowedClients, customerAdd, customerPerms, customerRemove, customerSetPerms, isCustomer, passwordChange, portalSignIn, userById, usersList } from '../lib/users.js';
 import { newCsrf, newSessionId, parseCookies, sameSecret, sessionStore } from '../lib/session.js';
 import { websiteListing } from './listing.js';
 import { deps, onDepsChange, setPortalDeps } from './deps.js';
@@ -26,7 +27,6 @@ import { createReadStream } from 'node:fs';
 export const COOKIE = 'ls_sid';
 const IDLE = 12 * 3600;
 const MAX_JSON = 100 * 1024;
-const RANK = ['owner', 'admin', 'approver', 'viewer'];
 const TIMEZONE = 'America/Los_Angeles';
 const PATHS = /^\/api\/(auth|dealers|staff)(\/|$)/;
 
@@ -52,22 +52,26 @@ function failed(email, ip) {
 }
 
 /** Role of an account at a dealer (client id): staff, owner, admin, viewer, or null. */
-export function roleAt(db, user, client) {
-  if (user.role === 'admin') return 'staff';
+/** What an account may do at a dealer: { staff, order, people, details }, or null without access. */
+export function canAt(user, client) {
+  if (user.role === 'admin') return { staff: true, order: true, people: true, details: true };
   if (!(user.clients ?? []).includes(client)) return null;
-  return { user: 'admin', viewer: 'viewer', customer: 'owner', customer_viewer: 'viewer' }[user.role] ?? null;
+  if (user.role === 'user') return { staff: false, order: true, people: false, details: true };
+  const p = customerPerms(user, client);
+  return { staff: false, order: p.order, people: p.people, details: p.people };
 }
-const atLeast = (role, min) => role === 'staff' || (RANK.includes(role) && RANK.indexOf(role) <= RANK.indexOf(min));
+/** A short name for the permissions, for the page header and the People list. */
+const roleName = (can) => (can.staff ? 'staff' : can.order && can.people ? 'order_people' : can.order ? 'order' : can.people ? 'people' : 'viewer');
 const publicUser = (u) => ({ id: u.id, email: u.email, name: u.name ?? '', is_staff: u.role === 'admin', customer: isCustomer(u) });
 
-function dealerView(db, client, role = null) {
+function dealerView(db, client, can = null) {
   const d = clientDetails(client);
   return { id: client.id, slug: client.id, name: client.name, website: client.website || null, city: d.city || null, phone: d.phone || null,
-    timezone: client.portal?.timezone ?? TIMEZONE, status: 'active', ...(role ? { role } : {}) };
+    timezone: client.portal?.timezone ?? TIMEZONE, status: 'active', ...(can ? { can, role: roleName(can) } : {}) };
 }
 function dealersFor(db, user) {
   const ids = allowedClients(db, user);
-  return clientsLoad(db).items.filter((c) => ids.includes(c.id)).map((c) => dealerView(db, c, roleAt(db, user, c.id))).sort((a, b) => a.name.localeCompare(b.name));
+  return clientsLoad(db).items.filter((c) => ids.includes(c.id)).map((c) => dealerView(db, c, canAt(user, c.id))).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 // ---- Request plumbing ----
@@ -100,10 +104,10 @@ route('POST', '/api/auth/password', null, async ({ db, user, body }) => {
 route('GET', '/api/dealers', null, ({ db, user }) => ({ dealers: dealersFor(db, user) }));
 route('POST', '/api/dealers', 'staff', async ({ db, body }) => {
   const c = await clientAdd(db, String(body.name ?? ''), String(body.website ?? ''));
-  return [201, { dealer: dealerView(db, c, 'staff') }];
+  return [201, { dealer: dealerView(db, c, canAt({ role: 'admin' }, c.id)) }];
 });
-route('GET', '/api/dealers/:dealer', 'viewer', ({ db, client, role }) => ({ dealer: dealerView(db, client), role }));
-route('PATCH', '/api/dealers/:dealer', 'admin', ({ db, client, body }) => {
+route('GET', '/api/dealers/:dealer', 'viewer', ({ db, client, can }) => ({ dealer: dealerView(db, client, can) }));
+route('PATCH', '/api/dealers/:dealer', 'details', ({ db, client, body }) => {
   const cur = clientDetails(client);
   const website = body.website === undefined ? client.website : String(body.website ?? '').trim() === '' ? client.website : clientWebsite(body.website);
   const host = String(website ?? '').replace(/^https:\/\//, '').replace(/^www\./, '');
@@ -119,17 +123,18 @@ route('PATCH', '/api/dealers/:dealer', 'admin', ({ db, client, body }) => {
 });
 
 // People: who has access to this dealer (eShield staff are not listed; they see every dealer).
-const PEOPLE_ROLE = { user: 'admin', viewer: 'viewer', customer: 'owner', customer_viewer: 'viewer' };
-route('GET', '/api/dealers/:dealer/users', 'admin', ({ db, client }) => ({
-  users: usersList(db).filter((u) => u.role !== 'admin' && (u.clients ?? []).includes(client.id) && u.active !== false)
-    .map((u) => ({ id: u.id, email: u.email, name: u.name ?? '', role: PEOPLE_ROLE[u.role], studio: !isCustomer(u) })),
+const person = (u, client) => { const can = canAt(u, client); return { id: u.id, email: u.email, name: u.name ?? '', order: can.order, people: can.people, role: roleName(can), studio: !isCustomer(u) }; };
+route('GET', '/api/dealers/:dealer/users', 'people', ({ db, client }) => ({
+  users: usersList(db).filter((u) => u.role !== 'admin' && (u.clients ?? []).includes(client.id) && u.active !== false).map((u) => person(u, client.id)),
 }));
-route('POST', '/api/dealers/:dealer/users', 'owner', ({ db, user, client, body }) => {
-  const role = body.role === 'viewer' ? 'customer_viewer' : 'customer';
-  const { user: added, created } = customerAdd(db, user, { email: body.email, name: body.name, password: body.password, role, client: client.id });
-  return [201, { user: { id: added.id, email: added.email, role: PEOPLE_ROLE[added.role] }, created }];
+route('POST', '/api/dealers/:dealer/users', 'people', ({ db, user, client, body }) => {
+  const { user: added, created } = customerAdd(db, user, { email: body.email, name: body.name, password: body.password, order: body.order === true, people: body.people === true, client: client.id });
+  return [201, { user: person(added, client.id), created }];
 });
-route('DELETE', '/api/dealers/:dealer/users/:user', 'owner', ({ db, user, client, params }) => { customerRemove(db, user, params.user, client.id); return { ok: true }; });
+route('PATCH', '/api/dealers/:dealer/users/:user', 'people', ({ db, user, client, params, body }) => ({
+  user: person(customerSetPerms(db, user, params.user, client.id, { order: body.order === true, people: body.people === true }), client.id),
+}));
+route('DELETE', '/api/dealers/:dealer/users/:user', 'people', ({ db, user, client, params }) => { customerRemove(db, user, params.user, client.id); return { ok: true }; });
 
 // Cars: the website read live (nothing saved), cars with videos (stored when ordered), VIN lookup, uploads.
 route('GET', '/api/dealers/:dealer/website-cars', 'viewer', async ({ db, client, query }) => {
@@ -139,13 +144,13 @@ route('GET', '/api/dealers/:dealer/website-cars', 'viewer', async ({ db, client,
 });
 route('GET', '/api/dealers/:dealer/vehicles', 'viewer', ({ db, client }) => ({ vehicles: listCars(db, client.id) }));
 route('GET', '/api/dealers/:dealer/vehicles/:vin', 'viewer', ({ db, client, params }) => ({ vehicle: carView(getCar(db, client.id, params.vin)) }));
-route('GET', '/api/dealers/:dealer/vin/:vin', 'admin', async ({ params }) => ({ vehicle: await decodeVin(params.vin, deps.fetchFn) }));
-route('POST', '/api/dealers/:dealer/uploads', 'admin', ({ db, cfg, client, user, body }) => [201, { photo_id: addUpload(db, cfg, client.id, user, body) }], 'jpeg');
-route('POST', '/api/dealers/:dealer/uploads/:photo/thumb', 'admin', ({ db, cfg, client, params, body }) => {
+route('GET', '/api/dealers/:dealer/vin/:vin', 'order', async ({ params }) => ({ vehicle: await decodeVin(params.vin, deps.fetchFn) }));
+route('POST', '/api/dealers/:dealer/uploads', 'order', ({ db, cfg, client, user, body }) => [201, { photo_id: addUpload(db, cfg, client.id, user, body) }], 'jpeg');
+route('POST', '/api/dealers/:dealer/uploads/:photo/thumb', 'order', ({ db, cfg, client, params, body }) => {
   setThumb(db, cfg, getUpload(db, client.id, params.photo), body);
   return { ok: true };
 }, 'thumb');
-route('DELETE', '/api/dealers/:dealer/uploads/:photo', 'admin', ({ db, cfg, client, params }) => { deleteUpload(db, cfg, getUpload(db, client.id, params.photo)); return { ok: true }; });
+route('DELETE', '/api/dealers/:dealer/uploads/:photo', 'order', ({ db, cfg, client, params }) => { deleteUpload(db, cfg, getUpload(db, client.id, params.photo)); return { ok: true }; });
 route('GET', '/api/dealers/:dealer/photos/:photo', 'viewer', ({ db, cfg, client, params, query, res }) => {
   const u = getUpload(db, client.id, params.photo);
   const path = (query.get('size') === 'thumb' && uploadPath(cfg, u.thumb)) || uploadPath(cfg, u.file) || uploadPath(cfg, u.thumb);
@@ -159,16 +164,16 @@ route('GET', '/api/dealers/:dealer/products', 'viewer', () => ({ products: PRODU
 route('GET', '/api/dealers/:dealer/orders', 'viewer', ({ db, client, query }) => ({
   orders: listOrders(db, { clients: [client.id], statuses: statusFilter(query.get('status')) }).map((o) => orderView(o, clientName(db))),
 }));
-route('POST', '/api/dealers/:dealer/orders', 'admin', ({ db, cfg, client, user, body }) => {
+route('POST', '/api/dealers/:dealer/orders', 'order', ({ db, cfg, client, user, body }) => {
   const id = placeOrder(db, cfg, client.id, user, body);
   return [201, { order: orderView(getOrder(db, id), clientName(db)) }];
 });
 route('GET', '/api/dealers/:dealer/orders/:order', 'viewer', ({ db, client, params }) => ({ order: orderView(getOrder(db, params.order, client.id), clientName(db)) }));
 // Customers cancel before payment; staff can cancel any order not delivered yet.
-route('POST', '/api/dealers/:dealer/orders/:order/cancel', 'admin', ({ db, client, role, params }) => {
+route('POST', '/api/dealers/:dealer/orders/:order/cancel', 'order', ({ db, client, can, params }) => {
   const order = getOrder(db, params.order, client.id);
-  const from = role === 'staff' ? ['awaiting_payment', 'paid', 'in_progress'] : ['awaiting_payment'];
-  moveOrder(db, order.id, from, 'cancelled', {}, role === 'staff' ? 'This order can no longer be cancelled.' : 'Paid orders can only be cancelled by eShield. Contact us.');
+  const from = can.staff ? ['awaiting_payment', 'paid', 'in_progress'] : ['awaiting_payment'];
+  moveOrder(db, order.id, from, 'cancelled', {}, can.staff ? 'This order can no longer be cancelled.' : 'Paid orders can only be cancelled by eShield. Contact us.');
   return { order: orderView(getOrder(db, order.id), clientName(db)) };
 });
 
@@ -240,15 +245,16 @@ export async function handlePortal(req, res, url, { https, allowed }) {
       }
     }
     const params = match.groups ?? {};
-    let client = null, role = null;
+    let client = null, can = null;
     if (r.access === 'staff' && user.role !== 'admin') throw new HttpError(403, 'Only eShield staff can do that.');
     if (params.dealer !== undefined) {
       try { client = clientFind(db, decodeURIComponent(params.dealer)); } catch { client = null; }
-      role = client ? roleAt(db, user, client.id) : null;
-      if (!role) throw new HttpError(404, 'Dealer not found.');
-      if (r.access && r.access !== 'staff' && !atLeast(role, r.access)) throw new HttpError(403, 'Your role at this dealer does not allow that.');
+      can = client ? canAt(user, client.id) : null;
+      if (!can) throw new HttpError(404, 'Dealer not found.');
+      const need = { order: 'order videos', people: 'add people', details: 'change the dealer details' }[r.access];
+      if (need && !can[r.access]) throw new HttpError(403, `Your access to this dealer does not include permission to ${need}.`);
     }
-    const out = await r.fn({ db, cfg, user, session, client, role, params, body, query: url.searchParams, res });
+    const out = await r.fn({ db, cfg, user, session, client, can, params, body, query: url.searchParams, res });
     const headers = { ...cors, ...finish() };
     if (out?.file) {
       res.writeHead(200, { 'Content-Type': 'image/jpeg', 'Cache-Control': 'private, max-age=86400', 'X-Content-Type-Options': 'nosniff', ...headers });

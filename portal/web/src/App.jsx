@@ -7,12 +7,12 @@ import { Cars } from './Cars.jsx';
 import { Orders, StaffOrders } from './Orders.jsx';
 import { DealerDetails } from './DealerDetails.jsx';
 
-const ROLE_NAMES = { staff: 'eShield staff', owner: 'Owner', admin: 'Can order', approver: 'Approver', viewer: 'View only' };
-const canManage = (role) => ['staff', 'owner', 'admin'].includes(role);
-/** Tabs this person sees: everyone Cars and Orders; owners and admins People and Dealer details; staff every dealer's orders. */
-const tabsFor = (role, isStaff) => [
+export const ROLE_NAMES = { staff: 'eShield staff', order_people: 'Can order and add people', order: 'Can order', people: 'Can add people', viewer: 'View only' };
+/** Tabs this person sees: everyone Cars and Orders; People and Dealer details with permission to add people; staff every dealer's orders. */
+const tabsFor = (can, isStaff) => [
   ['cars', 'Cars'], ['orders', 'Orders'],
-  ...(canManage(role) ? [['people', 'People'], ['dealer', 'Dealer details']] : []),
+  ...(can.people ? [['people', 'People']] : []),
+  ...(can.details ? [['dealer', 'Dealer details']] : []),
   ...(isStaff ? [['all-orders', 'All dealers’ orders']] : []),
 ];
 
@@ -72,54 +72,56 @@ function AddDealer({ onAdded, onCancel }) {
   );
 }
 
-/** Who can use this dealer on the portal; owners (and staff) add people who can order or only look. */
-function People({ dealerId, canAdd }) {
+/** Who can use this dealer on the portal. People with permission to add people give others access, with two separate
+ * permissions: order videos, and add people (which also lets them edit Dealer details). Neither = view only. */
+function People({ dealerId, myId }) {
+  const empty = { email: '', name: '', password: '', order: true, people: false };
   const [users, setUsers] = useState(null);
-  const [form, setForm] = useState({ email: '', name: '', password: '', role: 'owner' });
+  const [form, setForm] = useState(empty);
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
   const load = useCallback(() => api('GET', `/api/dealers/${dealerId}/users`).then((d) => setUsers(d.users), (e) => setError(e.message)), [dealerId]);
   useEffect(() => { load(); }, [load]);
   const field = (k) => ({ value: form[k], onChange: (e) => setForm({ ...form, [k]: e.target.value }) });
-  async function add(e) {
-    e.preventDefault();
-    setError(''); setNote('');
-    try {
-      const r = await api('POST', `/api/dealers/${dealerId}/users`, form);
-      setNote(r.created ? `Account made for ${form.email}. Give them the password you chose; they can change it after signing in.` : `${form.email} can now use this dealer too.`);
-      setForm({ email: '', name: '', password: '', role: 'owner' });
-      load();
-    } catch (err) { setError(err.message); }
-  }
-  async function remove(u) {
-    setError(''); setNote('');
-    try { await api('DELETE', `/api/dealers/${dealerId}/users/${u.id}`); load(); } catch (err) { setError(err.message); }
-  }
+  const tick = (k) => ({ checked: form[k], onChange: (e) => setForm({ ...form, [k]: e.target.checked }) });
+  const act = async (fn) => { setError(''); setNote(''); try { await fn(); load(); } catch (err) { setError(err.message); } };
+  const add = (e) => { e.preventDefault(); act(async () => {
+    const r = await api('POST', `/api/dealers/${dealerId}/users`, form);
+    setNote(r.created ? `Account made for ${form.email}. Give them the password you chose; they can change it after signing in.` : `${form.email} can now use this dealer too.`);
+    setForm(empty);
+  }); };
+  const change = (u, k, v) => act(() => api('PATCH', `/api/dealers/${dealerId}/users/${u.id}`, { order: u.order, people: u.people, [k]: v }));
   return (
     <section className="card">
       <h2>People</h2>
-      <p className="muted small">eShield staff see every dealer and are not listed. People with a studio account are managed in the studio.</p>
+      <p className="muted small">eShield staff see every dealer and are not listed. People with a studio account are managed in the studio. "Add people" also lets them edit Dealer details.</p>
       {users === null ? <p className="muted">Loading…</p> : users.length === 0 ? <p className="muted">Nobody else has access yet.</p> : (
         <table><tbody>{users.map((u) => (
           <tr key={u.id}>
-            <td>{u.name || u.email}<div className="muted small">{u.email}</div></td>
-            <td>{ROLE_NAMES[u.role]}{u.studio && <div className="muted small">studio account</div>}</td>
-            <td>{canAdd && !u.studio && <button className="link" onClick={() => remove(u)}>Remove</button>}</td>
+            <td>{u.name || u.email}<div className="muted small">{u.email}{u.studio ? ' · studio account' : ''}</div></td>
+            <td className="nowrap">
+              <label className="check"><input type="checkbox" checked={u.order} disabled={u.studio} onChange={(e) => change(u, 'order', e.target.checked)} /> Order videos</label>
+              <label className="check"><input type="checkbox" checked={u.people} disabled={u.studio || u.id === myId} onChange={(e) => change(u, 'people', e.target.checked)} /> Add people</label>
+              {!u.order && !u.people && <div className="muted small">View only</div>}
+            </td>
+            <td>{!u.studio && u.id !== myId && <button className="link" onClick={() => act(() => api('DELETE', `/api/dealers/${dealerId}/users/${u.id}`))}>Remove</button>}</td>
           </tr>
         ))}</tbody></table>
       )}
-      {canAdd && (
-        <form className="form people-form" onSubmit={add}>
-          <h3>Add a person</h3>
-          <div className="grid">
-            <label>Email<input type="email" required {...field('email')} /></label>
-            <label>Name<input {...field('name')} /></label>
-            <label>Password <span className="muted small">(new accounts, 10+ characters)</span><input type="text" autoComplete="new-password" {...field('password')} /></label>
-            <label>Access<select {...field('role')}><option value="owner">Can order and add people</option><option value="viewer">View only</option></select></label>
-          </div>
-          <div className="actions"><button>Add person</button></div>
-        </form>
-      )}
+      <form className="form people-form" onSubmit={add}>
+        <h3>Add a person</h3>
+        <div className="grid">
+          <label>Email<input type="email" required {...field('email')} /></label>
+          <label>Name<input {...field('name')} /></label>
+          <label>Password <span className="muted small">(new accounts, 10+ characters)</span><input type="text" autoComplete="new-password" {...field('password')} /></label>
+        </div>
+        <div className="checks">
+          <label className="check"><input type="checkbox" {...tick('order')} /> Can order videos</label>
+          <label className="check"><input type="checkbox" {...tick('people')} /> Can add people</label>
+          <span className="muted small">{!form.order && !form.people ? 'View only' : ''}</span>
+        </div>
+        <div className="actions"><button>Add person</button></div>
+      </form>
       {error && <p className="error">{error}</p>}
       {note && <p className="ok">{note}</p>}
     </section>
@@ -196,15 +198,15 @@ export default function App() {
         <main>
           {tab !== 'all-orders' && <h1>{dealer.name} <span className="muted small">{ROLE_NAMES[dealer.role]}</span></h1>}
           <nav className="tabs">
-            {tabsFor(dealer.role, me.user.is_staff).map(([id, label]) => <button key={id} className={tab === id ? 'tab active' : 'tab'} onClick={() => setTab(id)}>{label}</button>)}
+            {tabsFor(dealer.can, me.user.is_staff).map(([id, label]) => <button key={id} className={tab === id ? 'tab active' : 'tab'} onClick={() => setTab(id)}>{label}</button>)}
           </nav>
           {(() => {
-            const shown = tabsFor(dealer.role, me.user.is_staff).some(([id]) => id === tab) ? tab : 'cars';
-            if (shown === 'orders') return <Orders dealerId={dealer.id} canOrder={['staff', 'owner', 'admin'].includes(dealer.role)} />;
-            if (shown === 'people') return <People dealerId={dealer.id} canAdd={['staff', 'owner'].includes(dealer.role)} />;
+            const shown = tabsFor(dealer.can, me.user.is_staff).some(([id]) => id === tab) ? tab : 'cars';
+            if (shown === 'orders') return <Orders dealerId={dealer.id} canOrder={dealer.can.order} />;
+            if (shown === 'people') return <People dealerId={dealer.id} myId={me.user.id} />;
             if (shown === 'dealer') return <DealerDetails dealerId={dealer.id} onSaved={dealerSaved} />;
             if (shown === 'all-orders') return <StaffOrders />;
-            return <Cars dealerId={dealer.id} role={dealer.role} />;
+            return <Cars dealerId={dealer.id} canOrder={dealer.can.order} />;
           })()}
         </main>
       )}
