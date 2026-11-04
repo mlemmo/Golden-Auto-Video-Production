@@ -93,7 +93,9 @@ for u in "${users[@]}"; do
   name_ok "$uname" && [[ "$uemail" == *@*.* ]] || { echo "Not name:email: $u" >&2; exit 1; }
   if ! call GET "/users/$uname" >/dev/null 2>&1; then
     echo "Creating account $uname:"
-    as_git "$bin" --config "$conf" admin user create --username "$uname" --email "$uemail" --random-password --must-change-password | grep -i password || true
+    out="$(as_git "$bin" --config "$conf" admin user create --username "$uname" --email "$uemail" --random-password --must-change-password 2>&1)" \
+      || { echo "Forgejo could not create $uname: $out" >&2; exit 1; }
+    echo "$out" | grep -i password || echo "$out"
   fi
   call PUT "/teams/$owners/members/$uname" >/dev/null
   echo "$uname is an owner of $org."
