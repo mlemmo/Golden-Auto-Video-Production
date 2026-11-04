@@ -21,8 +21,13 @@ static files. Everything they show comes from the API, which is part of the stud
   up to 10 MB; unused ones are deleted after a day.
 - **Orders** (`portal_orders`): AI spokesperson (15/30 s) or photo slideshow (15/30/60 s); awaiting payment → paid
   (staff "Release as paid" until Stripe) → in progress → ready for review → approved / rejected, or cancelled. The
-  studio's **Orders** window (admins) lists paid orders and "Open in studio" copies the car and its photos into the
-  dealer's cars there.
+  studio's **Orders** window (admins) lists open orders: "Open in studio" copies the car and its photos into the
+  dealer's cars there with the order's length and type, and once a video of that car is finished, "Send to customer"
+  puts it on the order (Milestone 4).
+- **Review**: the customer watches the sent videos on the order and approves, or asks for changes with a reason. The
+  first request is a free remake (the order goes back to in progress with the reason); a second one goes to eShield
+  staff (rejected), who can send another version or cancel. Video files stay on the studio's server for now
+  (public asset links); a cloud store comes later.
 
 API paths: `/api/auth/…`, `/api/dealers/…`, `/api/staff/…` (`node/src/portal/api.js`); tests: `node/test/portal.test.js`.
 

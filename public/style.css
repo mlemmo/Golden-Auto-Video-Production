@@ -280,3 +280,8 @@ a.button.secondary-link{background:#262d3a;color:#fff;border:1px solid var(--lin
 .library-pager small { margin-left: 8px; }
 .library-card .actions { gap: 6px; }
 .library-card .actions button, .library-card .actions .button { padding: 5px 10px; font-size: 13px; }
+.order-deliver{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.order-video{display:flex;align-items:center;gap:8px;font-weight:normal}
+.order-video img,.order-video .thumb{width:48px;height:48px;object-fit:cover;border-radius:4px;flex:none}
+.order-video a{margin-left:auto}
+.order-deliver button{align-self:flex-start}

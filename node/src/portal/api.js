@@ -20,7 +20,7 @@ import { deps, onDepsChange, setPortalDeps } from './deps.js';
 import { decodeVin } from './vin.js';
 import {
   addUpload, carView, deleteUpload, getCar, getOrder, getUpload, listCars, listOrders, MAX_PHOTO_BYTES, MAX_THUMB_BYTES, moveOrder, orderView,
-  placeOrder, PRODUCTS, setThumb, statusFilter, uploadPath,
+  placeOrder, PRODUCTS, reviewOrder, setThumb, statusFilter, uploadPath,
 } from './store.js';
 import { createReadStream } from 'node:fs';
 
@@ -172,9 +172,19 @@ route('GET', '/api/dealers/:dealer/orders/:order', 'viewer', ({ db, client, para
 // Customers cancel before payment; staff can cancel any order not delivered yet.
 route('POST', '/api/dealers/:dealer/orders/:order/cancel', 'order', ({ db, client, can, params }) => {
   const order = getOrder(db, params.order, client.id);
-  const from = can.staff ? ['awaiting_payment', 'paid', 'in_progress'] : ['awaiting_payment'];
+  const from = can.staff ? ['awaiting_payment', 'paid', 'in_progress', 'ready_for_review', 'rejected'] : ['awaiting_payment'];
   moveOrder(db, order.id, from, 'cancelled', {}, can.staff ? 'This order can no longer be cancelled.' : 'Paid orders can only be cancelled by eShield. Contact us.');
   return { order: orderView(getOrder(db, order.id), clientName(db)) };
+});
+
+// The customer's review of the delivered videos (Milestone 4): approve, or reject with what to change.
+route('POST', '/api/dealers/:dealer/orders/:order/approve', 'order', ({ db, client, user, params }) => {
+  reviewOrder(db, params.order, client.id, user, { approve: true });
+  return { order: orderView(getOrder(db, params.order), clientName(db)) };
+});
+route('POST', '/api/dealers/:dealer/orders/:order/reject', 'order', ({ db, client, user, params, body }) => {
+  reviewOrder(db, params.order, client.id, user, { approve: false, reason: body.reason });
+  return { order: orderView(getOrder(db, params.order), clientName(db)) };
 });
 
 route('GET', '/api/staff/orders', 'staff', ({ db, query }) => ({ orders: listOrders(db, { statuses: statusFilter(query.get('status')) }).map((o) => orderView(o, clientName(db))) }));

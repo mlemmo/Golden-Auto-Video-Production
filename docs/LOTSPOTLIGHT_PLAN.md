@@ -35,7 +35,8 @@ API only through the signed worker API.
 | Video types at launch | AI spokesperson video (15 or 30 s) and photo slideshow (15, 30 or 60 s). "My footage" waits (customers would upload video files). |
 | Photo uploads | Up to 30 photos of 10 MB each per car; the full files are deleted once the studio has copied them (thumbnails stay). |
 | VIN | Required for cars added by form; the form fills year, make and model from the free NHTSA VIN lookup. |
-| Who orders | Dealer owners and admins (approvers and viewers do not). |
+| Who orders | People with the dealer's "order videos" permission (separate from "add people"). |
+| Rejected videos | One free remake; a second rejection goes to eShield staff to decide. |
 
 ## Milestones
 
@@ -45,15 +46,15 @@ API only through the signed worker API.
    website are ordered, released by staff, shown in both staff views, and opened in the studio on staging.
 3. **M3 Payments** — Stripe Checkout per order, a credits balance (top-ups, spending, refunds as credits), the Stripe
    webhook that marks orders paid. Built in Stripe's test mode until the new business has its account.
-4. **M4 Delivery and approval** — the finished video goes from the video app to the customer's review page through a
-   short-lived signed link; approve, reject with a reason, download.
+4. **M4 Delivery and approval** — built 2026-11-03: staff send finished videos from the studio's Orders window; the
+   customer watches, downloads, approves or asks for changes (one free remake, then eShield decides). Videos are
+   served from the studio's server for now; signed links or a cloud store come with the move to cloud storage.
 5. **M5 Paid auto posting** — after approval, the video app posts to the dealer's Facebook and Instagram; needs the new
    business's Meta app (and Meta's App Review to post for other dealers).
 6. **Later** — subscriptions.
 
 ## Open questions
 
-1. Rejected videos: a free remake, a refund in credits, or a set number of free remakes per order?
 2. Golden Auto: does it move to the portal as customer #1, or keep using the video studio directly?
 3. Finished-video delivery until the cloud service: signed links from our server, or a storage bucket now?
 4. The domain and DNS, once the new business has its name.

@@ -129,6 +129,45 @@ test('a customer orders; staff release it; the studio opens it into the dealerâ€
   assert.equal((await owner.get(`/api/dealers/elease/orders/${order.id}`)).data.order.status, 'in_progress');
 });
 
+test('delivery and review: staff send finished videos; one free remake; a second rejection goes to staff', async () => {
+  const owner = portalBrowser(); await owner.login('owner@lr.test');
+  const staff = portalBrowser(); await staff.login('staff@eshield.test');
+  const user = userByEmail(db, 'staff@eshield.test');
+  const [order] = (await owner.get('/api/dealers/elease/orders?status=in_progress')).data.orders;
+  assert.ok(order, 'the order opened in the studio above');
+  // Two finished videos of the car in the studio (as the caption worker leaves them), and one of another car.
+  const job = (id, stock, format) => db.prepare('INSERT INTO jobs (id, fingerprint, payload) VALUES (?,?,?)').run(id, null,
+    JSON.stringify({ id, client: 'elease', stock, vehicle: '2019 HONDA CIVIC', format, duration: 30, finish_status: 'completed', captioned_url: `https://studio.example.com:4343/assets/${id}.mp4`, poster_url: `https://studio.example.com:4343/assets/posters/${id}.jpg`, provider: 'slideshow', created_at: '2026-11-03T20:00:00Z' }));
+  job('aaaaaaaaaaaaaaaa', 'S1', 'instagram_reels'); job('bbbbbbbbbbbbbbbb', 'S1', 'youtube'); job('cccccccccccccccc', 'S9', 'instagram_reels');
+  const row = (await actions.portal_orders({ db, cfg, user })).orders.find((o) => o.id === order.id);
+  assert.deepEqual(row.finished.map((f) => f.id).sort(), ['aaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbb'], 'only this carâ€™s finished videos');
+  assert.throws(() => actions.portal_order_deliver({ db, body: { id: order.id, videos: ['cccccccccccccccc'] }, user }), /not a finished video of this car/);
+  assert.equal((await owner.post(`/api/dealers/elease/orders/${order.id}/approve`)).status, 409, 'nothing sent yet');
+
+  actions.portal_order_deliver({ db, body: { id: order.id, videos: ['aaaaaaaaaaaaaaaa', 'bbbbbbbbbbbbbbbb'] }, user });
+  let o = (await owner.get(`/api/dealers/elease/orders/${order.id}`)).data.order;
+  assert.deepEqual([o.status, o.videos.length, o.videos[0].url.endsWith('.mp4'), o.free_remakes_left], ['ready_for_review', 2, true, 1]);
+  const look = portalBrowser(); await look.login('look@lr.test');
+  assert.equal((await look.post(`/api/dealers/elease/orders/${order.id}/approve`)).status, 403, 'view only cannot answer');
+  assert.equal((await owner.post(`/api/dealers/elease/orders/${order.id}/reject`, { reason: '' })).status, 400, 'a reason is needed');
+
+  // First rejection: a free remake (back in progress with the reason).
+  o = (await owner.post(`/api/dealers/elease/orders/${order.id}/reject`, { reason: 'Say $14,995' })).data.order;
+  assert.deepEqual([o.status, o.remake.reason, o.free_remakes_left], ['in_progress', 'Say $14,995', 0]);
+  assert.equal((await actions.portal_orders({ db, cfg, user })).orders.find((x) => x.id === order.id).remake.reason, 'Say $14,995');
+  // Second rejection: staff decide.
+  actions.portal_order_deliver({ db, body: { id: order.id, videos: ['bbbbbbbbbbbbbbbb'] }, user });
+  o = (await owner.post(`/api/dealers/elease/orders/${order.id}/reject`, { reason: 'Still the old price' })).data.order;
+  assert.deepEqual([o.status, o.rejections.length], ['rejected', 2]);
+  // Staff try again; this time the customer approves.
+  actions.portal_order_deliver({ db, body: { id: order.id, videos: ['aaaaaaaaaaaaaaaa'] }, user });
+  o = (await owner.post(`/api/dealers/elease/orders/${order.id}/approve`)).data.order;
+  assert.deepEqual([o.status, o.approved_by, o.videos.length], ['approved', 'owner@lr.test', 1]);
+  assert.ok(!(await actions.portal_orders({ db, cfg, user })).orders.some((x) => x.id === order.id), 'approved orders leave the studio window');
+  assert.equal((await owner.get('/api/dealers/elease/vehicles')).data.vehicles[0].order_status, 'approved');
+  assert.equal((await staff.get('/api/staff/orders?status=approved')).data.orders.length, 1);
+});
+
 test('people: order videos and add people are separate permissions, alone or together', async () => {
   const owner = portalBrowser(); await owner.login('owner@lr.test');
   const add = (email, order, people) => owner.post('/api/dealers/elease/users', { email, name: email, password: PW, order, people });

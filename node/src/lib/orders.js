@@ -1,29 +1,51 @@
 // Customer orders from the LotSpotlight portal, for the admin's "Orders" window. The portal is served by this same
 // server with this same database (src/portal), so orders are read directly. "Open in studio" copies the ordered car
 // and its photos into its dealer's cars here (source 'portal'), marks the order in progress and selects the car in
-// step 1. Free: no paid API is called here.
+// step 1 with the order's length and type. "Send to customer" puts finished videos of that car on the order for the
+// customer to approve or reject (Milestone 4). Free: no paid API is called here.
 import { readFileSync } from 'node:fs';
 import { clientsLoad, clientInventoryKey } from './clients.js';
 import { dcsStorePhotos } from './photos.js';
 import { dcPhotoId, dcPhotoUrl } from './dealercenter.js';
 import { state, save } from './db.js';
 import { gmdateC, trim, upper } from './text.js';
-import { getOrder, listOrders, moveOrder, orderView, uploadPath } from '../portal/store.js';
+import { deliverOrder, getOrder, listOrders, moveOrder, orderView, uploadPath } from '../portal/store.js';
+import { libraryVideos } from './jobs.js';
 import { deps } from '../portal/deps.js';
 
-/** What the window lists for one order. */
-function orderRow(o) {
+/** The order's car in the studio: its stock number as opened (studio_ref "client/stock"), else as ordered. */
+const studioStock = (o) => (o.studio_ref ? o.studio_ref.split('/').slice(1).join('/') : trim(String(o.vehicle?.stock_no ?? '')) || String(o.vehicle?.vin ?? '').slice(-8));
+
+/** What the window lists for one order, with the finished videos of its car to send. */
+function orderRow(o, finished = []) {
   const v = o.vehicle ?? {};
+  const sent = new Set(o.videos.map((x) => x.job_id));
   return {
     id: o.id, status: o.status, product: o.product, product_name: o.product_name, length_s: o.length_s, notes: o.notes ?? '',
     dealer: o.dealer_name, client: o.dealer_id, ordered_by: o.ordered_by_email ?? '', created_at: o.created_at, paid_at: o.paid_at, studio_ref: o.studio_ref,
     vehicle: { title: [v.year, v.make, v.model, v.trim].filter(Boolean).join(' '), vin: v.vin, stock: v.stock_no ?? '', price: v.price ?? null, mileage: v.mileage ?? null, photos: (v.photos ?? []).length },
+    delivered_at: o.delivered_at, remake: o.remake, rejections: o.rejections,
+    finished: finished.map((f) => ({ id: f.id, kind: f.kind, format: f.format, duration: f.duration, url: f.url, poster: f.poster, created_at: f.created_at, sent: sent.has(f.id) })),
   };
 }
 
+const finishedFor = (db, o) => (o.status === 'paid' ? [] : libraryVideos(db, [o.dealer_id]).filter((f) => f.stock === studioStock(o)));
+
 export function portalOrders(db) {
   const names = new Map(clientsLoad(db).items.map((c) => [c.id, c.name]));
-  return { configured: true, orders: listOrders(db, { statuses: ['paid', 'in_progress'] }).map((r) => orderRow(orderView(r, (id) => names.get(id) ?? id))) };
+  const orders = listOrders(db, { statuses: ['paid', 'in_progress', 'ready_for_review', 'rejected'] }).map((r) => orderView(r, (id) => names.get(id) ?? id));
+  return { configured: true, orders: orders.map((o) => orderRow(o, finishedFor(db, o))) };
+}
+
+/** Sends finished videos of the order's car (job ids from the Orders window) to the customer for review. */
+export function portalOrderDeliver(db, id, jobIds, user) {
+  const order = orderView(getOrder(db, Number(id)));
+  const ids = new Set((Array.isArray(jobIds) ? jobIds : []).map(String));
+  const videos = finishedFor(db, order).filter((f) => ids.has(f.id))
+    .map((f) => ({ job_id: f.id, url: f.url, poster: f.poster || null, format: f.format, kind: f.kind, duration: f.duration }));
+  if (videos.length !== ids.size) throw new Error('A chosen video is not a finished video of this car. Refresh and choose again.');
+  deliverOrder(db, order.id, videos, user);
+  return { message: `Sent ${videos.length} video${videos.length === 1 ? '' : 's'} to ${order.dealer_name} for order ${order.id}. They can approve it or ask for changes on the portal.` };
 }
 
 /** A website photo address as downloaded: DealerCenter photos without the website's logo overlay, Dealer.com originals. */

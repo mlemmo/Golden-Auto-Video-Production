@@ -18,6 +18,9 @@ export const MAX_PHOTO_BYTES = 10 * 1024 * 1024;
 export const MAX_THUMB_BYTES = 300 * 1024;
 const MAX_WAITING = 60;
 const MAX_NOTES = 2000;
+const MAX_REASON = 1000;
+// A rejected video is remade once at no charge; a second rejection goes to eShield staff to decide (plan, 2026-11-03).
+export const FREE_REMAKES = 1;
 const NAME = /^[a-f0-9]{40}\.jpg$/;
 
 const ready = new WeakSet();
@@ -121,9 +124,14 @@ export function listCars(db, client) {
 
 export function orderView(row, clientName = (c) => c) {
   const p = JSON.parse(row.payload);
+  const rejections = p.rejections ?? [];
   return { id: row.id, dealer_id: row.client, dealer_name: clientName(row.client), status: row.status, created_at: row.created_at, updated_at: row.updated_at,
     product: p.product, product_name: PRODUCTS[p.product]?.name ?? p.product, length_s: p.length_s, notes: p.notes ?? null, vehicle: p.vehicle,
-    ordered_by_email: p.ordered_by ?? null, paid_via: p.paid_via ?? null, paid_at: p.paid_at ?? null, studio_ref: p.studio_ref ?? null };
+    ordered_by_email: p.ordered_by ?? null, paid_via: p.paid_via ?? null, paid_at: p.paid_at ?? null, studio_ref: p.studio_ref ?? null,
+    // Delivery and review (Milestone 4): the videos sent, when, and the customer's answers.
+    videos: p.delivery?.videos ?? [], delivered_at: p.delivery?.sent_at ?? null, approved_at: p.approved_at ?? null, approved_by: p.approved_by ?? null,
+    rejections, remake: row.status === 'in_progress' && rejections.length ? rejections.at(-1) : null,
+    free_remakes_left: Math.max(0, FREE_REMAKES - rejections.length) };
 }
 
 /**
@@ -205,4 +213,32 @@ export function moveOrder(db, id, from, to, extra = {}, conflict = 'This order h
     db.prepare('UPDATE portal_orders SET status = ?, payload = ?, updated_at = ? WHERE id = ?').run(to, JSON.stringify(payload), gmdateC(), row.id);
     return { ...row, status: to, payload: JSON.stringify(payload) };
   });
+}
+
+// ---- Delivery and review (Milestone 4) ----
+
+/**
+ * Staff send finished videos (from the studio) to the customer: the order waits for their review. videos: [{ job_id,
+ * url, poster, format, kind, duration }]. From in progress (or a remake), from rejected (staff decided to try again), or
+ * again while waiting (a corrected video).
+ */
+export function deliverOrder(db, id, videos, by) {
+  if (!Array.isArray(videos) || !videos.length) throw new HttpError(400, 'Choose at least one finished video to send.');
+  return moveOrder(db, id, ['in_progress', 'rejected', 'ready_for_review'], 'ready_for_review',
+    { delivery: { videos, sent_at: new Date().toISOString(), sent_by: by.email } }, 'Only orders being worked on can be sent to the customer.');
+}
+
+/**
+ * The customer's answer: approve, or reject with a reason. The first rejection sends the order back for a free remake
+ * (in progress, with the reason); after that a rejection waits for eShield staff (rejected).
+ */
+export function reviewOrder(db, id, client, user, { approve, reason }) {
+  const row = getOrder(db, id, client);
+  if (approve) return moveOrder(db, row.id, ['ready_for_review'], 'approved', { approved_at: new Date().toISOString(), approved_by: user.email }, 'This order is not waiting for your review.');
+  const why = String(reason ?? '').trim();
+  if (!why) throw new HttpError(400, 'Tell us what to change, so the remake gets it right.');
+  if (why.length > MAX_REASON) throw new HttpError(400, `Keep the reason under ${MAX_REASON} characters.`);
+  const p = JSON.parse(row.payload);
+  const rejections = [...(p.rejections ?? []), { reason: why, by: user.email, at: new Date().toISOString(), videos: (p.delivery?.videos ?? []).map((v) => v.job_id) }];
+  return moveOrder(db, row.id, ['ready_for_review'], rejections.length <= FREE_REMAKES ? 'in_progress' : 'rejected', { rejections }, 'This order is not waiting for your review.');
 }
